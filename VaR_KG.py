@@ -12,9 +12,9 @@ from botorch.models.model import Model
 from torch.distributions import Distribution, Uniform
 from botorch import settings
 from botorch.sampling.samplers import IIDNormalSampler
-from botorch.gen import gen_candidates_torch
-
-# TODO: current implementation has some issues with Tensor dimensions. Need to debug these.
+from botorch.gen import gen_candidates_scipy
+# TODO: gen_candidates_scipy maximizes the given acquisition function. Use accordingly
+#       We also need to test the returned values. So far, we only handled the error messages
 
 
 class InnerVaR(MCAcquisitionFunction):
@@ -36,20 +36,25 @@ class InnerVaR(MCAcquisitionFunction):
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
-        We will sample from w and calculate the corresponding VaR
-        :param X: The decision variable, only the x component
-        :return: x_i = argmin VaR(..)
-        TODO: current gen_candidates sends multiple X at once. Fix this somewhere
+        Sample from w and calculate the corresponding VaR(mu)
+        :param X: The decision variable, only the x component num_starting_sols x dim_x
+        :return: VaR(mu(X, w))
+        TODO: Can we make the sampling of w work for a d dimensional random variable?
         """
-        # sample w and concatenate with x
-        w = self.distribution.rsample((self.num_samples, 1))
-        z = torch.cat((torch.cat([X]*self.num_samples, 0), w), 1)
-        # sample from posterior at w
-        samples = self.model.posterior(z).sample()
-        # order samples
-        samples, _ = samples.sort(1)
-        # return the sample quantile
-        return samples[0][int(self.num_samples * self.alpha)]
+        with torch.enable_grad(), settings.propagate_grads(True):
+            VaRs = torch.empty([X.size()[0], 1], requires_grad=True)
+            for i in range(X.size()[0]):
+                # sample w and concatenate with x
+                w = self.distribution.rsample((self.num_samples, 1))
+                w.requires_grad = True
+                z = torch.cat((torch.cat([X[i].unsqueeze(0)]*self.num_samples, 0), w), 1)
+                # sample from posterior at w
+                samples = torch.squeeze(self.model.posterior(z).mean, 0)
+                # order samples
+                samples, index = samples.sort(-2)
+                # return the sample quantile
+                VaRs[i] = samples[index[int(self.num_samples * self.alpha)]]
+            return VaRs
 
 
 class VaRKG(MCAcquisitionFunction):
@@ -89,9 +94,8 @@ class VaRKG(MCAcquisitionFunction):
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
-        Calculate the value of VaRKG acquisition function
-        TODO: might be better to include the inner optimization as a function in here
-        :param X: The X (x, w) at which VaR-KG is being evaluated
+        Calculate the value of VaRKG acquisition function by averaging over fantasies
+        :param X: The X: (x, w) at which VaR-KG is being evaluated
         :return: value of VaR-KG at X
         """
         with settings.propagate_grads(True):
@@ -105,13 +109,18 @@ class VaRKG(MCAcquisitionFunction):
     def optimize_inner(self, inner_VaR: InnerVaR) -> Tensor:
         r"""
         Optimizes the given inner VaR function over the x component.
+        TODO: check whether it is minimization or maximization - it is maximization
+                verify the return values are actually optimal
         :param inner_VaR: constructed InnerVaR object
         :return: result of optimization
         """
-        uniform = Uniform(self.l_bound, self.u_bound)
-        starting_sols = uniform.rsample((self.num_inner_restarts, self.dim_x))
-        candidates, values = gen_candidates_torch(starting_sols, inner_VaR, self.l_bound, self.u_bound)
-        print(candidates, values)
-        return torch.min(values)
+        with settings.propagate_grads(True):
+            # generate starting solutions
+            uniform = Uniform(self.l_bound, self.u_bound)
+            starting_sols = uniform.rsample((self.num_inner_restarts, self.dim_x))
+            # optimize inner_VaR
+            candidates, values = gen_candidates_scipy(starting_sols, inner_VaR, self.l_bound, self.u_bound)
+            # return the best value found
+            return torch.min(values)
 
 
