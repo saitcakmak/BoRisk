@@ -39,3 +39,5 @@ starting_sol = Tensor([0.5, 0.5])
 candidates, values = gen_candidates_scipy(starting_sol, var_kg, 0, 1)
 print(candidates, values)
 
+# TODO: so far we have only handled the runtime errors etc, and we have a working optimization routine.
+#       next step is to verify that the results we get from here are accurate

@@ -34,7 +34,7 @@ class InnerVaR(MCAcquisitionFunction):
         self.distribution = distribution
         self.num_samples = num_samples
         self.alpha = float(alpha)
-        self.num_calls = 0
+        self.num_calls = 0  # for debugging purposes
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -59,6 +59,8 @@ class InnerVaR(MCAcquisitionFunction):
                 #   which then prevents gradients. With torch.enable_grad() option, it works for inner optimization
                 #   somehow. But then, it breaks down when we try to do more
                 #   qKG uses the PosteriorMean class for evaluating post mean. Could this be the solution?
+                #   using PosteriorMean doesn't really change anything
+                #   adding torch.enable_grad() to other two seem to have fixed the issue
                 # samples = torch.squeeze(self.model.posterior(z).mean, 0)
                 post_mean = PosteriorMean(self.model)
                 samples = post_mean(z.unsqueeze(1))
@@ -73,6 +75,7 @@ class VaRKG(MCAcquisitionFunction):
     r"""
     The VaR-KG acquisition function.
     TODO: right now, the inner function works with multi-starts. We should make VaR-KG do the same.
+    TODO: this can easily be extended to q-batch evaluation. Simply change the fantasize method to use multiple X
     """
 
     def __init__(self, model: Model, distribution: Distribution, num_samples: int, alpha: Union[Tensor, float],
@@ -104,7 +107,7 @@ class VaRKG(MCAcquisitionFunction):
         self.num_inner_restarts = num_inner_restarts
         self.l_bound = l_bound
         self.u_bound = u_bound
-        self.num_calls = 0
+        self.num_calls = 0  # for debugging purposes
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
