@@ -7,6 +7,7 @@ import gpytorch
 import matplotlib.pyplot as plt
 from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
+from botorch.gen import gen_candidates_scipy
 
 # sample some training data
 uniform = Uniform(0, 1)
@@ -22,12 +23,19 @@ fit_gpytorch_model(mll)
 # construct the sampling distribution of w
 dist = Uniform(0, 1)
 
-# TODO: needs debugging. Currently we get some errors.
 
 # construct the acquisition function
 var_kg = VaRKG(model=gp, distribution=dist, num_samples=100, alpha=0.8, current_best_VaR=Tensor([0]),
                num_fantasies=10, dim_x=1, num_inner_restarts=5, l_bound=0, u_bound=1)
 
 # query the value of acquisition function
-value = var_kg(Tensor([[0.5, 0.5]]))
-print(value)
+# value = var_kg(Tensor([[0.5, 0.5]]))
+# print(value)
+
+# optimize VaR-KG with a single starting solution.
+starting_sol = Tensor([0.5, 0.5])
+# TODO: no idea why but we get an inner_VaR returning Tensor without grad at some point, which breaks the optimization.
+#   having torch.enable_grad() seems to solve all the problems. Needs verification that everything actually works
+candidates, values = gen_candidates_scipy(starting_sol, var_kg, 0, 1)
+print(candidates, values)
+

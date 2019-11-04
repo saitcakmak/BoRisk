@@ -13,7 +13,8 @@ from torch.distributions import Distribution, Uniform
 from botorch import settings
 from botorch.sampling.samplers import IIDNormalSampler
 from botorch.gen import gen_candidates_scipy
-# TODO: gen_candidates_scipy maximizes the given acquisition function. Use accordingly
+from botorch.acquisition.analytic import PosteriorMean
+# TODO: gen_candidates_scipy maximizes the given acquisition function. Use accordingly - need to adjust the quantile
 #       We also need to test the returned values. So far, we only handled the error messages
 
 
@@ -24,7 +25,7 @@ class InnerVaR(MCAcquisitionFunction):
     def __init__(self, model: Model, distribution: Distribution, num_samples: int, alpha: Union[Tensor, float]):
         r"""
         Initialize the problem for sampling
-        :param model: a constructed GP model
+        :param model: a constructed GP model - typically a fantasy model
         :param distribution: a constructed Torch distribution object
         :param num_samples: number of samples to use to calculate VaR
         :param alpha: VaR risk level alpha
@@ -33,25 +34,36 @@ class InnerVaR(MCAcquisitionFunction):
         self.distribution = distribution
         self.num_samples = num_samples
         self.alpha = float(alpha)
+        self.num_calls = 0
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Sample from w and calculate the corresponding VaR(mu)
-        :param X: The decision variable, only the x component num_starting_sols x dim_x
-        :return: VaR(mu(X, w))
+        :param X: The decision variable, only the x component. Dimensions: num_starting_sols x dim_x
+        :return: VaR(mu(X, w)). Dimensions: num_starting_sols x 1
         TODO: Can we make the sampling of w work for a d dimensional random variable?
         """
+        self.num_calls += 1
+        #  torch.enable_grad(),
         with torch.enable_grad(), settings.propagate_grads(True):
             VaRs = torch.empty([X.size()[0], 1], requires_grad=True)
+            # Separately calculate VaR for each entry in X
             for i in range(X.size()[0]):
                 # sample w and concatenate with x
                 w = self.distribution.rsample((self.num_samples, 1))
                 w.requires_grad = True
                 z = torch.cat((torch.cat([X[i].unsqueeze(0)]*self.num_samples, 0), w), 1)
                 # sample from posterior at w
-                samples = torch.squeeze(self.model.posterior(z).mean, 0)
+                # TODO: posterior mean does not return gradients
+                #   I think the reason is that posterior enforces that the model is in evaluate mode
+                #   which then prevents gradients. With torch.enable_grad() option, it works for inner optimization
+                #   somehow. But then, it breaks down when we try to do more
+                #   qKG uses the PosteriorMean class for evaluating post mean. Could this be the solution?
+                # samples = torch.squeeze(self.model.posterior(z).mean, 0)
+                post_mean = PosteriorMean(self.model)
+                samples = post_mean(z.unsqueeze(1))
                 # order samples
-                samples, index = samples.sort(-2)
+                samples, index = samples.sort(-1)  # -2 for the old version
                 # return the sample quantile
                 VaRs[i] = samples[index[int(self.num_samples * self.alpha)]]
             return VaRs
@@ -60,6 +72,7 @@ class InnerVaR(MCAcquisitionFunction):
 class VaRKG(MCAcquisitionFunction):
     r"""
     The VaR-KG acquisition function.
+    TODO: right now, the inner function works with multi-starts. We should make VaR-KG do the same.
     """
 
     def __init__(self, model: Model, distribution: Distribution, num_samples: int, alpha: Union[Tensor, float],
@@ -91,6 +104,7 @@ class VaRKG(MCAcquisitionFunction):
         self.num_inner_restarts = num_inner_restarts
         self.l_bound = l_bound
         self.u_bound = u_bound
+        self.num_calls = 0
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -98,7 +112,8 @@ class VaRKG(MCAcquisitionFunction):
         :param X: The X: (x, w) at which VaR-KG is being evaluated
         :return: value of VaR-KG at X
         """
-        with settings.propagate_grads(True):
+        self.num_calls += 1
+        with torch.enable_grad(), settings.propagate_grads(True):
             inner_VaRs = torch.empty(self.num_fantasies)
             for i in range(self.num_fantasies):
                 fantasy_model = self.model.fantasize(X, IIDNormalSampler(1))
@@ -114,7 +129,7 @@ class VaRKG(MCAcquisitionFunction):
         :param inner_VaR: constructed InnerVaR object
         :return: result of optimization
         """
-        with settings.propagate_grads(True):
+        with torch.enable_grad(), settings.propagate_grads(True):
             # generate starting solutions
             uniform = Uniform(self.l_bound, self.u_bound)
             starting_sols = uniform.rsample((self.num_inner_restarts, self.dim_x))
