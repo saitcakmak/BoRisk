@@ -8,7 +8,10 @@ import matplotlib.pyplot as plt
 from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
 from botorch.gen import gen_candidates_scipy
+from time import time
 
+
+start = time()
 # sample some training data
 uniform = Uniform(0, 1)
 train_x = uniform.rsample((4, 2))
@@ -20,9 +23,10 @@ gp = SingleTaskGP(train_x, train_y, likelihood)
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
+fit_complete = time()
+
 # construct the sampling distribution of w
 dist = Uniform(0, 1)
-
 
 # construct the acquisition function
 var_kg = VaRKG(model=gp, distribution=dist, num_samples=100, alpha=0.8, current_best_VaR=Tensor([0]),
@@ -39,5 +43,7 @@ starting_sol = Tensor([0.5, 0.5])
 candidates, values = gen_candidates_scipy(starting_sol, var_kg, 0, 1)
 print(candidates, values)
 
+opt_complete = time()
+print("fit: ", fit_complete-start, " opt: ", opt_complete - fit_complete)
 # TODO: so far we have only handled the runtime errors etc, and we have a working optimization routine.
 #       next step is to verify that the results we get from here are accurate

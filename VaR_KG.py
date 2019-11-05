@@ -14,7 +14,7 @@ from botorch import settings
 from botorch.sampling.samplers import IIDNormalSampler
 from botorch.gen import gen_candidates_scipy
 from botorch.acquisition.analytic import PosteriorMean
-# TODO: gen_candidates_scipy maximizes the given acquisition function. Use accordingly - need to adjust the quantile
+# TODO: gen_candidates_scipy maximizes the given acquisition function. Use accordingly - done
 #       We also need to test the returned values. So far, we only handled the error messages
 
 
@@ -64,11 +64,13 @@ class InnerVaR(MCAcquisitionFunction):
                 # samples = torch.squeeze(self.model.posterior(z).mean, 0)
                 post_mean = PosteriorMean(self.model)
                 samples = post_mean(z.unsqueeze(1))
+                # TODO: we can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
                 # order samples
                 samples, index = samples.sort(-1)  # -2 for the old version
                 # return the sample quantile
                 VaRs[i] = samples[index[int(self.num_samples * self.alpha)]]
-            return VaRs
+            # return negative so that the optimization minimizes the function
+            return -VaRs
 
 
 class VaRKG(MCAcquisitionFunction):
@@ -122,13 +124,12 @@ class VaRKG(MCAcquisitionFunction):
                 fantasy_model = self.model.fantasize(X, IIDNormalSampler(1))
                 inner_VaR = InnerVaR(fantasy_model, self.distribution, self.num_samples, self.alpha)
                 inner_VaRs[i] = self.optimize_inner(inner_VaR)
-            return inner_VaRs.mean() - self.current_best_VaR
+            return self.current_best_VaR - inner_VaRs.mean()
 
     def optimize_inner(self, inner_VaR: InnerVaR) -> Tensor:
         r"""
         Optimizes the given inner VaR function over the x component.
-        TODO: check whether it is minimization or maximization - it is maximization
-                verify the return values are actually optimal
+        TODO: verify the return values are actually optimal
         :param inner_VaR: constructed InnerVaR object
         :return: result of optimization
         """
@@ -138,6 +139,8 @@ class VaRKG(MCAcquisitionFunction):
             starting_sols = uniform.rsample((self.num_inner_restarts, self.dim_x))
             # optimize inner_VaR
             candidates, values = gen_candidates_scipy(starting_sols, inner_VaR, self.l_bound, self.u_bound)
+            # we maximize the negative of inner VaR and negate to get the minimum
+            values = - values
             # return the best value found
             return torch.min(values)
 
