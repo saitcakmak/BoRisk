@@ -41,11 +41,13 @@ class InnerVaR(MCAcquisitionFunction):
         Sample from w and calculate the corresponding VaR(mu)
         :param X: The decision variable, only the x component. Dimensions: num_starting_sols x dim_x
         :return: VaR(mu(X, w)). Dimensions: num_starting_sols x 1
-        TODO: Can we make the sampling of w work for a d dimensional random variable?
+        TODO: Can we make the sampling of w work for a d dimensional random variable?  done. w can be l-dimensional.
+
         """
         self.num_calls += 1
         #  torch.enable_grad(),
         with torch.enable_grad(), settings.propagate_grads(True):
+            sample_VaR = torch.empty([X.size()[0], 1])
             VaRs = torch.empty([X.size()[0], 1], requires_grad=True)
             # Separately calculate VaR for each entry in X
             for i in range(X.size()[0]):
@@ -61,14 +63,29 @@ class InnerVaR(MCAcquisitionFunction):
                 #   qKG uses the PosteriorMean class for evaluating post mean. Could this be the solution?
                 #   using PosteriorMean doesn't really change anything
                 #   adding torch.enable_grad() to other two seem to have fixed the issue
-                # samples = torch.squeeze(self.model.posterior(z).mean, 0)
-                post_mean = PosteriorMean(self.model)
-                samples = post_mean(z.unsqueeze(1))
+                post = self.model.posterior(z)
+                samples = torch.squeeze(post.mean, 0)
+                # samples_variance = torch.squeeze(self.model.posterior(z).variance.pow(1/2), 0)
+                c = 1
+                # samples = samples - c * samples_variance
+                # post_mean = PosteriorMean(self.model)
+                #
+                # samples = post_mean(z.unsqueeze(1))
                 # TODO: we can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
                 # order samples
                 samples, index = samples.sort(-1)  # -2 for the old version
                 # return the sample quantile
                 VaRs[i] = samples[index[int(self.num_samples * self.alpha)]]
+
+                n = 100000
+                sample_VaR_ind = torch.empty(n)
+                for j in range(n):
+                    true_samples = post.sample().reshape(-1).sort()
+                    sample_VaR_ind[j] = true_samples[0][index[int(self.num_samples * self.alpha)]]
+                sample_VaR[i] = sample_VaR_ind.mean()
+                print(sample_VaR[i])
+                print('hah')
+                print(VaRs[i])
             # return negative so that the optimization minimizes the function
             return -VaRs
 
