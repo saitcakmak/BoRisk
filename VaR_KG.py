@@ -40,7 +40,7 @@ class InnerVaR(MCAcquisitionFunction):
         r"""
         Sample from w and calculate the corresponding VaR(mu)
         :param X: The decision variable, only the x component. Dimensions: num_starting_sols x dim_x
-        :return: VaR(mu(X, w)). Dimensions: num_starting_sols x 1
+        :return: -VaR(mu(X, w)). Dimensions: num_starting_sols x 1
         TODO: Can we make the sampling of w work for a d dimensional random variable?
         """
         self.num_calls += 1

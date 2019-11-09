@@ -86,19 +86,43 @@ def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float]
     :param sols: Points to evaluate VaR(mu) at (num_points x dim_x)
     :param num_samples: number of w used to evaluate VaR
     :param alpha: the VaR level
-    :return: corresponding inner VaR values
+    :return: corresponding inner VaR values (num_points x dim_x)
     """
     # construct the acquisition function
     inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha)
+    # return the negative since inner VaR negates by default
+    return -inner_VaR(sols)
 
-    return inner_VaR(sols)
+
+def inner_opt_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7):
+    """
+    this is for testing the optimization of InnerVaR
+    :param sols: starting points for optimization loop (num_starting_sols x dim_x)
+    :param num_samples: number of w used to evaluate VaR
+    :param alpha: the VaR level
+    :return: optimized points and inner VaR values (num_starting_sols x dim_x, num_starting_sols x 1)
+    """
+    # construct the acquisition function
+    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha)
+    # optimize
+    # TODO: the return values don't make much sense
+    candidates, values = gen_candidates_scipy(sols, inner_VaR, 0, 1)
+    return candidates, -values
 
 
 # calculate and plot inner VaR values at a few points
-sols = Tensor([[0.1], [0.3], [0.5], [0.7], [0.9]])
-VaRs = -inner_test(sols, 10000, 0.7)
+# sols = Tensor([[0.1], [0.3], [0.5], [0.7], [0.9]])
+k = 40
+sols = torch.linspace(0, 1, k).view(-1, 1)
+VaRs = inner_test(sols, 10000, 0.7)
 print(VaRs)
-ax.scatter3D(sols.reshape(-1).numpy(), [1, 1, 1, 1, 1], VaRs.detach().reshape(-1).numpy())
+ax.scatter3D(sols.reshape(-1).numpy(), [1]*k, VaRs.detach().reshape(-1).numpy())
+
+k = 3
+start_sols = torch.linspace(0, 1, k).view(-1, 1)
+cand, vals = inner_opt_test(start_sols, 10000, 0.7)
+print("cand: ", cand, " values: ", vals)
+ax.scatter3D(cand.reshape(-1).numpy(), [1]*k, vals.detach().reshape(-1).numpy(), marker='^')
 
 # starting_sol = Tensor([0.5, 0.5])
 # KG_test(starting_sol)
@@ -107,6 +131,7 @@ print("fit: ", fit_complete-start, " opt: ", opt_complete - fit_complete)
 
 # TODO: so far we have only handled the runtime errors etc, and we have a working optimization routine.
 #       next step is to verify that the results we get from here are accurate
+#       inner VaR and its optimization appear to be working correctly.
 
 
 # to keep the figures showing after the code is done
