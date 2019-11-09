@@ -10,6 +10,7 @@ from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
 from botorch.gen import gen_candidates_scipy
 from time import time
+from typing import Union
 
 # fix the seed for testing
 torch.manual_seed(0)
@@ -28,6 +29,8 @@ plt.figure()
 ax = plt.axes(projection='3d')
 # ax.plot3D(train_x.numpy()[:, 0], train_x.numpy()[:, 1], train_y.squeeze().numpy())
 ax.scatter3D(train_x.numpy()[:, 0], train_x.numpy()[:, 1], train_y.squeeze().numpy())
+plt.xlabel("x")
+plt.ylabel("w")
 plt.show(block=False)
 plt.pause(0.01)
 
@@ -77,22 +80,23 @@ def KG_test(start_sol: Tensor):
     print(candidates, values)
 
 
-def inner_test(sols: Tensor, num_samples: int = 100):
+def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7):
     """
     this is for testing InnerVaR
     :param sols: Points to evaluate VaR(mu) at (num_points x dim_x)
     :param num_samples: number of w used to evaluate VaR
+    :param alpha: the VaR level
     :return: corresponding inner VaR values
     """
     # construct the acquisition function
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=0.7)
+    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha)
 
     return inner_VaR(sols)
 
 
 # calculate and plot inner VaR values at a few points
 sols = Tensor([[0.1], [0.3], [0.5], [0.7], [0.9]])
-VaRs = -inner_test(sols, 10000)
+VaRs = -inner_test(sols, 10000, 0.7)
 print(VaRs)
 ax.scatter3D(sols.reshape(-1).numpy(), [1, 1, 1, 1, 1], VaRs.detach().reshape(-1).numpy())
 

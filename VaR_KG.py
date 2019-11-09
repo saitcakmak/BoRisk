@@ -41,11 +41,9 @@ class InnerVaR(MCAcquisitionFunction):
         Sample from w and calculate the corresponding VaR(mu)
         :param X: The decision variable, only the x component. Dimensions: num_starting_sols x dim_x
         :return: VaR(mu(X, w)). Dimensions: num_starting_sols x 1
-        TODO: Can we make the sampling of w work for a d dimensional random variable?  done. w can be l-dimensional.
-
+        TODO: Can we make the sampling of w work for a d dimensional random variable?
         """
         self.num_calls += 1
-        #  torch.enable_grad(),
         with torch.enable_grad(), settings.propagate_grads(True):
             sample_VaR = torch.empty([X.size()[0], 1])
             VaRs = torch.empty([X.size()[0], 1], requires_grad=True)
@@ -54,7 +52,7 @@ class InnerVaR(MCAcquisitionFunction):
                 # sample w and concatenate with x
                 w = self.distribution.rsample((self.num_samples, 1))
                 w.requires_grad = True
-                # TODO: maybe use torch.repeat here instead.
+                # TODO: maybe use Tensor.repeat here instead.
                 z = torch.cat((torch.cat([X[i].unsqueeze(0)]*self.num_samples, 0), w), 1)
                 # sample from posterior at w
                 post = self.model.posterior(z)
@@ -62,21 +60,19 @@ class InnerVaR(MCAcquisitionFunction):
                 # samples_variance = torch.squeeze(self.model.posterior(z).variance.pow(1/2), 0)
                 c = 1
                 # samples = samples - c * samples_variance
-                # post_mean = PosteriorMean(self.model)
-                #
-                # samples = post_mean(z.unsqueeze(1))
                 # TODO: we can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
+
                 # order samples
-                samples, index = samples.sort(-1)  # -2 for the old version
+                samples, index = samples.sort(-2)  # -2 for the old version
                 # return the sample quantile
-                VaRs[i] = samples[index[int(self.num_samples * self.alpha)]]
+                VaRs[i] = samples[int(self.num_samples * self.alpha)]
 
                 # Yifan's code for comparison
                 # n = 100000
                 # sample_VaR_ind = torch.empty(n)
                 # for j in range(n):
                 #     true_samples = post.sample().reshape(-1).sort()
-                #     sample_VaR_ind[j] = true_samples[0][true_samples[1][int(self.num_samples * self.alpha)]]
+                #     sample_VaR_ind[j] = true_samples[0][int(self.num_samples * self.alpha)]
                 # sample_VaR[i] = sample_VaR_ind.mean()
                 # print(sample_VaR[i])
                 # print('hah')
