@@ -54,15 +54,9 @@ class InnerVaR(MCAcquisitionFunction):
                 # sample w and concatenate with x
                 w = self.distribution.rsample((self.num_samples, 1))
                 w.requires_grad = True
+                # TODO: maybe use torch.repeat here instead.
                 z = torch.cat((torch.cat([X[i].unsqueeze(0)]*self.num_samples, 0), w), 1)
                 # sample from posterior at w
-                # TODO: posterior mean does not return gradients
-                #   I think the reason is that posterior enforces that the model is in evaluate mode
-                #   which then prevents gradients. With torch.enable_grad() option, it works for inner optimization
-                #   somehow. But then, it breaks down when we try to do more
-                #   qKG uses the PosteriorMean class for evaluating post mean. Could this be the solution?
-                #   using PosteriorMean doesn't really change anything
-                #   adding torch.enable_grad() to other two seem to have fixed the issue
                 post = self.model.posterior(z)
                 samples = torch.squeeze(post.mean, 0)
                 # samples_variance = torch.squeeze(self.model.posterior(z).variance.pow(1/2), 0)
@@ -77,15 +71,16 @@ class InnerVaR(MCAcquisitionFunction):
                 # return the sample quantile
                 VaRs[i] = samples[index[int(self.num_samples * self.alpha)]]
 
-                n = 100000
-                sample_VaR_ind = torch.empty(n)
-                for j in range(n):
-                    true_samples = post.sample().reshape(-1).sort()
-                    sample_VaR_ind[j] = true_samples[0][index[int(self.num_samples * self.alpha)]]
-                sample_VaR[i] = sample_VaR_ind.mean()
-                print(sample_VaR[i])
-                print('hah')
-                print(VaRs[i])
+                # Yifan's code for comparison
+                # n = 100000
+                # sample_VaR_ind = torch.empty(n)
+                # for j in range(n):
+                #     true_samples = post.sample().reshape(-1).sort()
+                #     sample_VaR_ind[j] = true_samples[0][true_samples[1][int(self.num_samples * self.alpha)]]
+                # sample_VaR[i] = sample_VaR_ind.mean()
+                # print(sample_VaR[i])
+                # print('hah')
+                # print(VaRs[i])
             # return negative so that the optimization minimizes the function
             return -VaRs
 
