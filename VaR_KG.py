@@ -22,25 +22,28 @@ class InnerVaR(MCAcquisitionFunction):
     r"""
     This is the inner optimization problem of VaR-KG
     """
-    def __init__(self, model: Model, distribution: Distribution, num_samples: int, alpha: Union[Tensor, float]):
+    def __init__(self, model: Model, distribution: Distribution, num_samples: int,
+                 alpha: Union[Tensor, float], c: float = 0):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
         :param distribution: a constructed Torch distribution object
         :param num_samples: number of samples to use to calculate VaR
         :param alpha: VaR risk level alpha
+        :param c: the weight of the std-dev in utility function
         """
         super().__init__(model)
         self.distribution = distribution
         self.num_samples = num_samples
         self.alpha = float(alpha)
+        self.c = c
         self.num_calls = 0  # for debugging purposes
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Sample from w and calculate the corresponding VaR(mu)
         :param X: The decision variable, only the x component. Dimensions: num_starting_sols x dim_x
-        :return: -VaR(mu(X, w)). Dimensions: num_starting_sols x 1
+        :return: -VaR(mu(X, w) - c Sigma(x, w)). Dimensions: num_starting_sols x 1
         TODO: Can we make the sampling of w work for a d dimensional random variable?
         """
         self.num_calls += 1
@@ -57,26 +60,16 @@ class InnerVaR(MCAcquisitionFunction):
                 # sample from posterior at w
                 post = self.model.posterior(z)
                 samples = torch.squeeze(post.mean, 0)
-                # samples_variance = torch.squeeze(self.model.posterior(z).variance.pow(1/2), 0)
-                c = 1
-                # samples = samples - c * samples_variance
-                # TODO: we can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
+
+                # We can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
+                if self.c != 0:
+                    samples_variance = torch.squeeze(post.variance.pow(1/2), 0)
+                    samples = samples - self.c * samples_variance
 
                 # order samples
                 samples, index = samples.sort(-2)  # -2 for the old version
                 # return the sample quantile
                 VaRs[i] = samples[int(self.num_samples * self.alpha)]
-
-                # Yifan's code for comparison
-                # n = 100000
-                # sample_VaR_ind = torch.empty(n)
-                # for j in range(n):
-                #     true_samples = post.sample().reshape(-1).sort()
-                #     sample_VaR_ind[j] = true_samples[0][int(self.num_samples * self.alpha)]
-                # sample_VaR[i] = sample_VaR_ind.mean()
-                # print(sample_VaR[i])
-                # print('hah')
-                # print(VaRs[i])
             # return negative so that the optimization minimizes the function
             return -VaRs
 
@@ -123,7 +116,7 @@ class VaRKG(MCAcquisitionFunction):
         r"""
         Calculate the value of VaRKG acquisition function by averaging over fantasies
         :param X: The X: (x, w) at which VaR-KG is being evaluated
-        :return: value of VaR-KG at X
+        :return: value of VaR-KG at X (to be maximized)
         """
         self.num_calls += 1
         with torch.enable_grad(), settings.propagate_grads(True):
@@ -137,7 +130,6 @@ class VaRKG(MCAcquisitionFunction):
     def optimize_inner(self, inner_VaR: InnerVaR) -> Tensor:
         r"""
         Optimizes the given inner VaR function over the x component.
-        TODO: verify the return values are actually optimal
         :param inner_VaR: constructed InnerVaR object
         :return: result of optimization
         """
