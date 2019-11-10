@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
-from botorch.gen import gen_candidates_scipy
+from botorch.gen import gen_candidates_scipy, gen_candidates_torch
 from time import time
 from typing import Union
 
@@ -21,8 +21,15 @@ There is some condition_on_observations() method as well. This might be of use t
 #       if we calculate VaRKG for multiple points with high precision, memory blows up.
 #       need to look into reducing this memory usage. It probably stores many unnecessary values
 
+# TODO: we can also look into optimize_acqf for multi-start optimization. Not sure of the exact behavior
+#       but it might offer some improvements.
+#       Another alternative could be to fix the samples of w at each iteration to make the optimization
+#       algorithms perform better. gen_candidates_scipy uses quasi-newton methods, which require somewhat stability of
+#       the gradients.
+#       We can also think about coding our own optimizers by modifying the given ones to work with these functions.
+
 # fix the seed for testing
-torch.manual_seed(0)
+# torch.manual_seed(0)
 
 start = time()
 # sample some training data
@@ -105,6 +112,9 @@ def KG_opt_test(start_sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, 
 
     # optimize it
     # TODO: KG optimization doesn't really do anything.
+    #       Testing torch optimizers - we have some issue with retain-graph.
+    #       It is likely that as we take multiple derivatives with the same starting solution, we need to change
+    #       some options to enable this.
     candidates, values = gen_candidates_scipy(start_sol, var_kg, 0, 1)
     values = - values
     print("cand:", candidates, "vals: ", values)
@@ -136,6 +146,7 @@ def inner_opt_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, fl
     # construct the acquisition function
     inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha)
     # optimize
+    # TODO: testing torch optimizers - now they also work - slower than scipy optimizers
     candidates, values = gen_candidates_scipy(sols, inner_VaR, 0, 1)
     return candidates, -values
 
@@ -150,27 +161,32 @@ ax.scatter3D(sols.reshape(-1).numpy(), [1]*k, VaRs.detach().reshape(-1).numpy())
 current_best = min(VaRs)
 
 # test for optimization of inner VaR
-# k = 3
-# start_sols = torch.linspace(0, 1, k).view(-1, 1)
-# cand, vals = inner_opt_test(start_sols, 10000, 0.7)
-# print("cand: ", cand, " values: ", vals)
-# ax.scatter3D(cand.reshape(-1).numpy(), [1]*k, vals.detach().reshape(-1).numpy(), marker='^')
+k = 3
+start_sols = uniform.rsample((k, 1))
+print("start_sols: ", start_sols)
+cand, vals = inner_opt_test(start_sols, 10000, 0.7)
+print("cand: ", cand, " values: ", vals)
+ax.scatter3D(cand.detach().reshape(-1).numpy(), [1]*k, vals.detach().reshape(-1).numpy(), marker='^', s=50)
 
 # calculate the value of VaRKG for a number of points
-k = 10
+k = 6
 sols = torch.linspace(0, 1, k)
 xx = sols.view(-1, 1).repeat(1, k).reshape(-1)
 yy = sols.repeat(k, 1).reshape(-1)
 res = []
 for i in range(k**2):
     sol = Tensor([[xx[i], yy[i]]])
-    res.append(KG_test(sol, current_best=current_best, num_samples=200, num_fantasies=25))
+    res.append(KG_test(sol, current_best=current_best, num_samples=100, num_fantasies=10))
 print(res)
 ax.scatter3D(xx.numpy(), yy.numpy(), 10 * Tensor(res).reshape(-1).numpy(), marker='x')
 rrr = Tensor(res)
 
-# starting_sol = Tensor([0.5, 0.5])
-# KG_test(starting_sol)
+# test KG_opt
+# TODO: optimization doesn't really do much here
+starting_sol = Tensor([0.5, 0.5])
+cand, val = KG_opt_test(starting_sol, current_best=current_best)
+print("cand:", cand, " val: ", val)
+
 opt_complete = time()
 print("fit: ", fit_complete-start, " opt: ", opt_complete - fit_complete)
 

@@ -12,10 +12,8 @@ from botorch.models.model import Model
 from torch.distributions import Distribution, Uniform
 from botorch import settings
 from botorch.sampling.samplers import IIDNormalSampler
-from botorch.gen import gen_candidates_scipy
+from botorch.gen import gen_candidates_scipy, gen_candidates_torch
 from botorch.acquisition.analytic import PosteriorMean
-# TODO: gen_candidates_scipy maximizes the given acquisition function. Use accordingly - done
-#       We also need to test the returned values. So far, we only handled the error messages
 
 
 class InnerVaR(MCAcquisitionFunction):
@@ -48,15 +46,12 @@ class InnerVaR(MCAcquisitionFunction):
         """
         self.num_calls += 1
         with torch.enable_grad(), settings.propagate_grads(True):
-            sample_VaR = torch.empty([X.size()[0], 1])
-            VaRs = torch.empty([X.size()[0], 1], requires_grad=True)
+            VaRs = torch.empty([X.size()[0], 1])
             # Separately calculate VaR for each entry in X
             for i in range(X.size()[0]):
                 # sample w and concatenate with x
                 w = self.distribution.rsample((self.num_samples, 1))
-                w.requires_grad = True
-                # TODO: maybe use Tensor.repeat here instead.
-                z = torch.cat((torch.cat([X[i].unsqueeze(0)]*self.num_samples, 0), w), 1)
+                z = torch.cat((X[i].repeat(self.num_samples, 1), w), 1)
                 # sample from posterior at w
                 post = self.model.posterior(z)
                 samples = torch.squeeze(post.mean, 0)
@@ -138,6 +133,7 @@ class VaRKG(MCAcquisitionFunction):
             uniform = Uniform(self.l_bound, self.u_bound)
             starting_sols = uniform.rsample((self.num_inner_restarts, self.dim_x))
             # optimize inner_VaR
+            # TODO: testing torch optimizers - we run into some issues
             candidates, values = gen_candidates_scipy(starting_sols, inner_VaR, self.l_bound, self.u_bound)
             # we maximize the negative of inner VaR and negate to get the minimum
             values = - values
