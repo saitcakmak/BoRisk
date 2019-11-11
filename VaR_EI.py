@@ -125,12 +125,13 @@ class VaREI(MCAcquisitionFunction):
             current_fantasy_model = self.model.fantasize(X, IIDNormalSampler(1))
             current_inner_VaR = InnerVaR(current_fantasy_model, self.distribution, self.num_samples, self.alpha, self.mode)
             current_inner_candidate = self.optimize_inner(current_inner_VaR)
-            current_best_VaRs = torch.empty([X.size()[0], 1], requires_grad=True)
-            for i in range(X.size()[0]):
+            current_best_VaRs = torch.empty([X.size()[1], 1], requires_grad=True)
+
+            for i in range(X.size()[1]):
                 w = self.distribution.rsample((self.num_samples, 1))
                 w.requires_grad = True
                 # TODO: maybe use Tensor.repeat here instead.
-                z = torch.cat((torch.cat([current_inner_candidate.unsqueeze(0)]*self.num_samples, 0), w), 1)
+                z = torch.cat((torch.cat([current_inner_candidate[i].unsqueeze(0)]*self.num_samples, 0), w), 1)
                 # sample from posterior at w
                 post = self.model.posterior(z)
                 samples = torch.squeeze(post.mean, 0)
@@ -141,7 +142,7 @@ class VaREI(MCAcquisitionFunction):
             self.mode = 2
             for i in range(self.num_fantasies):
                 fantasy_model = self.model.fantasize(X, IIDNormalSampler(1))
-                inner_VaR = InnerVaR(fantasy_model, self.distribution, self.num_samples, self.alpha)
+                inner_VaR = InnerVaR(fantasy_model, self.distribution, self.num_samples, self.alpha, self.mode)
                 inner_VaRs[i] = self.optimize_inner(inner_VaR)
             return self.current_best_VaR - inner_VaRs.mean()
 
