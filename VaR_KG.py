@@ -74,7 +74,6 @@ class InnerVaR(MCAcquisitionFunction):
                 # return the sample quantile
                 VaRs[i] = samples[int(self.num_samples * self.alpha)]
             # return negative so that the optimization minimizes the function
-            # TODO: make sure this squeeze doesn't break anything
             return -VaRs.squeeze()
 
 
