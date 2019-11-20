@@ -149,7 +149,7 @@ class VaRKG(MCAcquisitionFunction):
                                            num_restarts=self.num_inner_restarts,
                                            raw_samples=self.num_inner_restarts * 5)
                     inner_values[j] = -val
-                print("X: ", X[i], " VaRKG: ", self.current_best_VaR - inner_values.mean())
+                # print("X: ", X[i], " VaRKG: ", self.current_best_VaR - inner_values.mean())
                 values[i] = self.current_best_VaR - inner_values.mean()
             return values.squeeze()
 

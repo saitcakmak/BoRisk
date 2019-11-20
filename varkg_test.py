@@ -12,7 +12,6 @@ from botorch.gen import gen_candidates_scipy, gen_candidates_torch
 from time import time
 from typing import Union
 from botorch.optim import optimize_acqf
-from multiprocessing import Pool
 
 r"""
 Some notes for future updates:
@@ -34,7 +33,7 @@ torch.manual_seed(0)
 start = time()
 # sample some training data
 uniform = Uniform(0, 1)
-n = 5  # training samples
+n = 10  # training samples
 d = 2  # dimension of train_x
 train_x = uniform.rsample((n, d))
 train_y = torch.sum(train_x.pow(2), 1, True) + torch.randn((n, 1)) * 0.2
@@ -235,7 +234,7 @@ fix_samples = True
 # If true, increases the optimization time significantly - optimization time depends on the starting point as well
 # num_fantasies affects the optimization significantly
 # KG_opt_test_scipy(starting_sol, current_best=current_best, num_fantasies=10, fix_samples=fix_samples)
-cand, val = KG_opt_test_opt(num_fantasies=10, fix_samples=fix_samples)
+cand, val = KG_opt_test_opt(num_fantasies=20, fix_samples=fix_samples)
 
 
 # test KG
