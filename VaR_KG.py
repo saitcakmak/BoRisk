@@ -7,7 +7,7 @@ In VaRKG, we optimize this inner value to calculate VaR-KG value.
 import torch
 from torch import Tensor
 from botorch.acquisition import MCAcquisitionFunction
-from typing import Optional, Callable, Iterable, Union
+from typing import Optional, Callable, Iterable, Union, List
 from botorch.models.model import Model
 from torch.distributions import Distribution, Uniform
 from botorch import settings
@@ -21,12 +21,12 @@ class InnerVaR(MCAcquisitionFunction):
     This is the inner optimization problem of VaR-KG
     """
 
-    def __init__(self, model: Model, distribution: Distribution, num_samples: int,
+    def __init__(self, model: Model, distribution: Union[Distribution, List[Distribution]], num_samples: int,
                  alpha: Union[Tensor, float], c: float = 0, fixed_samples: Optional[Tensor] = None):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
-        :param distribution: a constructed Torch distribution object
+        :param distribution: a constructed Torch distribution object, multiple if w is multidimensional
         :param num_samples: number of samples to use to calculate VaR
         :param alpha: VaR risk level alpha
         :param c: the weight of the std-dev in utility function
@@ -44,37 +44,44 @@ class InnerVaR(MCAcquisitionFunction):
         r"""
         Sample from w and calculate the corresponding VaR(mu)
         :param X: The decision variable, only the x component. Dimensions: num_starting_sols x dim_x
-        :return: -VaR(mu(X, w) - c Sigma(x, w)). Dimensions: num_starting_sols x 1
-        TODO: Can we make the sampling of w work for a d dimensional random variable?
+        :return: -VaR(mu(X, w) - c Sigma(x, w)). Dimensions: num_starting_sols
         """
         self.num_calls += 1
         # make sure X has proper shape
         if X.dim() < 2:
-            X.unsqueeze(0)
+            X = X.unsqueeze(0)
+        if X.dim() == 3 and X.size()[1] == 1:
+            X = X.squeeze(-2)
         with torch.enable_grad(), settings.propagate_grads(True):
-            VaRs = torch.empty([X.size()[0], 1])
-            # Separately calculate VaR for each entry in X
-            for i in range(X.size()[0]):
-                # sample w and concatenate with x
-                if self.fixed_samples is None:
-                    w = self.distribution.rsample((self.num_samples, 1))
+            # sample w and concatenate with x
+            if self.fixed_samples is None:
+                if isinstance(self.distribution, list):
+                    w_list = []
+                    for dist in self.distribution:
+                        w_list.append(dist.rsample((X.size()[0], self.num_samples, 1)))
+                    w = torch.cat(w_list, dim=-1)
                 else:
-                    w = self.fixed_samples
-                z = torch.cat((X[i].repeat(self.num_samples, 1), w), 1)
-                # sample from posterior at w
-                post = self.model.posterior(z)
-                samples = post.mean.reshape(-1, 1)
-                # We can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
-                if self.c != 0:
-                    samples_variance = post.variance.pow(1 / 2).reshape(-1, 1)
-                    samples = samples - self.c * samples_variance
+                    w = self.distribution.rsample((X.size()[0], self.num_samples, 1))
+            else:
+                w = self.fixed_samples.repeat(X.size()[0], 1, 1)
+            z = torch.cat((X.unsqueeze(-2).repeat(1, self.num_samples, 1), w), -1)
+            # sample from posterior at w
+            post = self.model.posterior(z)
+            samples = post.mean
+            # We can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
+            if self.c != 0:
+                samples_variance = post.variance.pow(1 / 2)
+                samples = samples - self.c * samples_variance
 
-                # order samples
-                samples, index = samples.sort(-2)
-                # return the sample quantile
-                VaRs[i] = samples[int(self.num_samples * self.alpha)]
+            # order samples
+            samples, _ = samples.sort(-2)
+            # return the sample quantile
+            if samples.dim() == 3:
+                VaRs = samples[:, int(self.num_samples * self.alpha)]
+            else:
+                VaRs = samples[:, :, int(self.num_samples * self.alpha)].squeeze(0)
             # return negative so that the optimization minimizes the function
-            return -VaRs.squeeze()
+            return -VaRs.squeeze(-1)
 
 
 class VaRKG(MCAcquisitionFunction):
@@ -83,7 +90,8 @@ class VaRKG(MCAcquisitionFunction):
     TODO: this can easily be extended to q-batch evaluation. Simply change the fantasize method to use multiple X
     """
 
-    def __init__(self, model: Model, distribution: Distribution, num_samples: int, alpha: Union[Tensor, float],
+    def __init__(self, model: Model, distribution: Union[Distribution, List[Distribution]], num_samples: int,
+                 alpha: Union[Tensor, float],
                  current_best_VaR: Optional[Tensor], num_fantasies: int, dim_x: int, num_inner_restarts: int,
                  l_bound: Union[float, Tensor], u_bound: Union[float, Tensor], fix_samples: bool = False):
         r"""

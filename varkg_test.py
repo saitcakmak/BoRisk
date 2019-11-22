@@ -12,6 +12,7 @@ from botorch.gen import gen_candidates_scipy, gen_candidates_torch
 from time import time
 from typing import Union
 from botorch.optim import optimize_acqf
+from botorch.acquisition import qKnowledgeGradient
 
 r"""
 Some notes for future updates:
@@ -50,7 +51,8 @@ plt.show(block=False)
 plt.pause(0.01)
 
 # construct and fit the GP
-likelihood = gpytorch.likelihoods.GaussianLikelihood()
+# likelihood = gpytorch.likelihoods.GaussianLikelihood()
+likelihood = None
 gp = SingleTaskGP(train_x, train_y, likelihood)
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
@@ -73,6 +75,7 @@ plt.pause(0.01)
 
 # construct the sampling distribution of w
 dist = Uniform(0, 1)
+current_best = Tensor([0])
 
 
 def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
@@ -143,7 +146,7 @@ def KG_opt_test_opt(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
     return candidates, values
 
 
-def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7):
+def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7, fixed_samples=None):
     """
     this is for testing InnerVaR
     :param sols: Points to evaluate VaR(mu) at (num_points x dim_x)
@@ -152,7 +155,7 @@ def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float]
     :return: corresponding inner VaR values (num_points x dim_x)
     """
     # construct the acquisition function
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha)
+    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, fixed_samples=fixed_samples)
     # return the negative since inner VaR negates by default
     return -inner_VaR(sols)
 
@@ -194,52 +197,64 @@ def inner_opt_test2(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7):
 
 
 # calculate and plot inner VaR values at a few points
-# sols = Tensor([[0.1], [0.3], [0.5], [0.7], [0.9]])
-k = 40
-sols = torch.linspace(0, 1, k).view(-1, 1)
-VaRs = inner_test(sols, 10000, 0.7)
-# print(VaRs)
-ax.scatter3D(sols.reshape(-1).numpy(), [1] * k, VaRs.detach().reshape(-1).numpy())
-plt.show(block=False)
-plt.pause(0.01)
+def tester_1():
+    k = 5
+    sols = torch.linspace(0, 1, k).view(-1, 1)
+    # TODO: increase this for higher precision
+    # fixed_samples = torch.linspace(0, 1, 10).reshape(10, 1)
+    fixed_samples = None
+    VaRs = inner_test(sols, 10000, 0.7, fixed_samples=fixed_samples)
+    # print(VaRs)
+    ax.scatter3D(sols.reshape(-1).numpy(), [1] * k, VaRs.detach().reshape(-1).numpy())
+    plt.show(block=False)
+    plt.pause(0.01)
+
 
 # test for optimization of inner VaR
-k = 10
-# start_sols = uniform.rsample((k, 1))
-# print("start_sols: ", start_sols)
-# cand, vals = inner_opt_test(start_sols, 100, 0.7)
-cand, vals = inner_opt_test2()
-current_best = vals
-print("cand: ", cand, " values: ", vals)
-ax.scatter3D(cand.detach().reshape(-1).numpy(), [1]*k, vals.detach().reshape(-1).numpy(), marker='^', s=50)
-
+def tester_2():
+    global current_best
+    k = 10
+    # start_sols = uniform.rsample((k, 1))
+    # print("start_sols: ", start_sols)
+    # cand, vals = inner_opt_test(start_sols, 100, 0.7)
+    cand, vals = inner_opt_test2()
+    current_best = vals
+    print("cand: ", cand, " values: ", vals)
+    ax.scatter3D(cand.detach().reshape(-1).numpy(), [1]*k, vals.detach().reshape(-1).numpy(), marker='^', s=50)
+    plt.show(block=False)
+    plt.pause(0.01)
 
 
 # calculate the value of VaRKG for a number of points
-# k = 6
-# sols = torch.linspace(0, 1, k)
-# xx = sols.view(-1, 1).repeat(1, k).reshape(-1)
-# yy = sols.repeat(k, 1).reshape(-1)
-# res = []
-# for i in range(k**2):
-#     sol = Tensor([[xx[i], yy[i]]])
-#     res.append(KG_test(sol, current_best=current_best, num_samples=100, num_fantasies=10))
-# print(res)
-# ax.scatter3D(xx.numpy(), yy.numpy(), 10 * Tensor(res).reshape(-1).numpy(), marker='x')
-# rrr = Tensor(res)
+def tester_3():
+    k = 6
+    sols = torch.linspace(0, 1, k)
+    xx = sols.view(-1, 1).repeat(1, k).reshape(-1)
+    yy = sols.repeat(k, 1).reshape(-1)
+    res = []
+    for i in range(k**2):
+        sol = Tensor([[xx[i], yy[i]]])
+        res.append(KG_test(sol, current_best=current_best, num_samples=100, num_fantasies=10))
+    print(res)
+    ax.scatter3D(xx.numpy(), yy.numpy(), 10 * Tensor(res).reshape(-1).numpy(), marker='x')
+    rrr = Tensor(res)
+    plt.show(block=False)
+    plt.pause(0.01)
+
 
 # test KG_opt
-# starting_sol = Tensor([0.5, 0.5])
-fix_samples = True
-# If true, increases the optimization time significantly - optimization time depends on the starting point as well
-# num_fantasies affects the optimization significantly
-# KG_opt_test_scipy(starting_sol, current_best=current_best, num_fantasies=10, fix_samples=fix_samples)
-cand, val = KG_opt_test_opt(num_fantasies=20, fix_samples=fix_samples)
+def tester_4():
+    fix_samples = True
+    # If true, increases the optimization time significantly - optimization time depends on the starting point as well
+    # num_fantasies affects the optimization significantly
+    cand, val = KG_opt_test_opt(num_fantasies=20, fix_samples=fix_samples)
 
 
-# test KG
-# sol = Tensor([[0.5, 0.5]])
-# KG_test(sol, current_best=current_best)
+# uncomment to run respective tests
+# tester_1()
+# tester_2()
+# tester_3()
+tester_4()
 
 
 opt_complete = time()
