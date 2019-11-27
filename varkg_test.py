@@ -235,7 +235,7 @@ def tester_3():
     for i in range(k**2):
         sol = Tensor([[xx[i], yy[i]]])
         res.append(KG_test(sol, current_best=current_best, num_samples=100, num_fantasies=10))
-    print(res)
+    # print(res)
     ax.scatter3D(xx.numpy(), yy.numpy(), 10 * Tensor(res).reshape(-1).numpy(), marker='x')
     rrr = Tensor(res)
     plt.show(block=False)
@@ -254,7 +254,7 @@ def tester_4():
 # tester_1()
 # tester_2()
 # tester_3()
-tester_4()
+# tester_4()
 
 
 opt_complete = time()

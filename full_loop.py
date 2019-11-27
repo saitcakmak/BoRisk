@@ -28,8 +28,8 @@ start = time()
 uniform = Uniform(0, 1)
 n = 10  # training samples
 d = 2  # dimension of train_x
-train_x = uniform.rsample((n, d))
-train_y = torch.sum(train_x.pow(2), 1, True) + torch.randn((n, 1)) * 0.2
+train_x = torch.rand((n, d))
+train_y = torch.sin(10 * train_x[:, 0]).reshape(-1, 1) + train_x[:, 1].pow(2).reshape(-1, 1) + torch.randn((n, 1)) * 0.2
 
 
 # construct and fit the GP
@@ -79,7 +79,7 @@ for i in range(iterations):
             'current_best_sol': current_best_sol, 'current_best_value': current_best_value, 'candidate': candidate,
             'kg_value': value}
     full_data[i] = data
-    torch.save(full_data, 'loop_output/run_data_3.pt')
+    torch.save(full_data, 'loop_output/run_data_6.pt')
 
     iteration_end = time()
     print("Iteration %d completed in %s" % (i, iteration_end-iteration_start))
@@ -87,9 +87,10 @@ for i in range(iterations):
     plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate)
 
     model_update_start = time()
-    observation = torch.sum(candidate.pow(2), 1, True) + torch.randn((1, 1)) * 0.2
+    observation = torch.sin(10 * candidate[:, 0]).reshape(-1, 1) + candidate[:, 1].pow(2).reshape(-1, 1) + torch.randn((1, 1)) * 0.2
     gp = gp.condition_on_observations(candidate, observation)
     # refit the model
+    # TODO: when we go on with refitting, at some point we get an error stating the cholesky elements are NaN
     mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
     fit_gpytorch_model(mll)
     model_update_complete = time()
