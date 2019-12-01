@@ -12,7 +12,6 @@ from botorch.models.model import Model
 from torch.distributions import Distribution, Uniform
 from botorch import settings
 from botorch.sampling.samplers import IIDNormalSampler
-from botorch.gen import gen_candidates_scipy
 from botorch.optim import optimize_acqf
 
 
@@ -22,8 +21,10 @@ class InnerVaR(MCAcquisitionFunction):
     """
 
     def __init__(self, model: Model, distribution: Union[Distribution, List[Distribution]], num_samples: int,
-                 alpha: Union[Tensor, float], c: float = 0, fixed_samples: Optional[Tensor] = None,
-                 num_lookahead_samples: int = 0, num_lookahead_repetitions: int = 0):
+                 alpha: Union[Tensor, float], l_bound: Union[float, Tensor],
+                 u_bound: Union[float, Tensor], c: float = 0, fixed_samples: Optional[Tensor] = None,
+                 num_lookahead_samples: int = 0, num_lookahead_repetitions: int = 0,
+                 lookahead_points: Tensor = None):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -34,6 +35,9 @@ class InnerVaR(MCAcquisitionFunction):
         :param fixed_samples: optional, fix the samples of w for numerical stability
         :param num_lookahead_samples: number of samples to enumerate the sample path with (m in Peter's description)
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
+        :param lookahead_points: if given, use this instead of generating the lookahead points. Just the w component
+        :param l_bound: lower bound of w
+        :param u_bound: upper bound of w
         """
         super().__init__(model)
         self.distribution = distribution
@@ -43,6 +47,9 @@ class InnerVaR(MCAcquisitionFunction):
         self.fixed_samples = fixed_samples
         self.num_lookahead_samples = num_lookahead_samples
         self.num_lookahead_repetitions = num_lookahead_repetitions
+        self.lookahead_points = lookahead_points
+        self.l_bound = l_bound
+        self.u_bound = u_bound
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -68,30 +75,69 @@ class InnerVaR(MCAcquisitionFunction):
                     w = self.distribution.rsample((X.size()[0], self.num_samples, 1))
             else:
                 w = self.fixed_samples.repeat(X.size()[0], 1, 1)
+            # z is the full dimensional variable (x, w)
             z = torch.cat((X.unsqueeze(-2).repeat(1, self.num_samples, 1), w), -1)
+
             # if num_lookahead_ > 0, then update the model to get the refined sample-path
-            # if self.num_lookahead_samples > 0 and self.num_lookahead_repetitions > 0:
-            #     # TODO: generate the look ahead points of X = (x,w) of appropriate dimensions
-            #     #       sample the fantasy models on this, ideally just a big batch fantasy
-            #     #       order the samples, get VaR per batch and average to get the VaR to return
-            # else:
-            #     # TODO: keep the same model and calculations
-            #     pass
-            # sample from posterior at w
-            post = self.model.posterior(z)
-            samples = post.mean
+            if self.num_lookahead_repetitions > 0 and (self.num_lookahead_samples > 0 or self.lookahead_points):
+                w_dim = w.size()[-1]  # the dimension of the w component
+                VaRs = torch.empty((self.num_lookahead_repetitions, X.size()[0]))
 
-            # We can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
-            if self.c != 0:
-                samples_variance = post.variance.pow(1 / 2)
-                samples = samples - self.c * samples_variance
+                # generate the lookahead points, w component
+                if self.lookahead_points is None:
+                    w_list = []
+                    # generate each dimension independently
+                    for j in range(w_dim):
+                        if not isinstance(self.l_bound, Tensor):
+                            l_bound = self.l_bound
+                            u_bound = self.u_bound
+                        else:
+                            l_bound = self.l_bound[j]
+                            u_bound = self.u_bound[j]
+                        w_list.append(torch.linspace(l_bound, u_bound, self.num_lookahead_samples).reshape(-1, 1))
+                    w = torch.cat(w_list, dim=-1)
+                    w = w.repeat(X.size()[0], 1, 1)
+                else:
+                    w = self.lookahead_points.repeat(X.size()[0], 1, 1)
+                # merge with X to generate full dimensional points
+                lookahead_points = torch.cat((X.unsqueeze(-2).repeat(1, self.num_lookahead_samples, 1), w), -1)
 
-            # order samples
-            samples, _ = samples.sort(-2)
-            # return the sample quantile
-            VaRs = samples[:, int(self.num_samples * self.alpha)]
-            # return negative so that the optimization minimizes the function
-            return -VaRs.squeeze(-1)
+                sampler = IIDNormalSampler(self.num_lookahead_repetitions)
+                # this might just be doing it in batch but needs verification
+
+                lookahead_model = self.model.fantasize(lookahead_points.unsqueeze(1), sampler)
+                # this is a batch fantasy model which works with batch evaluations.
+                # Batch size is num_lookahead_rep x X.size()[0] x 1.
+                # if queried with equal batch size points, returns the solutions for the corresponding batch.
+                # if queried with a (outer) batch dimension missing,
+                # then it repeats the points for each batch dimension.
+
+                samples = lookahead_model.posterior(z.unsqueeze(1)).mean.squeeze(2)
+                # This is a Tensor of size num_la_rep x X.size()[0] x num_samples x 1
+                # The squeeze and unsqueeze are needed for matching the batch dimensions
+                # It is essentially IID repetitions of a random Tensor of X.size()[0] x num_samples x 1
+
+                samples, _ = torch.sort(samples, dim=-2)
+                VaRs = samples[:, :, int(self.num_samples * self.alpha)]
+
+                # return negative since optimizers maximize
+                return - torch.mean(VaRs, dim=0).squeeze()
+            else:
+                # get the posterior mean
+                post = self.model.posterior(z)
+                samples = post.mean
+
+                # We can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
+                if self.c != 0:
+                    samples_variance = post.variance.pow(1 / 2)
+                    samples = samples - self.c * samples_variance
+
+                # order samples
+                samples, _ = samples.sort(-2)
+                # return the sample quantile
+                VaRs = samples[:, int(self.num_samples * self.alpha)]
+                # return negative so that the optimization minimizes the function
+                return -VaRs.squeeze(-1)
 
 
 class VaRKG(MCAcquisitionFunction):
@@ -168,46 +214,12 @@ class VaRKG(MCAcquisitionFunction):
                                          num_samples=self.num_samples,
                                          alpha=self.alpha, fixed_samples=fixed_samples,
                                          num_lookahead_samples=self.num_lookahead_samples,
-                                         num_lookahead_repetitions=self.num_lookahead_repetitions)
+                                         num_lookahead_repetitions=self.num_lookahead_repetitions,
+                                         l_bound=self.l_bound, u_bound=self.u_bound)
                     _, val = optimize_acqf(inner_VaR, bounds=Tensor([[self.l_bound], [self.u_bound]]), q=1,
                                            num_restarts=self.num_inner_restarts,
                                            raw_samples=self.num_inner_restarts * 5)
                     inner_values[j] = -val
                 # print("X: ", X[i], " VaRKG: ", self.current_best_VaR - inner_values.mean())
                 values[i] = self.current_best_VaR - inner_values.mean()
-            return values.squeeze()
-
-    def _attempt_forward(self, X: Tensor) -> Tensor:
-        r"""
-        This is an attempt on getting rid of For loops that failed so far.
-        Calculate the value of VaRKG acquisition function by averaging over fantasies
-        :param X: The X: (x, w) at which VaR-KG is being evaluated - now allows for batch evaluations, size (n x dim)
-        :return: value of VaR-KG at X (to be maximized) - size (n)
-        """
-        # TODO: this can potentially be improved by getting rid of the for loops and utilizing the batch evaluations
-        #       need to see whether inner VaR can handle batch fantasies
-        if self.fix_samples:
-            # TODO: generalize this to mutlidimensional w
-            fixed_samples = torch.linspace(self.l_bound, self.u_bound, self.num_samples).reshape(self.num_samples, 1)
-        else:
-            fixed_samples = None
-        # make sure X has proper shape
-        if X.dim() < 2:
-            X.unsqueeze(0)
-        # if a q dimension is present, handle that
-        if X.dim() == 3 and X.size()[1] == 1:
-            X = X.squeeze(-2)
-        with torch.enable_grad(), settings.propagate_grads(True):
-            inner_values = torch.empty(self.num_fantasies)
-            for j in range(self.num_fantasies):
-                fantasy_model = self.model.fantasize(X, IIDNormalSampler(1))
-                inner_VaR = InnerVaR(model=fantasy_model, distribution=self.distribution,
-                                     num_samples=self.num_samples,
-                                     alpha=self.alpha, fixed_samples=fixed_samples)
-                _, val = optimize_acqf(inner_VaR, bounds=Tensor([[self.l_bound], [self.u_bound]]), q=X.size()[0],
-                                       num_restarts=self.num_inner_restarts,
-                                       raw_samples=self.num_inner_restarts * 5)
-                inner_values[j] = -val
-            # print("X: ", X[i], " VaRKG: ", self.current_best_VaR - inner_values.mean())
-            values = self.current_best_VaR.repeat(X.size()[0], 1) - inner_values.mean(dim=-1, keepdim=True)
             return values.squeeze()
