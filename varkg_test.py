@@ -279,7 +279,7 @@ tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
 # evaluate VaRKG
 tester_3(num_lookahead_samples=5, num_lookahead_repetitions=3, num_fantasies=10)
 # optimize VaRKG
-tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10)
+tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
 # evaluate inner VaR with lookaheads
 tester_5()
 

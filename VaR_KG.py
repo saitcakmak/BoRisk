@@ -22,7 +22,7 @@ class InnerVaR(MCAcquisitionFunction):
 
     def __init__(self, model: Model, distribution: Union[Distribution, List[Distribution]], num_samples: int,
                  alpha: Union[Tensor, float], l_bound: Union[float, Tensor],
-                 u_bound: Union[float, Tensor], c: float = 0, fixed_samples: Optional[Tensor] = None,
+                 u_bound: Union[float, Tensor], dim_x:int,  c: float = 0, fixed_samples: Optional[Tensor] = None,
                  num_lookahead_samples: int = 0, num_lookahead_repetitions: int = 0,
                  lookahead_points: Tensor = None):
         r"""
@@ -31,6 +31,7 @@ class InnerVaR(MCAcquisitionFunction):
         :param distribution: a constructed Torch distribution object, multiple if w is multidimensional
         :param num_samples: number of samples to use to calculate VaR
         :param alpha: VaR risk level alpha
+        :param dim_x: dimension of the x component - used in the experimental versions
         :param c: the weight of the std-dev in utility function
         :param fixed_samples: optional, fix the samples of w for numerical stability
         :param num_lookahead_samples: number of samples to enumerate the sample path with (m in Peter's description)
@@ -212,7 +213,7 @@ class VaRKG(MCAcquisitionFunction):
                     fantasy_model = self.model.fantasize(X[i].unsqueeze(0), IIDNormalSampler(1))
                     inner_VaR = InnerVaR(model=fantasy_model, distribution=self.distribution,
                                          num_samples=self.num_samples,
-                                         alpha=self.alpha, fixed_samples=fixed_samples,
+                                         alpha=self.alpha, dim_x=self.dim_x, fixed_samples=fixed_samples,
                                          num_lookahead_samples=self.num_lookahead_samples,
                                          num_lookahead_repetitions=self.num_lookahead_repetitions,
                                          l_bound=self.l_bound, u_bound=self.u_bound)
