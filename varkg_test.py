@@ -3,7 +3,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-import gpytorch
+from gpytorch.likelihoods import GaussianLikelihood
 import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 from torch.distributions import Uniform, Gamma
@@ -12,6 +12,10 @@ from botorch.gen import gen_candidates_scipy, gen_candidates_torch
 from time import time
 from typing import Union
 from botorch.optim import optimize_acqf
+from gpytorch.constraints.constraints import GreaterThan
+from gpytorch.priors.torch_priors import GammaPrior
+
+
 from botorch.acquisition import qKnowledgeGradient
 
 r"""
@@ -50,8 +54,20 @@ plt.show(block=False)
 plt.pause(0.01)
 
 # construct and fit the GP
-# likelihood = gpytorch.likelihoods.GaussianLikelihood()  # tends to set noise to 0
-likelihood = None  # works better this way with the noise priors
+# likelihood = GaussianLikelihood()  # tends to set noise to 0
+# likelihood = None  # works better this way with the noise priors
+# a more involved prior to set a significant lower bound on the noise. Significantly speeds up computation.
+noise_prior = GammaPrior(1.1, 0.05)
+noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
+likelihood = GaussianLikelihood(
+    noise_prior=noise_prior,
+    batch_shape=[],
+    noise_constraint=GreaterThan(
+        0.05,
+        transform=None,
+        initial_value=noise_prior_mode,
+    ),
+)
 gp = SingleTaskGP(train_x, train_y, likelihood)
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
@@ -273,15 +289,15 @@ def tester_5(k=100, num_samples=100, num_lookahead_samples=10, num_lookahead_rep
 
 # uncomment to run respective tests
 # evaluate simple inner VaR
-tester_1()
+# tester_1()
 # optimize inner VaR
-tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
+# tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
 # evaluate VaRKG
-tester_3(num_lookahead_samples=5, num_lookahead_repetitions=3, num_fantasies=10)
+# tester_3(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
 # optimize VaRKG
-tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
+# tester_4(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
 # evaluate inner VaR with lookaheads
-tester_5()
+# tester_5()
 
 opt_complete = time()
 print("fit: ", fit_complete - start, " opt: ", opt_complete - fit_complete)
