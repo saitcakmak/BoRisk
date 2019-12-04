@@ -22,7 +22,7 @@ class InnerVaR(MCAcquisitionFunction):
 
     def __init__(self, model: Model, distribution: Union[Distribution, List[Distribution]], num_samples: int,
                  alpha: Union[Tensor, float], l_bound: Union[float, Tensor],
-                 u_bound: Union[float, Tensor], dim_x:int,  c: float = 0, fixed_samples: Optional[Tensor] = None,
+                 u_bound: Union[float, Tensor], dim_x: int,  c: float = 0, fixed_samples: Optional[Tensor] = None,
                  num_lookahead_samples: int = 0, num_lookahead_repetitions: int = 0,
                  lookahead_points: Tensor = None):
         r"""
@@ -51,6 +51,7 @@ class InnerVaR(MCAcquisitionFunction):
         self.lookahead_points = lookahead_points
         self.l_bound = l_bound
         self.u_bound = u_bound
+        self.dim_x = dim_x
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -59,11 +60,8 @@ class InnerVaR(MCAcquisitionFunction):
         :return: -VaR(mu(X, w) - c Sigma(x, w)). Dimensions: num_starting_sols
         """
         # make sure X has proper shape
-        if X.dim() < 2:
-            X = X.unsqueeze(0)
-        # if a q dimension is present, handle that
-        if X.dim() == 3 and X.size()[1] == 1:
-            X = X.squeeze(-2)
+        assert X.size(-1) == self.dim_x
+        X = X.reshape(-1, 1, self.dim_x)
         with torch.enable_grad(), settings.propagate_grads(True):
             # sample w and concatenate with x
             if self.fixed_samples is None:
@@ -77,12 +75,11 @@ class InnerVaR(MCAcquisitionFunction):
             else:
                 w = self.fixed_samples.repeat(X.size()[0], 1, 1)
             # z is the full dimensional variable (x, w)
-            z = torch.cat((X.unsqueeze(-2).repeat(1, self.num_samples, 1), w), -1)
+            z = torch.cat((X.repeat(1, self.num_samples, 1), w), -1)
 
             # if num_lookahead_ > 0, then update the model to get the refined sample-path
             if self.num_lookahead_repetitions > 0 and (self.num_lookahead_samples > 0 or self.lookahead_points):
                 w_dim = w.size()[-1]  # the dimension of the w component
-                VaRs = torch.empty((self.num_lookahead_repetitions, X.size()[0]))
 
                 # generate the lookahead points, w component
                 if self.lookahead_points is None:
@@ -101,7 +98,7 @@ class InnerVaR(MCAcquisitionFunction):
                 else:
                     w = self.lookahead_points.repeat(X.size()[0], 1, 1)
                 # merge with X to generate full dimensional points
-                lookahead_points = torch.cat((X.unsqueeze(-2).repeat(1, self.num_lookahead_samples, 1), w), -1)
+                lookahead_points = torch.cat((X.repeat(1, self.num_lookahead_samples, 1), w), -1)
 
                 sampler = IIDNormalSampler(self.num_lookahead_repetitions)
                 # this might just be doing it in batch but needs verification
@@ -162,8 +159,8 @@ class VaRKG(MCAcquisitionFunction):
         :param num_fantasies: number of fantasies used to calculate VaR-KG (number of Z repetitions)
         :param dim_x: dimension of x in X = (x,w)
         :param num_inner_restarts: number of starting points for inner optimization
-        :param l_bound: lower bound for inner restart points
-        :param u_bound: upper bound for inner restart points
+        :param l_bound: lower bound for inner restart points, size 1 or size dim_x
+        :param u_bound: upper bound for inner restart points, same size as l_bound
         :param fix_samples: if True, fixed samples are used for w, generated using linspace
         :param num_lookahead_samples: number of samples to enumerate the sample path with (m in Peter's description)
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
@@ -179,8 +176,13 @@ class VaRKG(MCAcquisitionFunction):
         self.num_fantasies = num_fantasies
         self.dim_x = dim_x
         self.num_inner_restarts = num_inner_restarts
-        self.l_bound = l_bound
-        self.u_bound = u_bound
+        # set the bounds as dim_x dimensional flat Tensors
+        if Tensor([l_bound]).reshape(-1).size(0) == self.dim_x:
+            self.l_bound = l_bound.reshape(-1)
+            self.u_bound = u_bound.reshape(-1)
+        else:
+            self.l_bound = Tensor([l_bound]).repeat(self.dim_x).reshape(-1)
+            self.u_bound = Tensor([u_bound]).repeat(self.dim_x).reshape(-1)
         self.fix_samples = fix_samples
         self.num_lookahead_samples = num_lookahead_samples
         self.num_lookahead_repetitions = num_lookahead_repetitions
@@ -191,10 +193,9 @@ class VaRKG(MCAcquisitionFunction):
         :param X: The X: (x, w) at which VaR-KG is being evaluated - now allows for batch evaluations, size (n x dim)
         :return: value of VaR-KG at X (to be maximized) - size (n)
         """
-        # TODO: this can potentially be improved by getting rid of the for loops and utilizing the batch evaluations
-        #       need to see whether inner VaR can handle batch fantasies
-        if self.fix_samples:
-            # TODO: generalize this to mutlidimensional w
+        # TODO: No longer works.
+        if self.fix_samples and self.dim_x == 1:
+            # TODO: generalize this to mutlidimensional x, w
             fixed_samples = torch.linspace(self.l_bound, self.u_bound, self.num_samples).reshape(self.num_samples, 1)
         else:
             fixed_samples = None
@@ -217,7 +218,8 @@ class VaRKG(MCAcquisitionFunction):
                                          num_lookahead_samples=self.num_lookahead_samples,
                                          num_lookahead_repetitions=self.num_lookahead_repetitions,
                                          l_bound=self.l_bound, u_bound=self.u_bound)
-                    _, val = optimize_acqf(inner_VaR, bounds=Tensor([[self.l_bound], [self.u_bound]]), q=1,
+                    bounds = torch.cat((self.l_bound.reshape(1, -1), self.u_bound.reshape(1, -1)), dim=0)
+                    _, val = optimize_acqf(inner_VaR, bounds=bounds, q=1,
                                            num_restarts=self.num_inner_restarts,
                                            raw_samples=self.num_inner_restarts * 5)
                     inner_values[j] = -val
