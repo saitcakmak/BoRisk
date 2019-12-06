@@ -178,8 +178,8 @@ class VaRKG(MCAcquisitionFunction):
         self.num_inner_restarts = num_inner_restarts
         # set the bounds as dim_x dimensional flat Tensors
         if Tensor([l_bound]).reshape(-1).size(0) == self.dim_x:
-            self.l_bound = l_bound.reshape(-1)
-            self.u_bound = u_bound.reshape(-1)
+            self.l_bound = Tensor([l_bound]).reshape(-1)
+            self.u_bound = Tensor([u_bound]).reshape(-1)
         else:
             self.l_bound = Tensor([l_bound]).repeat(self.dim_x).reshape(-1)
             self.u_bound = Tensor([u_bound]).repeat(self.dim_x).reshape(-1)
@@ -193,25 +193,20 @@ class VaRKG(MCAcquisitionFunction):
         :param X: The X: (x, w) at which VaR-KG is being evaluated - now allows for batch evaluations, size (n x dim)
         :return: value of VaR-KG at X (to be maximized) - size (n)
         """
-        # TODO: No longer works.
-        if self.fix_samples and self.dim_x == 1:
+        if self.fix_samples and X.size(-1) - self.dim_x == 1:
             # TODO: generalize this to mutlidimensional x, w
-            fixed_samples = torch.linspace(self.l_bound, self.u_bound, self.num_samples).reshape(self.num_samples, 1)
+            fixed_samples = torch.linspace(self.l_bound[-1], self.u_bound[-1], self.num_samples).reshape(self.num_samples, 1)
         else:
             fixed_samples = None
         # make sure X has proper shape
-        if X.dim() < 2:
-            X.unsqueeze(0)
-        # if a q dimension is present, handle that
-        if X.dim() == 3 and X.size()[1] == 1:
-            X = X.squeeze(-2)
+        X = X.reshape(-1, 1, X.size(-1))
         with torch.enable_grad(), settings.propagate_grads(True):
-            values = torch.empty([X.size()[0], 1])
+            values = torch.empty([X.size(0), 1])
             # separately calculate for each X
-            for i in range(X.size()[0]):
+            for i in range(X.size(0)):
                 inner_values = torch.empty(self.num_fantasies)
                 for j in range(self.num_fantasies):
-                    fantasy_model = self.model.fantasize(X[i].unsqueeze(0), IIDNormalSampler(1))
+                    fantasy_model = self.model.fantasize(X[i], IIDNormalSampler(1))
                     inner_VaR = InnerVaR(model=fantasy_model, distribution=self.distribution,
                                          num_samples=self.num_samples,
                                          alpha=self.alpha, dim_x=self.dim_x, fixed_samples=fixed_samples,

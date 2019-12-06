@@ -10,32 +10,50 @@ from time import time
 from typing import Union
 from botorch.optim import optimize_acqf
 from plotter import plotter
+from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.constraints.constraints import GreaterThan
+from gpytorch.priors.torch_priors import GammaPrior
+from simple_test_functions import SimpleQuadratic, SineQuadratic
+from botorch.test_functions import Hartmann, ThreeHumpCamel
+from standardized_function import StandardizedFunction
 
 """
 In this code, we will initialize a random GP, then optimize it's KG, sample, update and repeat.
 The aim is to see if we get convergence and find the true optimum in the end.
 """
-# TODO: does SingleTaskGP allow for observation noise or assume noiseless observations?
-#   Using the GaussianLikelihood without any parameters sets the noise in a weird way, almost assuming noiseless
-#   observations. If we let SingleTaskGP use its own priors, the problem is mostly fixed, as it has strong priors on
-#   the noise. With the added noise, a smoother GP results which speeds up the optimization loop.
+
+start = time()
 
 # fix the seed for testing
 torch.manual_seed(0)
 
-start = time()
-# sample some training data
-uniform = Uniform(0, 1)
-n = 10  # training samples
-d = 2  # dimension of train_x
-train_x = torch.rand((n, d))
-train_y = torch.sin(10 * train_x[:, 0]).reshape(-1, 1) + train_x[:, 1].pow(2).reshape(-1, 1) + torch.randn((n, 1)) * 0.2
+# Initialize the test function
+noise_std = 0.1  # observation noise level
+# function = SimpleQuadratic(noise_std=noise_std)
+function = SineQuadratic(noise_std=noise_std)
+# function = StandardizedFunction(Hartmann(noise_std=noise_std))
+# function = StandardizedFunction(ThreeHumpCamel(noise_std=noise_std))  # has issues with GP fitting
 
+d = function.dim  # dimension of train_X
+n = 2 * d + 2  # training samples
+dim_x = d - 1  # dimension of the x component
+train_X = torch.rand((n, d))
+train_Y = function(train_X)
 
 # construct and fit the GP
-# likelihood = gpytorch.likelihoods.GaussianLikelihood()
-likelihood = None
-gp = SingleTaskGP(train_x, train_y, likelihood)
+# a more involved prior to set a significant lower bound on the noise. Significantly speeds up computation.
+noise_prior = GammaPrior(1.1, 0.05)
+noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
+likelihood = GaussianLikelihood(
+    noise_prior=noise_prior,
+    batch_shape=[],
+    noise_constraint=GreaterThan(
+        0.05,  # minimum observation noise assumed in the GP model
+        transform=None,
+        initial_value=noise_prior_mode,
+    ),
+)
+gp = SingleTaskGP(train_X, train_Y, likelihood)
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
@@ -48,24 +66,31 @@ full_data = dict()
 num_samples = 100
 alpha = 0.7
 num_fantasies = 10
-num_inner_restarts = 3
-num_restarts = 5
-raw_multiplier = 2
+num_inner_restarts = 5
+num_restarts = 10
+raw_multiplier = 4
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 fix_samples = True
 dist = Uniform(0, 1)
-x_bounds = Tensor([[0], [1]])
-full_bounds = Tensor([[0, 0], [1, 1]])
-dim_x = 1
+x_bounds = Tensor([[0], [1]]).repeat(1, dim_x)
+full_bounds = Tensor([[0], [1]]).repeat(1, d)
+num_lookahead_samples = 0
+num_lookahead_repetitions = 0
+verbose = True
+filename = 'run_data_7'
 
 iterations = 50
 
 for i in range(iterations):
     iteration_start = time()
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, fixed_samples=fixed_samples)
+    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, fixed_samples=fixed_samples,
+                         l_bound=0, u_bound=1, dim_x=dim_x, num_lookahead_samples=num_lookahead_samples,
+                         num_lookahead_repetitions=num_lookahead_repetitions)
     current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
                                             raw_samples=num_inner_restarts * raw_multiplier)
     current_best_value = - value
+    if verbose:
+        print("Current best value: ", current_best_value)
 
     var_kg = VaRKG(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha,
                    current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim_x=dim_x,
@@ -74,23 +99,25 @@ for i in range(iterations):
 
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
                                      raw_samples=num_restarts * raw_multiplier)
+    if verbose:
+        print("Candidate: ", candidate, " KG value: ", value)
 
     data = {'state_dict': gp.state_dict(), 'train_targets': gp.train_targets, 'train_inputs': gp.train_inputs,
             'current_best_sol': current_best_sol, 'current_best_value': current_best_value, 'candidate': candidate,
             'kg_value': value}
     full_data[i] = data
-    torch.save(full_data, 'loop_output/run_data_6.pt')
+    torch.save(full_data, 'loop_output/%s.pt' % filename)
 
     iteration_end = time()
     print("Iteration %d completed in %s" % (i, iteration_end-iteration_start))
 
-    plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate)
+    if verbose and d == 2:
+        plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate)
 
     model_update_start = time()
-    observation = torch.sin(10 * candidate[:, 0]).reshape(-1, 1) + candidate[:, 1].pow(2).reshape(-1, 1) + torch.randn((1, 1)) * 0.2
+    observation = function(candidate)
     gp = gp.condition_on_observations(candidate, observation)
     # refit the model
-    # TODO: when we go on with refitting, at some point we get an error stating the cholesky elements are NaN
     mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
     fit_gpytorch_model(mll)
     model_update_complete = time()
