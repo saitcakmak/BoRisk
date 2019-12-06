@@ -9,7 +9,7 @@ from mpl_toolkits import mplot3d
 from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
 from time import time
-from typing import Union
+from typing import Union, Optional
 from botorch.optim import optimize_acqf
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
@@ -34,9 +34,10 @@ function = SineQuadratic(noise_std=noise_std)
 # function = StandardizedFunction(Hartmann(noise_std=noise_std))
 # function = StandardizedFunction(ThreeHumpCamel(noise_std=noise_std))  # has issues with GP fitting
 
-n = 30  # training samples
 d = function.dim  # dimension of train_X
-dim_x = d - 1  # dimension of the x component
+dim_w = 1  # dimension of the w component
+n = 2 * d + 2  # training samples
+dim_x = d - dim_w  # dimension of the x component
 train_X = torch.rand((n, d))
 train_Y = function(train_X)
 
@@ -90,15 +91,16 @@ current_best = Tensor([0])
 
 
 def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
-            current_best: Tensor = Tensor([0]), num_fantasies: int = 10, fix_samples=True,
+            current_best: Optional[Tensor] = None, num_fantasies: int = 10, q: int = 1, fix_samples=True,
             num_lookahead_samples=0, num_lookahead_repetitions=0):
     """
     this is for testing VaRKG - evaluate at the given point(s)
-    :param sol: solution (1 x dim) to evaluate
+    :param sol: batch size x 1 x (q x dim + num_fantasies x dim_x) to evaluate
     :param num_samples: number of w to samples for inner VaR calculations
     :param alpha: the VaR level
     :param current_best: the current best VaR value for use in VaRKG calculations
     :param num_fantasies: number of fantasy models to average over for VaRKG
+    :param q: for q-batch parallel evaluation
     :param fix_samples: use fix samples for w
     :param num_lookahead_samples: number of lookahead points to enumerate on
     :param num_lookahead_repetitions: number of repetitions to average these over
@@ -106,8 +108,8 @@ def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0
     """
     # construct the acquisition function
     var_kg = VaRKG(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best,
-                   num_fantasies=num_fantasies, dim_x=dim_x, num_inner_restarts=5, l_bound=0, u_bound=1,
-                   fix_samples=fix_samples, num_lookahead_samples=num_lookahead_samples,
+                   num_fantasies=num_fantasies, dim=d, dim_x=dim_x, l_bound=0, u_bound=1,
+                   q=q, fix_samples=fix_samples, num_lookahead_samples=num_lookahead_samples,
                    num_lookahead_repetitions=num_lookahead_repetitions)
 
     # query the value of acquisition function
@@ -117,7 +119,7 @@ def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0
 
 
 def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
-                current_best: Tensor = Tensor([0]), num_fantasies: int = 10, fix_samples=True,
+                current_best: Optional[Tensor] = None, num_fantasies: int = 10, q: int = 1, fix_samples=True,
                 num_lookahead_samples=0, num_lookahead_repetitions=0):
     """
     this is for testing VaRKG optimization - uses optimize acqf
@@ -125,6 +127,7 @@ def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
     :param alpha: the VaR level
     :param current_best: the current best VaR value for use in VaRKG calculations
     :param num_fantasies: number of fantasy models to average over for VaRKG
+    :param q: for q-batch parallel evaluation
     :param fix_samples: use fix samples for w
     :param num_lookahead_samples: number of lookahead points to enumerate on
     :param num_lookahead_repetitions: number of repetitions to average these over
@@ -132,12 +135,12 @@ def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
     """
     # construct the acquisition function
     var_kg = VaRKG(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best,
-                   num_fantasies=num_fantasies, dim_x=dim_x, num_inner_restarts=5, l_bound=0, u_bound=1,
-                   fix_samples=fix_samples, num_lookahead_samples=num_lookahead_samples,
+                   num_fantasies=num_fantasies, dim=d, dim_x=dim_x, l_bound=0, u_bound=1,
+                   q=q, fix_samples=fix_samples, num_lookahead_samples=num_lookahead_samples,
                    num_lookahead_repetitions=num_lookahead_repetitions)
 
     # optimize it
-    bounds = Tensor([[0], [1]]).repeat(1, d)
+    bounds = Tensor([[0], [1]]).repeat(1, q * d + num_fantasies * dim_x)
     candidates, values = optimize_acqf(var_kg, bounds=bounds, q=1, num_restarts=5, raw_samples=25)
     print("cand:", candidates, "vals: ", values)
     return candidates, values
@@ -153,7 +156,7 @@ def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float]
     :return: corresponding inner VaR values (num_points x dim_x)
     """
     # construct the acquisition function
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x,
+    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x, dim_w=dim_w,
                          fixed_samples=fixed_samples,
                          l_bound=0, u_bound=1)
     # return the negative since inner VaR negates by default
@@ -176,7 +179,7 @@ def inner_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
         fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
     else:
         fixed_samples = None
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x,
+    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x, dim_w=dim_w,
                          fixed_samples=fixed_samples,
                          l_bound=0, u_bound=1, num_lookahead_samples=num_lookahead_samples,
                          num_lookahead_repetitions=num_lookahead_repetitions)
@@ -202,7 +205,7 @@ def inner_lookahead_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tens
     :return: value of VaR: num_sols x 1
     """
     # construct the acquisition function
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x,
+    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x, dim_w=dim_w,
                          fixed_samples=fixed_samples,
                          l_bound=0, u_bound=1, num_lookahead_samples=num_lookahead_samples,
                          num_lookahead_repetitions=num_lookahead_repetitions, lookahead_points=lookahead_points)
@@ -247,7 +250,7 @@ def tester_2(k=10, num_lookahead_samples=0, num_lookahead_repetitions=0, fix_sam
 def tester_3(k=10, num_samples=100, num_fantasies=10, num_lookahead_samples=0, num_lookahead_repetitions=0,
              fix_samples=True):
     # TODO: this can also be more interesting
-    sols = torch.rand(k, d)
+    sols = torch.rand(k, d + num_fantasies * dim_x)
     res = KG_test(sols, current_best=current_best, num_samples=num_samples, num_fantasies=num_fantasies,
                   num_lookahead_samples=num_lookahead_samples,
                   num_lookahead_repetitions=num_lookahead_repetitions,

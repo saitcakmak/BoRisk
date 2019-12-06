@@ -30,13 +30,14 @@ torch.manual_seed(0)
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
-function = SineQuadratic(noise_std=noise_std)
-# function = StandardizedFunction(Hartmann(noise_std=noise_std))
+# function = SineQuadratic(noise_std=noise_std)
+function = StandardizedFunction(Hartmann(noise_std=noise_std))
 # function = StandardizedFunction(ThreeHumpCamel(noise_std=noise_std))  # has issues with GP fitting
 
 d = function.dim  # dimension of train_X
+dim_w = 1  # dimension of w component
 n = 2 * d + 2  # training samples
-dim_x = d - 1  # dimension of the x component
+dim_x = d - dim_w  # dimension of the x component
 train_X = torch.rand((n, d))
 train_Y = function(train_X)
 
@@ -60,41 +61,41 @@ fit_gpytorch_model(mll)
 fit_complete = time()
 print("Initial model fit completed in %s" % (fit_complete - start))
 
-
 # the data for acquisition functions
 full_data = dict()
 num_samples = 100
 alpha = 0.7
 num_fantasies = 10
-num_inner_restarts = 5
-num_restarts = 10
-raw_multiplier = 4
+num_inner_restarts = 10 * d
+num_restarts = 10 * d
+inner_raw_multiplier = 4
+raw_multiplier = 20
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 fix_samples = True
 dist = Uniform(0, 1)
 x_bounds = Tensor([[0], [1]]).repeat(1, dim_x)
-full_bounds = Tensor([[0], [1]]).repeat(1, d)
+full_bounds = Tensor([[0], [1]]).repeat(1, d + num_fantasies * dim_x)
 num_lookahead_samples = 0
 num_lookahead_repetitions = 0
 verbose = True
-filename = 'run_data_7'
+filename = input('output file name: ')
 
 iterations = 50
 
 for i in range(iterations):
     iteration_start = time()
     inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, fixed_samples=fixed_samples,
-                         l_bound=0, u_bound=1, dim_x=dim_x, num_lookahead_samples=num_lookahead_samples,
+                         l_bound=0, u_bound=1, dim_x=dim_x, dim_w=dim_w, num_lookahead_samples=num_lookahead_samples,
                          num_lookahead_repetitions=num_lookahead_repetitions)
     current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
-                                            raw_samples=num_inner_restarts * raw_multiplier)
+                                            raw_samples=num_inner_restarts * inner_raw_multiplier)
     current_best_value = - value
     if verbose:
         print("Current best value: ", current_best_value)
 
     var_kg = VaRKG(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha,
-                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim_x=dim_x,
-                   num_inner_restarts=num_inner_restarts, l_bound=0, u_bound=1,
+                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x,
+                   l_bound=0, u_bound=1,
                    fix_samples=fix_samples)
 
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
@@ -109,14 +110,15 @@ for i in range(iterations):
     torch.save(full_data, 'loop_output/%s.pt' % filename)
 
     iteration_end = time()
-    print("Iteration %d completed in %s" % (i, iteration_end-iteration_start))
+    print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
     if verbose and d == 2:
         plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate)
 
     model_update_start = time()
-    observation = function(candidate)
-    gp = gp.condition_on_observations(candidate, observation)
+    candidate_point = candidate[:, 0:d]
+    observation = function(candidate_point)
+    gp = gp.condition_on_observations(candidate_point, observation)
     # refit the model
     mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
     fit_gpytorch_model(mll)
