@@ -106,7 +106,7 @@ class InnerVaR(MCAcquisitionFunction):
                 VaRs = samples[:, :, :, int(self.num_samples * self.alpha)]
 
                 # return negative since optimizers maximize
-                return - torch.mean(VaRs, dim=0).squeeze()
+                return -torch.mean(VaRs, dim=0).squeeze()
             else:
                 # get the posterior mean
                 post = self.model.posterior(z)
@@ -246,6 +246,6 @@ class VaRKG(MCAcquisitionFunction):
                                  num_lookahead_repetitions=self.num_lookahead_repetitions,
                                  l_bound=self.l_bound, u_bound=self.u_bound)
             # sample and return
-            inner_values = -inner_VaR(X_fantasies)
+            inner_values = - inner_VaR(X_fantasies)
             values = self.current_best_VaR - inner_values.mean(0)
             return values.squeeze()

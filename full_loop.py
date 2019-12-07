@@ -9,7 +9,7 @@ from VaR_KG import VaRKG, InnerVaR
 from time import time
 from typing import Union
 from botorch.optim import optimize_acqf
-from plotter import plotter
+from plotter import plotter_3D, contour_plotter
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
@@ -29,9 +29,9 @@ torch.manual_seed(0)
 
 # Initialize the test function
 noise_std = 0.1  # observation noise level
-# function = SimpleQuadratic(noise_std=noise_std)
+function = SimpleQuadratic(noise_std=noise_std)
 # function = SineQuadratic(noise_std=noise_std)
-function = StandardizedFunction(Hartmann(noise_std=noise_std))
+# function = StandardizedFunction(Hartmann(noise_std=noise_std))
 # function = StandardizedFunction(ThreeHumpCamel(noise_std=noise_std))  # has issues with GP fitting
 
 d = function.dim  # dimension of train_X
@@ -65,9 +65,9 @@ print("Initial model fit completed in %s" % (fit_complete - start))
 full_data = dict()
 num_samples = 100
 alpha = 0.7
-num_fantasies = 10
+num_fantasies = 50
 num_inner_restarts = 10 * d
-num_restarts = 10 * d
+num_restarts = 15 * d
 inner_raw_multiplier = 4
 raw_multiplier = 20
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
@@ -78,6 +78,7 @@ full_bounds = Tensor([[0], [1]]).repeat(1, d + num_fantasies * dim_x)
 num_lookahead_samples = 0
 num_lookahead_repetitions = 0
 verbose = True
+plotter = contour_plotter
 filename = input('output file name: ')
 
 iterations = 50
