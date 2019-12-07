@@ -53,7 +53,7 @@ if d == 2:
 
 # construct and fit the GP
 # a more involved prior to set a significant lower bound on the noise. Significantly speeds up computation.
-noise_prior = GammaPrior(1.1, 0.05)
+noise_prior = GammaPrior(1.1, 0.5)
 noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
 likelihood = GaussianLikelihood(
     noise_prior=noise_prior,

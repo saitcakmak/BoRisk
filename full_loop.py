@@ -14,8 +14,9 @@ from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from simple_test_functions import SimpleQuadratic, SineQuadratic
-from botorch.test_functions import Hartmann, ThreeHumpCamel
+from botorch.test_functions import Hartmann, ThreeHumpCamel, Beale, Branin, Powell
 from standardized_function import StandardizedFunction
+import matplotlib.pyplot as plt
 
 """
 In this code, we will initialize a random GP, then optimize it's KG, sample, update and repeat.
@@ -29,10 +30,10 @@ torch.manual_seed(0)
 
 # Initialize the test function
 noise_std = 0.1  # observation noise level
-function = SimpleQuadratic(noise_std=noise_std)
+# function = SimpleQuadratic(noise_std=noise_std)
 # function = SineQuadratic(noise_std=noise_std)
-# function = StandardizedFunction(Hartmann(noise_std=noise_std))
-# function = StandardizedFunction(ThreeHumpCamel(noise_std=noise_std))  # has issues with GP fitting
+function = StandardizedFunction(Powell(noise_std=noise_std))
+# function = StandardizedFunction(Branin(noise_std=noise_std))
 
 d = function.dim  # dimension of train_X
 dim_w = 1  # dimension of w component
@@ -43,7 +44,7 @@ train_Y = function(train_X)
 
 # construct and fit the GP
 # a more involved prior to set a significant lower bound on the noise. Significantly speeds up computation.
-noise_prior = GammaPrior(1.1, 0.05)
+noise_prior = GammaPrior(1.1, 0.5)
 noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
 likelihood = GaussianLikelihood(
     noise_prior=noise_prior,
@@ -65,11 +66,11 @@ print("Initial model fit completed in %s" % (fit_complete - start))
 full_data = dict()
 num_samples = 100
 alpha = 0.7
-num_fantasies = 50
+num_fantasies = 40
 num_inner_restarts = 10 * d
-num_restarts = 15 * d
-inner_raw_multiplier = 4
-raw_multiplier = 20
+num_restarts = 60
+inner_raw_multiplier = 5
+raw_multiplier = 10
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 fix_samples = True
 dist = Uniform(0, 1)
@@ -79,9 +80,10 @@ num_lookahead_samples = 0
 num_lookahead_repetitions = 0
 verbose = True
 plotter = contour_plotter
+# plotter = plotter_3D
 filename = input('output file name: ')
 
-iterations = 50
+iterations = 20
 
 for i in range(iterations):
     iteration_start = time()
@@ -105,8 +107,8 @@ for i in range(iterations):
         print("Candidate: ", candidate, " KG value: ", value)
 
     data = {'state_dict': gp.state_dict(), 'train_targets': gp.train_targets, 'train_inputs': gp.train_inputs,
-            'current_best_sol': current_best_sol, 'current_best_value': current_best_value, 'candidate': candidate,
-            'kg_value': value}
+            'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(), 'candidate': candidate,
+            'kg_value': value.detach()}
     full_data[i] = data
     torch.save(full_data, 'loop_output/%s.pt' % filename)
 
@@ -114,6 +116,7 @@ for i in range(iterations):
     print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
     if verbose and d == 2:
+        plt.close('all')
         plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate)
 
     model_update_start = time()
@@ -125,3 +128,5 @@ for i in range(iterations):
     fit_gpytorch_model(mll)
     model_update_complete = time()
     print("Model updated in %s" % (model_update_complete - model_update_start))
+
+print("total time: ", time()-start)
