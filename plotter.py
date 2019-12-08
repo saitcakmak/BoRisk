@@ -54,7 +54,7 @@ def plotter_3D(model, inner_var, best_pt, best_val, next_pt):
     print("Plot completed in %s" % (plot_end - plot_start))
 
 
-def contour_plotter(model, inner_var, best_pt, best_val, next_pt):
+def contour_plotter(model, inner_var=None, best_pt=None, best_val=None, next_pt=None):
     """
     plot the data in a new figure
     :param inner_var:
@@ -103,22 +103,25 @@ def contour_plotter(model, inner_var, best_pt, best_val, next_pt):
     c = ax[1].contourf(xx, yy, means, alpha=0.8)
     plt.colorbar(c, ax=ax[1])
 
-    # calculate and plot inner VaR values at a few points
-    sols = torch.linspace(0, 1, k).view(-1, 1)
-    VaRs = -inner_var(sols)
-    # print(VaRs)
-    ax[2].plot(sols.reshape(-1).numpy(), VaRs.detach().reshape(-1).numpy())
+    if inner_var:
+        # calculate and plot inner VaR values at a few points
+        sols = torch.linspace(0, 1, k).view(-1, 1)
+        VaRs = -inner_var(sols)
+        # print(VaRs)
+        ax[2].plot(sols.reshape(-1).numpy(), VaRs.detach().reshape(-1).numpy())
 
-    # best VaR
-    ax[2].scatter(best_pt.detach().reshape(-1).numpy(), best_val.detach().reshape(-1).numpy(),
-                  marker='^', s=50, color='red')
+    if best_pt and best_val:
+        # best VaR
+        ax[2].scatter(best_pt.detach().reshape(-1).numpy(), best_val.detach().reshape(-1).numpy(),
+                      marker='^', s=50, color='red')
 
-    # next point
-    ax[0].scatter(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
-                  marker='^', s=50, color='black')
-    ax[1].scatter(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
-                  marker='^', s=50, color='black')
-    ax[2].scatter(next_pt.detach().reshape(-1).numpy()[0], 0, marker='^', s=50, color='black')
+    if next_pt:
+        # next point
+        ax[0].scatter(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
+                      marker='^', s=50, color='black')
+        ax[1].scatter(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
+                      marker='^', s=50, color='black')
+        ax[2].scatter(next_pt.detach().reshape(-1).numpy()[0], 0, marker='^', s=50, color='black')
     plot_end = time()
     plt.show(block=False)
     plt.pause(0.01)
