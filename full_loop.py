@@ -67,11 +67,23 @@ print("Initial model fit completed in %s" % (fit_complete - start))
 full_data = dict()
 num_samples = 100
 alpha = 0.7
-num_fantasies = 40
+num_fantasies = input("num_fantasies (press enter for defaults): ")
+if num_fantasies:
+    num_fantasies = int(num_fantasies)
+else:
+    num_fantasies = 40
 num_inner_restarts = 10 * d
-num_restarts = 60
-inner_raw_multiplier = 5
-raw_multiplier = 10
+num_restarts = input("num_restarts (press enter for defaults): ")
+if num_restarts:
+    num_restarts = int(num_restarts)
+else:
+    num_restarts = 60
+inner_raw_multiplier = 10
+raw_multiplier = input("raw_multiplier (press enter for defaults): ")
+if raw_multiplier:
+    raw_multiplier = int(raw_multiplier)
+else:
+    raw_multiplier = 10
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 fix_samples = True
 dist = Uniform(0, 1)
@@ -84,7 +96,11 @@ plotter = contour_plotter
 # plotter = plotter_3D
 filename = input('output file name: ')
 
-iterations = 50
+iterations = input("iterations (press enter for defaults): ")
+if iterations:
+    iterations = int(iterations)
+else:
+    iterations = 40
 
 for i in range(iterations):
     iteration_start = time()
