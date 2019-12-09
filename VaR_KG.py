@@ -212,7 +212,7 @@ class VaRKG(MCAcquisitionFunction):
             self.fixed_samples = None
         self.num_lookahead_samples = num_lookahead_samples
         self.num_lookahead_repetitions = num_lookahead_repetitions
-        self.mini_batch_size = 10
+        self.mini_batch_size = 50
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
