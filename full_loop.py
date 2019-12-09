@@ -22,6 +22,7 @@ import multiprocessing
 
 cpu_count = multiprocessing.cpu_count()
 torch.set_num_threads(cpu_count)
+torch.set_num_interop_threads(cpu_count)
 
 """
 In this code, we will initialize a random GP, then optimize it's KG, sample, update and repeat.
