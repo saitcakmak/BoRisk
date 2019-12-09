@@ -16,11 +16,9 @@ from gpytorch.priors.torch_priors import GammaPrior
 from simple_test_functions import SimpleQuadratic, SineQuadratic
 from botorch.test_functions import Hartmann, ThreeHumpCamel
 from standardized_function import StandardizedFunction
+from botorch.models.transforms import Standardize
 
-r"""    
-Fixed samples for inner VaR are implemented. These provide numerical stability, however, increase the run time.
-The increase in the run time is likely due to the optimization algorithms running for more iterations than before. 
-"""
+# TODO: update this to use contour plots
 
 # fix the seed for testing
 torch.manual_seed(0)
@@ -64,7 +62,7 @@ likelihood = GaussianLikelihood(
         initial_value=noise_prior_mode,
     ),
 )
-gp = SingleTaskGP(train_X, train_Y, likelihood)
+gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 

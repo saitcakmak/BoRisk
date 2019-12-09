@@ -1,21 +1,30 @@
 import torch
 from torch import Tensor
 from botorch.models import SingleTaskGP
-from botorch.fit import fit_gpytorch_model
-from gpytorch.mlls import ExactMarginalLogLikelihood
-import gpytorch
 from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
 from time import time, sleep
-from typing import Union
 from plotter import plotter_3D, contour_plotter
+from botorch.models.transforms import Standardize
+from gpytorch.likelihoods import GaussianLikelihood
+from gpytorch.constraints.constraints import GreaterThan
+from gpytorch.priors.torch_priors import GammaPrior
 
 file_name = input("file name (w/o extension): ")
 file_path = "loop_output/%s.pt" % file_name
 plotter = contour_plotter
 data = torch.load(file_path)
-# likelihood = gpytorch.likelihoods.GaussianLikelihood()
-likelihood = None
+noise_prior = GammaPrior(1.1, 0.5)
+noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
+likelihood = GaussianLikelihood(
+    noise_prior=noise_prior,
+    batch_shape=[],
+    noise_constraint=GreaterThan(
+        0.05,  # minimum observation noise assumed in the GP model
+        transform=None,
+        initial_value=noise_prior_mode,
+    ),
+)
 num_samples = 100
 alpha = 0.7
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
@@ -24,7 +33,8 @@ dist = Uniform(0, 1)
 
 for i in range(len(data.keys())):
     iteration_data = data[i]
-    gp = SingleTaskGP(iteration_data['train_inputs'][0], iteration_data['train_targets'].unsqueeze(-1), likelihood)
+    gp = SingleTaskGP(iteration_data['train_inputs'][0], iteration_data['train_targets'].unsqueeze(-1), likelihood,
+                      outcome_transform=Standardize(m=1))
     gp.load_state_dict(iteration_data['state_dict'])
     inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha,
                          l_bound=0, u_bound=1, dim_x=1, dim_w=1, fixed_samples=fixed_samples)

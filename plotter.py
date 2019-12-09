@@ -6,7 +6,7 @@ from time import time
 import numpy as np
 
 
-def plotter_3D(model, inner_var, best_pt, best_val, next_pt):
+def plotter_3D(model, inner_var=None, best_pt=None, best_val=None, next_pt=None):
     """
     plot the data in a new figure
     :param inner_var:
@@ -34,20 +34,23 @@ def plotter_3D(model, inner_var, best_pt, best_val, next_pt):
     means = model.posterior(xy).mean
     ax.scatter3D(xx.reshape(-1).numpy(), yy.reshape(-1).numpy(), means.detach().reshape(-1).numpy(), color='orange')
 
-    # calculate and plot inner VaR values at a few points
-    k = 40
-    sols = torch.linspace(0, 1, k).view(-1, 1)
-    VaRs = -inner_var(sols)
-    # print(VaRs)
-    ax.scatter3D(sols.reshape(-1).numpy(), [1] * k, VaRs.detach().reshape(-1).numpy(), color='green')
+    if inner_var is not None:
+        # calculate and plot inner VaR values at a few points
+        k = 40
+        sols = torch.linspace(0, 1, k).view(-1, 1)
+        VaRs = -inner_var(sols)
+        # print(VaRs)
+        ax.scatter3D(sols.reshape(-1).numpy(), [1] * k, VaRs.detach().reshape(-1).numpy(), color='green')
 
-    # best VaR
-    ax.scatter3D(best_pt.detach().reshape(-1).numpy(), [1], best_val.detach().reshape(-1).numpy(),
-                 marker='^', s=50, color='red')
+    if best_pt is not None and best_val is not None:
+        # best VaR
+        ax.scatter3D(best_pt.detach().reshape(-1).numpy(), [1], best_val.detach().reshape(-1).numpy(),
+                     marker='^', s=50, color='red')
 
-    # next point
-    ax.scatter3D(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
-                 2, marker='^', s=50, color='black')
+    if next_pt is not None:
+        # next point
+        ax.scatter3D(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
+                     2, marker='^', s=50, color='black')
     plot_end = time()
     plt.show(block=False)
     plt.pause(0.01)
@@ -103,19 +106,19 @@ def contour_plotter(model, inner_var=None, best_pt=None, best_val=None, next_pt=
     c = ax[1].contourf(xx, yy, means, alpha=0.8)
     plt.colorbar(c, ax=ax[1])
 
-    if inner_var:
+    if inner_var is not None:
         # calculate and plot inner VaR values at a few points
         sols = torch.linspace(0, 1, k).view(-1, 1)
         VaRs = -inner_var(sols)
         # print(VaRs)
         ax[2].plot(sols.reshape(-1).numpy(), VaRs.detach().reshape(-1).numpy())
 
-    if best_pt and best_val:
+    if best_pt is not None and best_val is not None:
         # best VaR
         ax[2].scatter(best_pt.detach().reshape(-1).numpy(), best_val.detach().reshape(-1).numpy(),
                       marker='^', s=50, color='red')
 
-    if next_pt:
+    if next_pt is not None:
         # next point
         ax[0].scatter(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
                       marker='^', s=50, color='black')

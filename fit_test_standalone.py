@@ -9,6 +9,7 @@ from gpytorch.priors.torch_priors import GammaPrior
 import numpy as np
 import matplotlib.pyplot as plt
 from time import sleep
+from botorch.models.transforms import Standardize
 
 
 def contour_plotter(model):
@@ -92,7 +93,7 @@ likelihood = GaussianLikelihood(
         initial_value=noise_prior_mode,
     ),
 )
-gp = SingleTaskGP(tx[0: n], ty[0: n], likelihood)
+gp = SingleTaskGP(tx[0: n], ty[0: n], likelihood, outcome_transform=Standardize(m=1))
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
@@ -100,7 +101,7 @@ contour_plotter(gp)
 sleep(1)
 plt.show()
 
-for i in range(6):
+for i in range(12-n):
     candidate_point = tx[n + i, :].reshape(1, -1)
     observation = ty[n + i, :].reshape(1, -1)
     gp = gp.condition_on_observations(candidate_point, observation)

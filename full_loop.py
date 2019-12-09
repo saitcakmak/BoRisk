@@ -17,6 +17,7 @@ from simple_test_functions import SimpleQuadratic, SineQuadratic
 from botorch.test_functions import Hartmann, ThreeHumpCamel, Beale, Branin, Powell
 from standardized_function import StandardizedFunction
 import matplotlib.pyplot as plt
+from botorch.models.transforms import Standardize
 
 """
 In this code, we will initialize a random GP, then optimize it's KG, sample, update and repeat.
@@ -31,8 +32,8 @@ torch.manual_seed(0)
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
-# function = SineQuadratic(noise_std=noise_std)
-function = StandardizedFunction(Powell(noise_std=noise_std))
+function = SineQuadratic(noise_std=noise_std)
+# function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
 
 d = function.dim  # dimension of train_X
@@ -55,7 +56,7 @@ likelihood = GaussianLikelihood(
         initial_value=noise_prior_mode,
     ),
 )
-gp = SingleTaskGP(train_X, train_Y, likelihood)
+gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
