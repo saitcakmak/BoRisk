@@ -13,6 +13,7 @@ from torch.distributions import Distribution, Uniform
 from botorch import settings
 from botorch.sampling.samplers import IIDNormalSampler, SobolQMCNormalSampler
 from botorch.optim import optimize_acqf
+from math import ceil
 
 
 class InnerVaR(MCAcquisitionFunction):
@@ -211,6 +212,7 @@ class VaRKG(MCAcquisitionFunction):
             self.fixed_samples = None
         self.num_lookahead_samples = num_lookahead_samples
         self.num_lookahead_repetitions = num_lookahead_repetitions
+        self.mini_batch_size = 10
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -234,17 +236,26 @@ class VaRKG(MCAcquisitionFunction):
         X_fantasies = X_fantasies.permute(1, 0, 2).unsqueeze(-2)
 
         # construct the fantasy model
-        sampler = SobolQMCNormalSampler(self.num_fantasies)
-        fantasy_model = self.model.fantasize(X_actual, sampler)
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
+        num_batches = ceil(batch_size / self.mini_batch_size)
+        values = torch.empty(batch_size)
+        for i in range(num_batches):
+            left_index = i * self.mini_batch_size
+            if i == num_batches - 1:
+                right_index = batch_size
+            else:
+                right_index = (i + 1) * self.mini_batch_size
+            sampler = SobolQMCNormalSampler(self.num_fantasies)
+            fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler)
 
-        inner_VaR = InnerVaR(model=fantasy_model, distribution=self.distribution,
-                             num_samples=self.num_samples,
-                             alpha=self.alpha, dim_x=self.dim_x, dim_w=self.dim_w, fixed_samples=self.fixed_samples,
-                             num_lookahead_samples=self.num_lookahead_samples,
-                             num_lookahead_repetitions=self.num_lookahead_repetitions,
-                             l_bound=self.l_bound, u_bound=self.u_bound)
-        # sample and return
-        with settings.propagate_grads(True):
-            inner_values = - inner_VaR(X_fantasies)
-        values = self.current_best_VaR - inner_values.mean(0)
+            inner_VaR = InnerVaR(model=fantasy_model, distribution=self.distribution,
+                                 num_samples=self.num_samples,
+                                 alpha=self.alpha, dim_x=self.dim_x, dim_w=self.dim_w, fixed_samples=self.fixed_samples,
+                                 num_lookahead_samples=self.num_lookahead_samples,
+                                 num_lookahead_repetitions=self.num_lookahead_repetitions,
+                                 l_bound=self.l_bound, u_bound=self.u_bound)
+            # sample and return
+            with settings.propagate_grads(True):
+                inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
+            values[left_index: right_index] = self.current_best_VaR - inner_values.mean(0)
         return values.squeeze()
