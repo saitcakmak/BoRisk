@@ -59,8 +59,7 @@ class InnerVaR(MCAcquisitionFunction):
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Sample from w and calculate the corresponding VaR(mu)
-        TODO: update the info here
-        :param X: The decision variable, only the x component. Dimensions: num_starting_sols x dim_x
+        :param X: The decision variable, only the x component. Dimensions: num_starting_sols x 1 x dim_x (see below)
         :return: -VaR(mu(X, w) - c Sigma(x, w)). Dimensions: num_starting_sols
         """
         # make sure X has proper shape, 4 dimensional to match the batch shape of VaRKG
@@ -74,55 +73,55 @@ class InnerVaR(MCAcquisitionFunction):
         else:
             raise ValueError("InnerVaR supports only up to 2 dimensional batch models")
         batch_shape = X.shape[0: -2]
-        with torch.enable_grad(), settings.propagate_grads(True):
-            # sample w and concatenate with x, using CRN here
-            if self.fixed_samples is None:
-                if isinstance(self.distribution, list):
-                    w_list = []
-                    for dist in self.distribution:
-                        w_list.append(dist.rsample((self.num_samples, 1)))
-                    w = torch.cat(w_list, dim=-1)
-                else:
-                    w_list = []
-                    for i in range(self.dim_w):
-                        w_list.append(self.distribution.rsample((self.num_samples, 1)))
-                    w = torch.cat(w_list, dim=-1)
-                w = w.repeat(*batch_shape, 1, 1)
+
+        # sample w and concatenate with x, using CRN here
+        if self.fixed_samples is None:
+            if isinstance(self.distribution, list):
+                w_list = []
+                for dist in self.distribution:
+                    w_list.append(dist.rsample((self.num_samples, 1)))
+                w = torch.cat(w_list, dim=-1)
             else:
-                if self.fixed_samples.size() != (self.num_samples, self.dim_w):
-                    raise ValueError("fixed_samples must be of size num_samples x dim_w")
-                w = self.fixed_samples.repeat(*batch_shape, 1, 1)
-            # z is the full dimensional variable (x, w)
-            z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
+                w_list = []
+                for i in range(self.dim_w):
+                    w_list.append(self.distribution.rsample((self.num_samples, 1)))
+                w = torch.cat(w_list, dim=-1)
+            w = w.repeat(*batch_shape, 1, 1)
+        else:
+            if self.fixed_samples.size() != (self.num_samples, self.dim_w):
+                raise ValueError("fixed_samples must be of size num_samples x dim_w")
+            w = self.fixed_samples.repeat(*batch_shape, 1, 1)
+        # z is the full dimensional variable (x, w)
+        z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
 
-            # if num_lookahead_ > 0, then update the model to get the refined sample-path
-            if self.num_lookahead_repetitions > 0 and (self.num_lookahead_samples > 0 or self.lookahead_points):
-                lookahead_model = self._get_lookahead_model(X, batch_shape)
-                z = z.repeat(self.num_lookahead_repetitions, 1, 1, 1, 1)
-                samples = lookahead_model.posterior(z).mean
-                # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (5 dim)
+        # if num_lookahead_ > 0, then update the model to get the refined sample-path
+        if self.num_lookahead_repetitions > 0 and (self.num_lookahead_samples > 0 or self.lookahead_points):
+            lookahead_model = self._get_lookahead_model(X, batch_shape)
+            z = z.repeat(self.num_lookahead_repetitions, 1, 1, 1, 1)
+            samples = lookahead_model.posterior(z).mean
+            # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (5 dim)
 
-                samples, _ = torch.sort(samples, dim=-2)
-                VaRs = samples[:, :, :, int(self.num_samples * self.alpha)]
+            samples, _ = torch.sort(samples, dim=-2)
+            VaRs = samples[:, :, :, int(self.num_samples * self.alpha)]
 
-                # return negative since optimizers maximize
-                return -torch.mean(VaRs, dim=0).squeeze()
-            else:
-                # get the posterior mean
-                post = self.model.posterior(z)
-                samples = post.mean
+            # return negative since optimizers maximize
+            return -torch.mean(VaRs, dim=0).squeeze()
+        else:
+            # get the posterior mean
+            post = self.model.posterior(z)
+            samples = post.mean
 
-                # We can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
-                if self.c != 0:
-                    samples_variance = post.variance.pow(1 / 2)
-                    samples = samples - self.c * samples_variance
+            # We can similarly query the variance and use VaR(mu - c Sigma) as an alternative acq func.
+            if self.c != 0:
+                samples_variance = post.variance.pow(1 / 2)
+                samples = samples - self.c * samples_variance
 
-                # order samples
-                samples, _ = samples.sort(-2)
-                # return the sample quantile
-                VaRs = samples[:, :, int(self.num_samples * self.alpha)]
-                # return negative so that the optimization minimizes the function
-                return -VaRs.squeeze()
+            # order samples
+            samples, _ = samples.sort(-2)
+            # return the sample quantile
+            VaRs = samples[:, :, int(self.num_samples * self.alpha)]
+            # return negative so that the optimization minimizes the function
+            return -VaRs.squeeze()
 
     def _get_lookahead_model(self, X: Tensor, batch_shape: tuple):
         """
@@ -234,18 +233,18 @@ class VaRKG(MCAcquisitionFunction):
         X_fantasies = X_fantasies.reshape(batch_size, self.num_fantasies, self.dim_x)
         X_fantasies = X_fantasies.permute(1, 0, 2).unsqueeze(-2)
 
-        with torch.enable_grad(), settings.propagate_grads(True):
-            # construct the fantasy model
-            sampler = SobolQMCNormalSampler(self.num_fantasies)
-            fantasy_model = self.model.fantasize(X_actual, sampler)
+        # construct the fantasy model
+        sampler = SobolQMCNormalSampler(self.num_fantasies)
+        fantasy_model = self.model.fantasize(X_actual, sampler)
 
-            inner_VaR = InnerVaR(model=fantasy_model, distribution=self.distribution,
-                                 num_samples=self.num_samples,
-                                 alpha=self.alpha, dim_x=self.dim_x, dim_w=self.dim_w, fixed_samples=self.fixed_samples,
-                                 num_lookahead_samples=self.num_lookahead_samples,
-                                 num_lookahead_repetitions=self.num_lookahead_repetitions,
-                                 l_bound=self.l_bound, u_bound=self.u_bound)
-            # sample and return
+        inner_VaR = InnerVaR(model=fantasy_model, distribution=self.distribution,
+                             num_samples=self.num_samples,
+                             alpha=self.alpha, dim_x=self.dim_x, dim_w=self.dim_w, fixed_samples=self.fixed_samples,
+                             num_lookahead_samples=self.num_lookahead_samples,
+                             num_lookahead_repetitions=self.num_lookahead_repetitions,
+                             l_bound=self.l_bound, u_bound=self.u_bound)
+        # sample and return
+        with settings.propagate_grads(True):
             inner_values = - inner_VaR(X_fantasies)
-            values = self.current_best_VaR - inner_values.mean(0)
-            return values.squeeze()
+        values = self.current_best_VaR - inner_values.mean(0)
+        return values.squeeze()

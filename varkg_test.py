@@ -292,18 +292,18 @@ def tester_5(k=100, num_samples=100, num_lookahead_samples=10, num_lookahead_rep
 
 # uncomment to run respective tests
 # evaluate simple inner VaR
-# tester_1()
+tester_1()
 # optimize inner VaR
-# tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
-# tester_2(num_lookahead_samples=10, num_lookahead_repetitions=10)
+tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
+tester_2(num_lookahead_samples=10, num_lookahead_repetitions=10)
 # evaluate VaRKG
-# tester_3(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
-# tester_3(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
+tester_3(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
+tester_3(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
 # optimize VaRKG
-# tester_4(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
-# tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
+tester_4(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
+tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
 # evaluate inner VaR with lookaheads
-# tester_5()
+tester_5()
 
 opt_complete = time()
 print("fit: ", fit_complete - start, " opt: ", opt_complete - fit_complete)
