@@ -97,6 +97,8 @@ mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
 contour_plotter(gp)
+sleep(1)
+plt.show()
 
 for i in range(6):
     candidate_point = tx[n + i, :].reshape(1, -1)
@@ -108,3 +110,5 @@ for i in range(6):
     plt.close('all')
     contour_plotter(gp)
     sleep(1)
+
+plt.show()

@@ -83,7 +83,7 @@ plotter = contour_plotter
 # plotter = plotter_3D
 filename = input('output file name: ')
 
-iterations = 20
+iterations = 50
 
 for i in range(iterations):
     iteration_start = time()
