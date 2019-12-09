@@ -9,18 +9,16 @@ from mpl_toolkits import mplot3d
 from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
 from time import time
-from typing import Union
+from typing import Union, Optional
 from botorch.optim import optimize_acqf
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from simple_test_functions import SimpleQuadratic, SineQuadratic
 from botorch.test_functions import Hartmann, ThreeHumpCamel
 from standardized_function import StandardizedFunction
+from botorch.models.transforms import Standardize
 
-r"""    
-Fixed samples for inner VaR are implemented. These provide numerical stability, however, increase the run time.
-The increase in the run time is likely due to the optimization algorithms running for more iterations than before. 
-"""
+# TODO: update this to use contour plots
 
 # fix the seed for testing
 torch.manual_seed(0)
@@ -34,9 +32,10 @@ function = SineQuadratic(noise_std=noise_std)
 # function = StandardizedFunction(Hartmann(noise_std=noise_std))
 # function = StandardizedFunction(ThreeHumpCamel(noise_std=noise_std))  # has issues with GP fitting
 
-n = 30  # training samples
 d = function.dim  # dimension of train_X
-dim_x = d - 1  # dimension of the x component
+dim_w = 1  # dimension of the w component
+n = 2 * d + 2  # training samples
+dim_x = d - dim_w  # dimension of the x component
 train_X = torch.rand((n, d))
 train_Y = function(train_X)
 
@@ -52,7 +51,7 @@ if d == 2:
 
 # construct and fit the GP
 # a more involved prior to set a significant lower bound on the noise. Significantly speeds up computation.
-noise_prior = GammaPrior(1.1, 0.05)
+noise_prior = GammaPrior(1.1, 0.5)
 noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
 likelihood = GaussianLikelihood(
     noise_prior=noise_prior,
@@ -63,7 +62,7 @@ likelihood = GaussianLikelihood(
         initial_value=noise_prior_mode,
     ),
 )
-gp = SingleTaskGP(train_X, train_Y, likelihood)
+gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
@@ -90,15 +89,16 @@ current_best = Tensor([0])
 
 
 def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
-            current_best: Tensor = Tensor([0]), num_fantasies: int = 10, fix_samples=True,
+            current_best: Optional[Tensor] = None, num_fantasies: int = 10, q: int = 1, fix_samples=True,
             num_lookahead_samples=0, num_lookahead_repetitions=0):
     """
     this is for testing VaRKG - evaluate at the given point(s)
-    :param sol: solution (1 x dim) to evaluate
+    :param sol: batch size x 1 x (q x dim + num_fantasies x dim_x) to evaluate
     :param num_samples: number of w to samples for inner VaR calculations
     :param alpha: the VaR level
     :param current_best: the current best VaR value for use in VaRKG calculations
     :param num_fantasies: number of fantasy models to average over for VaRKG
+    :param q: for q-batch parallel evaluation
     :param fix_samples: use fix samples for w
     :param num_lookahead_samples: number of lookahead points to enumerate on
     :param num_lookahead_repetitions: number of repetitions to average these over
@@ -117,7 +117,7 @@ def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0
 
 
 def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
-                current_best: Tensor = Tensor([0]), num_fantasies: int = 10, fix_samples=True,
+                current_best: Optional[Tensor] = None, num_fantasies: int = 10, q: int = 1, fix_samples=True,
                 num_lookahead_samples=0, num_lookahead_repetitions=0):
     """
     this is for testing VaRKG optimization - uses optimize acqf
@@ -125,6 +125,7 @@ def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
     :param alpha: the VaR level
     :param current_best: the current best VaR value for use in VaRKG calculations
     :param num_fantasies: number of fantasy models to average over for VaRKG
+    :param q: for q-batch parallel evaluation
     :param fix_samples: use fix samples for w
     :param num_lookahead_samples: number of lookahead points to enumerate on
     :param num_lookahead_repetitions: number of repetitions to average these over
@@ -270,7 +271,7 @@ def tester_4(fix_samples=True, num_fantasies=10, num_lookahead_samples=0, num_lo
 
 
 # test inner VaR with lookahead
-def tester_5(k=100, num_samples=100, num_lookahead_samples=10, num_lookahead_repetitions=10, fix_samples=True):
+def tester_5(k=10, num_samples=100, num_lookahead_samples=10, num_lookahead_repetitions=10, fix_samples=True):
     sols = torch.linspace(0, 1, k).view(-1, 1)
     # TODO: same here
     sols = sols.repeat(1, dim_x)
@@ -291,18 +292,18 @@ def tester_5(k=100, num_samples=100, num_lookahead_samples=10, num_lookahead_rep
 
 # uncomment to run respective tests
 # evaluate simple inner VaR
-# tester_1()
+tester_1()
 # optimize inner VaR
-# tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
-# tester_2(num_lookahead_samples=10, num_lookahead_repetitions=10)
+tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
+tester_2(num_lookahead_samples=10, num_lookahead_repetitions=10)
 # evaluate VaRKG
-# tester_3(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
-# tester_3(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
+tester_3(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
+tester_3(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
 # optimize VaRKG
-# tester_4(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
-# tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
+tester_4(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
+tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
 # evaluate inner VaR with lookaheads
-# tester_5()
+tester_5()
 
 opt_complete = time()
 print("fit: ", fit_complete - start, " opt: ", opt_complete - fit_complete)
