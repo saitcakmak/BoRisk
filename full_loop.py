@@ -18,6 +18,10 @@ from botorch.test_functions import Hartmann, ThreeHumpCamel, Beale, Branin, Powe
 from standardized_function import StandardizedFunction
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
+import multiprocessing
+
+cpu_count = multiprocessing.cpu_count()
+torch.set_num_threads(cpu_count)
 
 """
 In this code, we will initialize a random GP, then optimize it's KG, sample, update and repeat.
