@@ -3,19 +3,15 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-import gpytorch
-from torch.distributions import Uniform, Gamma
+from torch.distributions import Uniform
 from VaR_KG import VaRKG, InnerVaR
 from time import time
-from typing import Union
 from botorch.optim import optimize_acqf
-from plotter import plotter_3D, contour_plotter
+from plotter import contour_plotter
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from simple_test_functions import SimpleQuadratic, SineQuadratic
-from botorch.test_functions import Hartmann, ThreeHumpCamel, Beale, Branin, Powell
-from standardized_function import StandardizedFunction
+from test_functions.simple_test_functions import SineQuadratic
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing

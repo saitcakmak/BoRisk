@@ -259,3 +259,14 @@ class VaRKG(MCAcquisitionFunction):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
             values[left_index: right_index] = self.current_best_VaR - inner_values.mean(0)
         return values.squeeze()
+
+    def evaluate_kg(self, X: Tensor) -> Tensor:
+        """
+        Evaluates the KG value by optimizing over inner fantasies. Essentially for the given X, it calls forward and
+        optimizes the solutions to the inner problems.
+        :param X: batch_size x 1 x (q x dim)
+        :return: The actual VaRKG value of batch_size
+        """
+        # TODO: the fix features thing in optimize acqf seems to do this
+        #       need to set bounds etc and call the optimizer here with the first dim features fixed.
+        pass
