@@ -119,14 +119,17 @@ for i in range(iterations):
                    l_bound=0, u_bound=1,
                    fix_samples=fix_samples)
 
+    # just for testing evaluate_kg
+    # var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
+
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
                                      raw_samples=num_restarts * raw_multiplier)
     if verbose:
         print("Candidate: ", candidate, " KG value: ", value)
 
     data = {'state_dict': gp.state_dict(), 'train_targets': gp.train_targets, 'train_inputs': gp.train_inputs,
-            'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(), 'candidate': candidate,
-            'kg_value': value.detach()}
+            'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
+            'candidate': candidate, 'kg_value': value.detach()}
     full_data[i] = data
     torch.save(full_data, 'loop_output/%s.pt' % filename)
 

@@ -23,7 +23,8 @@ class InnerVaR(MCAcquisitionFunction):
 
     def __init__(self, model: Model, distribution: Union[Distribution, List[Distribution]], num_samples: int,
                  alpha: Union[Tensor, float], l_bound: Union[float, Tensor],
-                 u_bound: Union[float, Tensor], dim_x: int, dim_w: int, c: float = 0, fixed_samples: Optional[Tensor] = None,
+                 u_bound: Union[float, Tensor], dim_x: int, dim_w: int, c: float = 0,
+                 fixed_samples: Optional[Tensor] = None,
                  num_lookahead_samples: int = 0, num_lookahead_repetitions: int = 0,
                  lookahead_points: Tensor = None):
         r"""
@@ -170,6 +171,7 @@ class VaRKG(MCAcquisitionFunction):
                  num_lookahead_samples: int = 0, num_lookahead_repetitions: int = 0):
         r"""
         Initialize the problem for sampling
+        # TODO: look into using **kwargs etc instead of tons of default parameters
         :param model: a constructed GP model
         :param distribution: a constructed Torch distribution object
         :param num_samples: number of samples to use to calculate VaR (samples of w)
@@ -212,6 +214,7 @@ class VaRKG(MCAcquisitionFunction):
             self.fixed_samples = None
         self.num_lookahead_samples = num_lookahead_samples
         self.num_lookahead_repetitions = num_lookahead_repetitions
+        # TODO: maybe we can set this to some potential max by using psutil.virtual_memory() commands
         self.mini_batch_size = 50
 
     def forward(self, X: Tensor) -> Tensor:
@@ -228,23 +231,27 @@ class VaRKG(MCAcquisitionFunction):
         # split the evaluation and fantasy solutions
         split_sizes = [self.q * self.dim, self.num_fantasies * self.dim_x]
         if X.size(-1) != sum(split_sizes):
-            raise ValueError('X must be of size: batch size x 1 x (q x dim + num_fantasies x dim_x)')
+            if X.size(-1) == self.q * self.dim:
+                return self.evaluate_kg(X)
+            raise ValueError('X must be of size: batch size x 1 x (q x dim + num_fantasies x dim_x) or (q x dim)')
         X_actual, X_fantasies = torch.split(X, split_sizes, dim=-1)
         X_actual = X_actual.reshape(batch_size, self.q, self.dim)
         # After permuting, we get size self.num_fantasies x batch size x 1 x dim_x
         X_fantasies = X_fantasies.reshape(batch_size, self.num_fantasies, self.dim_x)
         X_fantasies = X_fantasies.permute(1, 0, 2).unsqueeze(-2)
 
-        # construct the fantasy model
         # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
         num_batches = ceil(batch_size / self.mini_batch_size)
         values = torch.empty(batch_size)
         for i in range(num_batches):
+            # TODO: we should handle the CRN issues inside. The CRNs are not necessarily synchronized across
+            #  for loop iterations.
             left_index = i * self.mini_batch_size
             if i == num_batches - 1:
                 right_index = batch_size
             else:
                 right_index = (i + 1) * self.mini_batch_size
+            # construct the fantasy model
             sampler = SobolQMCNormalSampler(self.num_fantasies)
             fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler)
 
@@ -260,13 +267,30 @@ class VaRKG(MCAcquisitionFunction):
             values[left_index: right_index] = self.current_best_VaR - inner_values.mean(0)
         return values.squeeze()
 
-    def evaluate_kg(self, X: Tensor) -> Tensor:
+    def evaluate_kg(self, X: Tensor, num_restarts=10, raw_multiplier=5) -> Tensor:
         """
         Evaluates the KG value by optimizing over inner fantasies. Essentially for the given X, it calls forward and
         optimizes the solutions to the inner problems.
         :param X: batch_size x 1 x (q x dim)
+        :param num_restarts: number of restarts for the optimization
+        :param raw_multiplier: raw_samples = num_restarts * raw_multiplier for optimization
         :return: The actual VaRKG value of batch_size
         """
         # TODO: the fix features thing in optimize acqf seems to do this
         #       need to set bounds etc and call the optimizer here with the first dim features fixed.
-        pass
+        #       this works but has some inefficiencies with the initial sample generation
+        X = X.reshape(-1, 1, self.q * self.dim)
+
+        # TODO: figure out things with bounds. Likely easiest to fix it all to unit hypercube.
+        full_bounds = Tensor([[0], [1]]).repeat(1, self.q * self.dim + self.num_fantasies * self.dim_x)
+
+        value = torch.empty(X.size(0))
+        for i in range(X.size(0)):
+            fixed_features = {}
+            for j in range(self.q * self.dim):
+                fixed_features[j] = X[i, 0, j]
+
+            _, value[i] = optimize_acqf(self, bounds=full_bounds, q=1, num_restarts=num_restarts,
+                                        raw_samples=num_restarts * raw_multiplier,
+                                        fixed_features=fixed_features)
+        return value
