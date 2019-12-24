@@ -122,6 +122,9 @@ for i in range(iterations):
     # just for testing evaluate_kg
     # var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
 
+    # for testing optimize_kg
+    # candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
+
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
                                      raw_samples=num_restarts * raw_multiplier)
     if verbose:

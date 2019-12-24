@@ -294,3 +294,18 @@ class VaRKG(MCAcquisitionFunction):
                                         raw_samples=num_restarts * raw_multiplier,
                                         fixed_features=fixed_features)
         return value
+
+    def optimize_kg(self, num_restarts=50, raw_multiplier=10):
+        """
+        Optimizes KG and returns the optimal solution and value.
+        :param num_restarts: Number of restarts for the optimization
+        :param raw_multiplier: raw_samples = num_restarts * raw_multiplier for optimization
+        :return: Optimal solution and KG value
+        """
+        # TODO: same thing with bounds
+        full_bounds = Tensor([[0], [1]]).repeat(1, self.q * self.dim + self.num_fantasies * self.dim_x)
+
+        candidate, value = optimize_acqf(self, bounds=full_bounds, q=1, num_restarts=num_restarts,
+                                         raw_samples=num_restarts * raw_multiplier)
+
+        return candidate[:, 0: self.q * self.dim], value
