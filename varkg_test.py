@@ -1,3 +1,8 @@
+"""
+this is for testing and debugging VaR_KG components only. Don't use it for other purposes, it is not clean.
+To use VaR_KG, run full_loop with the appropriate problem and parameters specified.
+"""
+
 import torch
 from torch import Tensor
 from botorch.models import SingleTaskGP
@@ -5,7 +10,7 @@ from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from gpytorch.likelihoods import GaussianLikelihood
 import matplotlib.pyplot as plt
-from torch.distributions import Uniform
+from mpl_toolkits import mplot3d
 from VaR_KG import VaRKG, InnerVaR
 from time import time
 from typing import Union, Optional
@@ -81,13 +86,14 @@ if d == 2:
 # torch.seed()
 
 # construct the sampling distribution of w
-dist = Uniform(0, 1)
 current_best = Tensor([0])
 
 
 def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
             current_best: Optional[Tensor] = None, num_fantasies: int = 10, q: int = 1, fix_samples=True,
-            num_lookahead_samples=0, num_lookahead_repetitions=0):
+            fixed_samples=None,
+            num_lookahead_repetitions=0,
+            lookahead_samples=None):
     """
     this is for testing VaRKG - evaluate at the given point(s)
     :param sol: batch size x 1 x (q x dim + num_fantasies x dim_x) to evaluate
@@ -97,15 +103,16 @@ def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0
     :param num_fantasies: number of fantasy models to average over for VaRKG
     :param q: for q-batch parallel evaluation
     :param fix_samples: use fix samples for w
-    :param num_lookahead_samples: number of lookahead points to enumerate on
+    :param lookahead_samples: lookahead points to enumerate on, w component only
     :param num_lookahead_repetitions: number of repetitions to average these over
     :return: changing
     """
     # construct the acquisition function
-    var_kg = VaRKG(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best,
-                   num_fantasies=num_fantasies, dim=d, dim_x=dim_x, l_bound=0, u_bound=1,
-                   q=q, fix_samples=fix_samples, num_lookahead_samples=num_lookahead_samples,
-                   num_lookahead_repetitions=num_lookahead_repetitions)
+    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best,
+                   num_fantasies=num_fantasies, dim=d, dim_x=dim_x,
+                   q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
+                   num_lookahead_repetitions=num_lookahead_repetitions,
+                   lookahead_samples=lookahead_samples)
 
     # query the value of acquisition function
     value = var_kg(sol)
@@ -115,7 +122,9 @@ def KG_test(sol: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0
 
 def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
                 current_best: Optional[Tensor] = None, num_fantasies: int = 10, q: int = 1, fix_samples=True,
-                num_lookahead_samples=0, num_lookahead_repetitions=0):
+                fixed_samples=None,
+                num_lookahead_repetitions=0,
+                lookahead_samples=None):
     """
     this is for testing VaRKG optimization - uses optimize acqf
     :param num_samples: number of w to samples for inner VaR calculations
@@ -124,15 +133,16 @@ def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
     :param num_fantasies: number of fantasy models to average over for VaRKG
     :param q: for q-batch parallel evaluation
     :param fix_samples: use fix samples for w
-    :param num_lookahead_samples: number of lookahead points to enumerate on
+    :param lookahead_samples: lookahead points to enumerate on
     :param num_lookahead_repetitions: number of repetitions to average these over
     :return: changing
     """
     # construct the acquisition function
-    var_kg = VaRKG(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best,
-                   num_fantasies=num_fantasies, dim=d, dim_x=dim_x, l_bound=0, u_bound=1,
-                   q=q, fix_samples=fix_samples, num_lookahead_samples=num_lookahead_samples,
-                   num_lookahead_repetitions=num_lookahead_repetitions)
+    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best,
+                   num_fantasies=num_fantasies, dim=d, dim_x=dim_x,
+                   q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
+                   num_lookahead_repetitions=num_lookahead_repetitions,
+                   lookahead_samples=lookahead_samples)
 
     # optimize it
     bounds = Tensor([[0], [1]]).repeat(1, q * d + num_fantasies * dim_x)
@@ -141,7 +151,7 @@ def KG_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
     return candidates, values
 
 
-def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7, fixed_samples=None):
+def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7):
     """
     this is for testing InnerVaR
     :param fixed_samples:
@@ -150,16 +160,15 @@ def inner_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float]
     :param alpha: the VaR level
     :return: corresponding inner VaR values (num_points x dim_x)
     """
+    w_samples = torch.rand((num_samples, dim_w))
     # construct the acquisition function
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x, dim_w=dim_w,
-                         fixed_samples=fixed_samples,
-                         l_bound=0, u_bound=1)
+    inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x)
     # return the negative since inner VaR negates by default
     return -inner_VaR(sols)
 
 
 def inner_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
-                   num_lookahead_samples=0, num_lookahead_repetitions=0, fix_samples=True):
+                   lookahead_samples=None, num_lookahead_repetitions=0):
     """
     this is for testing the optimization of InnerVaR - uses optimize acqf
     :param num_samples: number of w used to evaluate VaR
@@ -169,14 +178,11 @@ def inner_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
     :param num_lookahead_repetitions: number of repetitions to average these over
     :return: optimized points and inner VaR values (num_starting_sols x dim_x, num_starting_sols x 1)
     """
+    w_samples = torch.rand((num_samples, dim_w))
     # construct the acquisition function
-    if fix_samples:
-        fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
-    else:
-        fixed_samples = None
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x, dim_w=dim_w,
-                         fixed_samples=fixed_samples,
-                         l_bound=0, u_bound=1, num_lookahead_samples=num_lookahead_samples,
+
+    inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                         lookahead_samples=lookahead_samples,
                          num_lookahead_repetitions=num_lookahead_repetitions)
     # optimize
     bounds = Tensor([[0], [1]]).repeat(1, dim_x)
@@ -185,25 +191,21 @@ def inner_opt_test(num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
 
 
 def inner_lookahead_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tensor, float] = 0.7,
-                         fixed_samples: Tensor = None,
-                         num_lookahead_samples: int = 10, num_lookahead_repetitions: int = 5,
-                         lookahead_points: Tensor = None):
+                         lookahead_samples=torch.linspace(0, 1, 10).reshape(-1, 1), num_lookahead_repetitions: int = 5):
     """
     this is for testing InnerVaR with the lookahead sample path enumeration
     :param sols: solutions to evaluate VaR on: num_sols x dim_x
     :param num_samples: num_samples of w to calculate VaR with
     :param alpha: risk level alpha of VaR
-    :param fixed_samples: if given, use these instead of drawing samples of w
-    :param num_lookahead_samples: number of lookahead points to enumerate on
+    :param lookahead_samples: number of lookahead points to enumerate on
     :param num_lookahead_repetitions: number of repetitions to average these over
-    :param lookahead_points: if given, use these instead of drawing the lookahead points, only w component
     :return: value of VaR: num_sols x 1
     """
+    w_samples = torch.rand((num_samples, dim_w))
     # construct the acquisition function
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, dim_x=dim_x, dim_w=dim_w,
-                         fixed_samples=fixed_samples,
-                         l_bound=0, u_bound=1, num_lookahead_samples=num_lookahead_samples,
-                         num_lookahead_repetitions=num_lookahead_repetitions, lookahead_points=lookahead_points)
+    inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                         lookahead_samples=lookahead_samples,
+                         num_lookahead_repetitions=num_lookahead_repetitions)
     # negate to get the actual value
     return -inner_VaR(sols)
 
@@ -213,11 +215,7 @@ def tester_1(k=100, num_samples=100, fix_samples=True):
     sols = torch.linspace(0, 1, k).view(-1, 1)
     # TODO: update this with something more sensible, this is just the diagonal right now (for dim_x > 1)
     sols = sols.repeat(1, dim_x)
-    if fix_samples:
-        fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
-    else:
-        fixed_samples = None
-    VaRs = inner_test(sols, num_samples, 0.7, fixed_samples=fixed_samples)
+    VaRs = inner_test(sols, num_samples, 0.7)
     # print(VaRs)
     if d == 2:
         ax.scatter3D(sols.reshape(-1).numpy(), [1] * k, VaRs.detach().reshape(-1).numpy())
@@ -227,11 +225,10 @@ def tester_1(k=100, num_samples=100, fix_samples=True):
 
 
 # test for optimization of inner VaR
-def tester_2(k=10, num_lookahead_samples=0, num_lookahead_repetitions=0, fix_samples=True):
+def tester_2(k=10, lookahead_samples=None, num_lookahead_repetitions=0):
     global current_best
-    cand, vals = inner_opt_test(num_lookahead_samples=num_lookahead_samples,
-                                num_lookahead_repetitions=num_lookahead_repetitions,
-                                fix_samples=fix_samples)
+    cand, vals = inner_opt_test(lookahead_samples=lookahead_samples,
+                                num_lookahead_repetitions=num_lookahead_repetitions)
     current_best = vals
     print("cand: ", cand, " values: ", vals)
     if d == 2:
@@ -242,12 +239,12 @@ def tester_2(k=10, num_lookahead_samples=0, num_lookahead_repetitions=0, fix_sam
 
 
 # calculate the value of VaRKG for a number of points
-def tester_3(k=10, num_samples=100, num_fantasies=10, num_lookahead_samples=0, num_lookahead_repetitions=0,
-             fix_samples=True):
+def tester_3(k=10, num_samples=100, num_fantasies=10, lookahead_samples=None, num_lookahead_repetitions=0,
+             fix_samples=False):
     # TODO: this can also be more interesting
     sols = torch.rand(k, d + num_fantasies * dim_x)
     res = KG_test(sols, current_best=current_best, num_samples=num_samples, num_fantasies=num_fantasies,
-                  num_lookahead_samples=num_lookahead_samples,
+                  lookahead_samples=lookahead_samples,
                   num_lookahead_repetitions=num_lookahead_repetitions,
                   fix_samples=fix_samples)
     # print(res)
@@ -259,25 +256,21 @@ def tester_3(k=10, num_samples=100, num_fantasies=10, num_lookahead_samples=0, n
 
 
 # test KG_opt
-def tester_4(fix_samples=True, num_fantasies=10, num_lookahead_samples=0, num_lookahead_repetitions=0):
+def tester_4(fix_samples=True, num_fantasies=10, lookahead_samples=None, num_lookahead_repetitions=0):
     cand, val = KG_opt_test(num_fantasies=num_fantasies,
-                            num_lookahead_samples=num_lookahead_samples,
+                            lookahead_samples=lookahead_samples,
                             num_lookahead_repetitions=num_lookahead_repetitions,
                             fix_samples=fix_samples)
     print('tester_4 done!')
 
 
 # test inner VaR with lookahead
-def tester_5(k=100, num_samples=100, num_lookahead_samples=10, num_lookahead_repetitions=10, fix_samples=True):
+def tester_5(k=100, num_samples=100, lookahead_samples=None, num_lookahead_repetitions=10):
     sols = torch.linspace(0, 1, k).view(-1, 1)
     # TODO: same here
     sols = sols.repeat(1, dim_x)
-    if fix_samples:
-        fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
-    else:
-        fixed_samples = None
-    VaRs = inner_lookahead_test(sols, num_samples, 0.7, fixed_samples=fixed_samples,
-                                num_lookahead_samples=num_lookahead_samples,
+    VaRs = inner_lookahead_test(sols, num_samples, 0.7,
+                                lookahead_samples=lookahead_samples,
                                 num_lookahead_repetitions=num_lookahead_repetitions)
     # print(VaRs)
     if d == 2:
@@ -291,16 +284,27 @@ def tester_5(k=100, num_samples=100, num_lookahead_samples=10, num_lookahead_rep
 # evaluate simple inner VaR
 tester_1()
 # optimize inner VaR
-tester_2(num_lookahead_samples=0, num_lookahead_repetitions=0)
-tester_2(num_lookahead_samples=10, num_lookahead_repetitions=10)
+tester_2(lookahead_samples=None, num_lookahead_repetitions=0)
+tester_2(lookahead_samples=torch.linspace(0, 1, 10).reshape(-1, 1), num_lookahead_repetitions=10)
 # evaluate VaRKG
-tester_3(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
-tester_3(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
+tester_3(lookahead_samples=None, num_lookahead_repetitions=0, num_fantasies=10)
+tester_3(lookahead_samples=torch.linspace(0, 1, 10).reshape(-1, 1), num_lookahead_repetitions=10, num_fantasies=10)
 # optimize VaRKG
-tester_4(num_lookahead_samples=0, num_lookahead_repetitions=0, num_fantasies=10)
-tester_4(num_lookahead_samples=10, num_lookahead_repetitions=10, num_fantasies=10)
+tester_4(lookahead_samples=None, num_lookahead_repetitions=0, num_fantasies=10, fix_samples=True)
+tester_4(lookahead_samples=torch.linspace(0, 1, 10).reshape(-1, 1), num_lookahead_repetitions=10, num_fantasies=10,
+         fix_samples=True)
+tester_4(lookahead_samples=None, num_lookahead_repetitions=0, num_fantasies=10, fix_samples=False)
+tester_4(lookahead_samples=torch.linspace(0, 1, 10).reshape(-1, 1), num_lookahead_repetitions=10, num_fantasies=10,
+         fix_samples=False)
 # evaluate inner VaR with lookaheads
 tester_5()
+
+# mini function tests
+v_kg = VaRKG(model=gp, num_samples=100, alpha=0.7, current_best_VaR=None, num_fantasies=10, dim=d, dim_x=dim_x)
+v_kg.evaluate_kg(torch.rand((5, 1, d)))
+v_kg(torch.rand((5, 1, d)))
+v_kg.optimize_kg()
+print("mini tests done!")
 
 opt_complete = time()
 print("fit: ", fit_complete - start, " opt: ", opt_complete - fit_complete)

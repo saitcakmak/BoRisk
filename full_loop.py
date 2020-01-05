@@ -1,3 +1,10 @@
+"""
+A full optimization loop of VaRKG with some pre-specified parameters.
+Specify the problem to use as the 'function', adjust the parameters and run.
+Make sure that the problem is defined over unit-hypercube, including the w components.
+The w components will be drawn as i.i.d. uniform(0, 1) and the problem is expected to convert these to appropriate
+random variables.
+"""
 import torch
 from torch import Tensor
 from botorch.models import SingleTaskGP
@@ -85,13 +92,28 @@ if raw_multiplier:
     raw_multiplier = int(raw_multiplier)
 else:
     raw_multiplier = 10
+
+# samples used to get the current VaR value
+w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
+
+# fixed_samples and fix_samples makes it SAA approach.
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 fix_samples = True
-dist = Uniform(0, 1)
+# comment out above and uncomment below for SGD
+# fix_samples = False
+# fixed_samples = None
+
+q = 1  # number of parallel solutions to evaluate, think qKG
 x_bounds = Tensor([[0], [1]]).repeat(1, dim_x)
-full_bounds = Tensor([[0], [1]]).repeat(1, d + num_fantasies * dim_x)
-num_lookahead_samples = 0
+full_bounds = Tensor([[0], [1]]).repeat(1, q * d + num_fantasies * dim_x)
+
+# specify if 'm' lookahead method is preferred
+lookahead_samples = None
 num_lookahead_repetitions = 0
+# example below
+# lookahead_samples = torch.linspace(0, 1, 40).reshape(-1, 1)
+# num_lookahead_repetitions = 10
+
 verbose = True
 plotter = contour_plotter
 # plotter = plotter_3D
@@ -105,25 +127,24 @@ else:
 
 for i in range(iterations):
     iteration_start = time()
-    inner_VaR = InnerVaR(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha, fixed_samples=fixed_samples,
-                         l_bound=0, u_bound=1, dim_x=dim_x, dim_w=dim_w, num_lookahead_samples=num_lookahead_samples,
-                         num_lookahead_repetitions=num_lookahead_repetitions)
+    inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                         num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,)
     current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
                                             raw_samples=num_inner_restarts * inner_raw_multiplier)
     current_best_value = - value
     if verbose:
         print("Current best value: ", current_best_value)
 
-    var_kg = VaRKG(model=gp, distribution=dist, num_samples=num_samples, alpha=alpha,
+    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                    current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x,
-                   l_bound=0, u_bound=1,
-                   fix_samples=fix_samples)
+                   fix_samples=fix_samples, fixed_samples=fixed_samples,
+                   num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples)
 
     # just for testing evaluate_kg
-    # var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
+    var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
 
     # for testing optimize_kg
-    # candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
+    candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
 
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
                                      raw_samples=num_restarts * raw_multiplier)
