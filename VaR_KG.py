@@ -220,7 +220,7 @@ class VaRKG(MCAcquisitionFunction):
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Calculate the value of VaRKG acquisition function by averaging over fantasies
-        NOTE: DOES NOT RETURN THE TRUE VARKG VALUE UNLESS OPTIMIZED
+        NOTE: DOES NOT RETURN THE TRUE VARKG VALUE UNLESS OPTIMIZED - Use evaluate_kg for that
         :param X: batch size x 1 x (q x dim + num_fantasies x dim_x) of which the first (q x dim) is for q points
                     being evaluated, the remaining (num_fantasies x dim_x) are the solutions to the inner problem.
         :return: value of VaR-KG at X (to be maximized) - size: batch size
@@ -231,6 +231,7 @@ class VaRKG(MCAcquisitionFunction):
         # split the evaluation and fantasy solutions
         split_sizes = [self.q * self.dim, self.num_fantasies * self.dim_x]
         if X.size(-1) != sum(split_sizes):
+            # if the query does not include inner solutions, call evaluate_kg
             if X.size(-1) == self.q * self.dim:
                 return self.evaluate_kg(X)
             raise ValueError('X must be of size: batch size x 1 x (q x dim + num_fantasies x dim_x) or (q x dim)')
