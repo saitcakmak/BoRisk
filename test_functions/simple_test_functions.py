@@ -19,7 +19,7 @@ class SimpleQuadratic(SyntheticTestFunction):
         super().__init__(noise_std=noise_std, negate=negate)
 
     def evaluate_true(self, X: Tensor) -> Tensor:
-        return torch.sum(X.pow(2), 1, True)
+        return torch.sum(X.pow(2), -1, True)
 
 
 class SineQuadratic(SyntheticTestFunction):
@@ -37,4 +37,4 @@ class SineQuadratic(SyntheticTestFunction):
         super().__init__(noise_std=noise_std, negate=negate)
 
     def evaluate_true(self, X: Tensor) -> Tensor:
-        return torch.sin(self.a * X[:, 0]).reshape(-1, 1) + X[:, 1].pow(2).reshape(-1, 1)
+        return torch.sin(self.a * X[..., 0]).unsqueeze(-1) + X[..., 1].pow(2).unsqueeze(-1)

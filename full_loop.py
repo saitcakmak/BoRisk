@@ -6,12 +6,10 @@ The w components will be drawn as i.i.d. uniform(0, 1) and the problem is expect
 random variables.
 """
 import torch
-from botorch.test_functions import Powell
 from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from torch.distributions import Uniform
 from VaR_KG import VaRKG, InnerVaR
 from time import time
 from botorch.optim import optimize_acqf
@@ -19,8 +17,9 @@ from plotter import contour_plotter
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from test_functions.simple_test_functions import SineQuadratic
+from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
 from test_functions.standardized_function import StandardizedFunction
+from botorch.test_functions import Powell, Branin
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
