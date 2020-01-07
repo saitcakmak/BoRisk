@@ -6,6 +6,7 @@ The w components will be drawn as i.i.d. uniform(0, 1) and the problem is expect
 random variables.
 """
 import torch
+from botorch.test_functions import Powell
 from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
@@ -19,6 +20,7 @@ from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from test_functions.simple_test_functions import SineQuadratic
+from test_functions.standardized_function import StandardizedFunction
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
@@ -136,15 +138,15 @@ for i in range(iterations):
         print("Current best value: ", current_best_value)
 
     var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x,
+                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x, q=q,
                    fix_samples=fix_samples, fixed_samples=fixed_samples,
                    num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples)
 
-    # just for testing evaluate_kg
-    var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
+    # just for testing evaluate_kg, q=1
+    # var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
 
     # for testing optimize_kg
-    candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
+    # candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
 
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
                                      raw_samples=num_restarts * raw_multiplier)
@@ -160,12 +162,11 @@ for i in range(iterations):
     iteration_end = time()
     print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
+    model_update_start = time()
+    candidate_point = candidate[:, 0:q*d].reshape(q, d)
     if verbose and d == 2:
         plt.close('all')
-        plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate)
-
-    model_update_start = time()
-    candidate_point = candidate[:, 0:d]
+        plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
     observation = function(candidate_point)
     gp = gp.condition_on_observations(candidate_point, observation)
     # refit the model

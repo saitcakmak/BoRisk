@@ -20,8 +20,6 @@ from gpytorch.priors.torch_priors import GammaPrior
 from test_functions.simple_test_functions import SineQuadratic
 from botorch.models.transforms import Standardize
 
-# TODO: update this to use contour plots
-
 # fix the seed for testing
 torch.manual_seed(0)
 
@@ -213,7 +211,6 @@ def inner_lookahead_test(sols: Tensor, num_samples: int = 100, alpha: Union[Tens
 # calculate and plot inner VaR values at a few points
 def tester_1(k=100, num_samples=100, fix_samples=True):
     sols = torch.linspace(0, 1, k).view(-1, 1)
-    # TODO: update this with something more sensible, this is just the diagonal right now (for dim_x > 1)
     sols = sols.repeat(1, dim_x)
     VaRs = inner_test(sols, num_samples, 0.7)
     # print(VaRs)
@@ -241,7 +238,6 @@ def tester_2(k=10, lookahead_samples=None, num_lookahead_repetitions=0):
 # calculate the value of VaRKG for a number of points
 def tester_3(k=10, num_samples=100, num_fantasies=10, lookahead_samples=None, num_lookahead_repetitions=0,
              fix_samples=False):
-    # TODO: this can also be more interesting
     sols = torch.rand(k, d + num_fantasies * dim_x)
     res = KG_test(sols, current_best=current_best, num_samples=num_samples, num_fantasies=num_fantasies,
                   lookahead_samples=lookahead_samples,
@@ -267,7 +263,6 @@ def tester_4(fix_samples=True, num_fantasies=10, lookahead_samples=None, num_loo
 # test inner VaR with lookahead
 def tester_5(k=100, num_samples=100, lookahead_samples=None, num_lookahead_repetitions=10):
     sols = torch.linspace(0, 1, k).view(-1, 1)
-    # TODO: same here
     sols = sols.repeat(1, dim_x)
     VaRs = inner_lookahead_test(sols, num_samples, 0.7,
                                 lookahead_samples=lookahead_samples,

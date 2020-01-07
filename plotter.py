@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 from time import time
 import numpy as np
+# TODO: update to handle q
 
 
 def plotter_3D(model, inner_var=None, best_pt=None, best_val=None, next_pt=None):
@@ -49,7 +50,7 @@ def plotter_3D(model, inner_var=None, best_pt=None, best_val=None, next_pt=None)
 
     if next_pt is not None:
         # next point
-        ax.scatter3D(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
+        ax.scatter3D(next_pt.detach().numpy()[:, 0], next_pt.detach().numpy()[:, 1],
                      2, marker='^', s=50, color='black')
     plot_end = time()
     plt.show(block=False)
@@ -120,11 +121,11 @@ def contour_plotter(model, inner_var=None, best_pt=None, best_val=None, next_pt=
 
     if next_pt is not None:
         # next point
-        ax[0].scatter(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
+        ax[0].scatter(next_pt.detach().numpy()[:, 0], next_pt.detach().numpy()[:, 1],
                       marker='^', s=50, color='black')
-        ax[1].scatter(next_pt.detach().reshape(-1).numpy()[0], next_pt.detach().reshape(-1).numpy()[1],
+        ax[1].scatter(next_pt.detach().numpy()[:, 0], next_pt.detach().numpy()[:, 1],
                       marker='^', s=50, color='black')
-        ax[2].scatter(next_pt.detach().reshape(-1).numpy()[0], 0, marker='^', s=50, color='black')
+        ax[2].scatter(next_pt.detach().numpy()[:, 0], [0] * next_pt.size(0), marker='^', s=50, color='black')
     plot_end = time()
     plt.show(block=False)
     plt.pause(0.01)

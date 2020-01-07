@@ -175,6 +175,9 @@ class VaRKG(MCAcquisitionFunction):
         self.lookahead_samples = lookahead_samples
 
         # TODO: maybe we can set this to some potential max by using psutil.virtual_memory() commands
+        #       how about a try/except clause in forward that reduces this everytime it fails?
+        #       let's experiment to see how this affects the runtime, if significant, then we can implement that
+
         self.mini_batch_size = 50
 
     def forward(self, X: Tensor) -> Tensor:
