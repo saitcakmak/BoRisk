@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 from mpl_toolkits import mplot3d
 from time import time
 import numpy as np
-# TODO: update to handle q
 
 
 def plotter_3D(model, inner_var=None, best_pt=None, best_val=None, next_pt=None):
@@ -79,7 +78,7 @@ def contour_plotter(model, inner_var=None, best_pt=None, best_val=None, next_pt=
     ax[2].set_ylabel("VaR")
     ax[0].set_title("$\\mu_n$")
     ax[1].set_title("$\\Sigma_n$")
-    ax[2].set_title("VaR($\\mu$)")
+    ax[2].set_title("C/VaR($\\mu$)")
     ax[0].set_ylim(0, 1)
     ax[1].set_ylim(0, 1)
     ax[0].set_aspect('equal')

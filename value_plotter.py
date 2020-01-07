@@ -14,12 +14,13 @@ from test_functions.standardized_function import StandardizedFunction
 # Initialize the test function
 noise_std = 0  # observation noise level - no noise allows for a more precise evaluation
 # function = SimpleQuadratic(noise_std=noise_std)
-# function = SineQuadratic(noise_std=noise_std)
-function = StandardizedFunction(Powell(noise_std=noise_std))
+function = SineQuadratic(noise_std=noise_std)
+# function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
 
+CVaR = True  # if true, calculate CVaR instead of VaR
 d = function.dim  # dimension of train_X
-dim_w = 2  # dimension of w component
+dim_w = 1  # dimension of w component
 n = 2 * d + 2  # training samples
 dim_x = d - dim_w  # dimension of the x component
 alpha = 0.7  # alpha of the risk function
@@ -84,4 +85,4 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False):
     return x, y
 
 
-plot(*generate_values(100, 100, False))
+plot(*generate_values(100, 100, CVaR=CVaR))

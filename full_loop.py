@@ -33,8 +33,11 @@ In this code, we will initialize a random GP, then optimize it's KG, sample, upd
 The aim is to see if we get convergence and find the true optimum in the end.
 """
 
+# TODO: we again have that weird GP flat fitting thing where it turns into vertical lines.
+#       maybe don't use condition on observation and instead fit the model from scratch
 start = time()
 
+# TODO: we get different behavior despite fixed seed. Try to figure out why that happens
 # fix the seed for testing
 torch.manual_seed(0)
 
@@ -45,6 +48,7 @@ function = SineQuadratic(noise_std=noise_std)
 # function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
 
+CVaR = False  # if true, CVaRKG instead of VaRKG
 d = function.dim  # dimension of train_X
 dim_w = 1  # dimension of w component
 n = 2 * d + 2  # training samples
@@ -129,7 +133,8 @@ else:
 for i in range(iterations):
     iteration_start = time()
     inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                         num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,)
+                         num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                         CVaR=CVaR)
     current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
                                             raw_samples=num_inner_restarts * inner_raw_multiplier)
     current_best_value = - value
@@ -139,7 +144,8 @@ for i in range(iterations):
     var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                    current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x, q=q,
                    fix_samples=fix_samples, fixed_samples=fixed_samples,
-                   num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples)
+                   num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                   CVaR=CVaR)
 
     # just for testing evaluate_kg, q=1
     # var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))

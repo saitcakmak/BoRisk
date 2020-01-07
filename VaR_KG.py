@@ -29,7 +29,8 @@ class InnerVaR(MCAcquisitionFunction):
     def __init__(self, model: Model, w_samples: Tensor,
                  alpha: Union[Tensor, float], dim_x: int,
                  num_lookahead_repetitions: int = 0,
-                 lookahead_samples: Tensor = None):
+                 lookahead_samples: Tensor = None,
+                 CVaR: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -39,6 +40,7 @@ class InnerVaR(MCAcquisitionFunction):
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
         :param lookahead_samples: if given, use this instead of generating the lookahead points. Just the w component
                                     num_lookahead_samples ('m' in the description) x dim_w
+        :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         """
         super().__init__(model)
         self.num_samples = w_samples.size(0)
@@ -49,6 +51,7 @@ class InnerVaR(MCAcquisitionFunction):
         self.dim_x = dim_x
         self.dim_w = w_samples.size(-1)
         self.batch_shape = model._input_batch_shape
+        self.CVaR = CVaR
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -82,22 +85,28 @@ class InnerVaR(MCAcquisitionFunction):
             samples = lookahead_model.posterior(z).mean
             # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (5 dim)
 
+            # calculate C/VaR value
             samples, _ = torch.sort(samples, dim=-2)
-            VaRs = samples[:, :, :, int(self.num_samples * self.alpha)]
+            if self.CVaR:
+                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2, keepdim=True)
+            else:
+                values = samples[..., int(self.num_samples * self.alpha), :]
 
             # return negative since optimizers maximize
-            return -torch.mean(VaRs, dim=0).squeeze()
+            return -torch.mean(values, dim=0).squeeze()
         else:
             # get the posterior mean
             post = self.model.posterior(z)
             samples = post.mean
 
-            # order samples
-            samples, _ = samples.sort(-2)
-            # return the sample quantile
-            VaRs = samples[:, :, int(self.num_samples * self.alpha)]
+            # calculate C/VaR value
+            samples, _ = torch.sort(samples, dim=-2)
+            if self.CVaR:
+                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2, keepdim=True)
+            else:
+                values = samples[..., int(self.num_samples * self.alpha), :]
             # return negative so that the optimization minimizes the function
-            return -VaRs.squeeze()
+            return -values.squeeze()
 
     def _get_lookahead_model(self, X: Tensor, batch_shape: tuple):
         """
@@ -127,7 +136,8 @@ class VaRKG(MCAcquisitionFunction):
                  current_best_VaR: Optional[Tensor], num_fantasies: int, dim: int, dim_x: int,
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_lookahead_repetitions: int = 0,
-                 lookahead_samples: Tensor = None):
+                 lookahead_samples: Tensor = None,
+                 CVaR: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
@@ -145,6 +155,7 @@ class VaRKG(MCAcquisitionFunction):
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
         :param lookahead_samples: the lookahead samples to use. shape: num_lookahead_samples ("m") x dim_w
                                     has no effect unless num_lookahead_repetitions > 0 and vice-versa
+        :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         """
         super().__init__(model)
         self.num_samples = num_samples
@@ -158,6 +169,7 @@ class VaRKG(MCAcquisitionFunction):
         self.dim_x = dim_x
         self.dim_w = dim - dim_x
         self.q = q
+        self.CVaR = CVaR
 
         self.fix_samples = fix_samples
         if fixed_samples is not None:
@@ -230,7 +242,8 @@ class VaRKG(MCAcquisitionFunction):
             inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
                                  num_lookahead_repetitions=self.num_lookahead_repetitions,
-                                 lookahead_samples=self.lookahead_samples)
+                                 lookahead_samples=self.lookahead_samples,
+                                 CVaR=self.CVaR)
             # sample and return
             with settings.propagate_grads(True):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
