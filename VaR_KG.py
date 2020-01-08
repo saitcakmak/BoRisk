@@ -186,10 +186,8 @@ class VaRKG(MCAcquisitionFunction):
             raise ValueError("lookahead_samples must be of size num_lookahead_samples x dim_w")
         self.lookahead_samples = lookahead_samples
 
-        # TODO: maybe we can set this to some potential max by using psutil.virtual_memory() commands
-        #       how about a try/except clause in forward that reduces this everytime it fails?
-        #       let's experiment to see how this affects the runtime, if significant, then we can implement that
-
+        # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
+        # much unless set too low.
         self.mini_batch_size = 50
 
     def forward(self, X: Tensor) -> Tensor:

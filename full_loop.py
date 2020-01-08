@@ -33,12 +33,7 @@ In this code, we will initialize a random GP, then optimize it's KG, sample, upd
 The aim is to see if we get convergence and find the true optimum in the end.
 """
 
-# TODO: we again have that weird GP flat fitting thing where it turns into vertical lines.
-#       maybe don't use condition on observation and instead fit the model from scratch
-start = time()
-
-# TODO: we get different behavior despite fixed seed. Try to figure out why that happens
-# fix the seed for testing
+# fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
 torch.manual_seed(0)
 
 # Initialize the test function
@@ -55,26 +50,6 @@ n = 2 * d + 2  # training samples
 dim_x = d - dim_w  # dimension of the x component
 train_X = torch.rand((n, d))
 train_Y = function(train_X)
-
-# construct and fit the GP
-# a more involved prior to set a significant lower bound on the noise. Significantly speeds up computation.
-noise_prior = GammaPrior(1.1, 0.5)
-noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
-likelihood = GaussianLikelihood(
-    noise_prior=noise_prior,
-    batch_shape=[],
-    noise_constraint=GreaterThan(
-        0.05,  # minimum observation noise assumed in the GP model
-        transform=None,
-        initial_value=noise_prior_mode,
-    ),
-)
-gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
-mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
-fit_gpytorch_model(mll)
-
-fit_complete = time()
-print("Initial model fit completed in %s" % (fit_complete - start))
 
 # the data for acquisition functions
 full_data = dict()
@@ -130,8 +105,29 @@ if iterations:
 else:
     iterations = 40
 
+# for timing
+start = time()
+
+# a more involved prior to set a significant lower bound on the noise. Significantly speeds up computation.
+noise_prior = GammaPrior(1.1, 0.5)
+noise_prior_mode = (noise_prior.concentration - 1) / noise_prior.rate
+likelihood = GaussianLikelihood(
+    noise_prior=noise_prior,
+    batch_shape=[],
+    noise_constraint=GreaterThan(
+        0.05,  # minimum observation noise assumed in the GP model
+        transform=None,
+        initial_value=noise_prior_mode,
+    ),
+)
+
 for i in range(iterations):
     iteration_start = time()
+    # construct and fit the GP
+    gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
+    mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+    fit_gpytorch_model(mll)
+
     inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                          num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                          CVaR=CVaR)
@@ -173,11 +169,8 @@ for i in range(iterations):
         plt.close('all')
         plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
     observation = function(candidate_point)
-    gp = gp.condition_on_observations(candidate_point, observation)
-    # refit the model
-    mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
-    fit_gpytorch_model(mll)
-    model_update_complete = time()
-    print("Model updated in %s" % (model_update_complete - model_update_start))
+    # update the model input data for refitting
+    train_X = torch.cat((train_X, candidate_point), dim=0)
+    train_Y = torch.cat((train_Y, observation), dim=0)
 
 print("total time: ", time()-start)
