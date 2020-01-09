@@ -27,7 +27,7 @@ class ContinuousNewsvendor(SyntheticTestFunction):
         """
         Initialize the problem
         :param run_length: Number of days of demand to simulate. Reduces the observation error.
-        :param crn: If True, CRN will be employed, i.e. same demands are used across solutions.
+        :param crn: If True, CRN will be employed, i.e. same demands are used to evaluate each solution.
         """
         super().__init__()
         if run_length < 1:
@@ -77,3 +77,12 @@ class ContinuousNewsvendor(SyntheticTestFunction):
 
     def evaluate_true(self, X: Tensor) -> Tensor:
         raise NotImplementedError("True function evaluation is not available.")
+
+
+if __name__ == "__main__":
+    # for testing purposes
+    from time import time
+    start = time()
+    ctnv = ContinuousNewsvendor()
+    print(ctnv(torch.tensor([0.5, 0.5, 0.5])))
+    print('time: ', time()-start)
