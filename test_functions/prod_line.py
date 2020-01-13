@@ -8,7 +8,6 @@ class ProductionLine(SyntheticTestFunction):
     """
     This is the ProductionLine problem adopted from SimOpt.
     See the write-up for implementation details.
-    TODO: TEST TEST TEST
     """
     _optimizers = None
     rate_lb = 0  # lower bound of server rates
@@ -201,6 +200,6 @@ if __name__ == "__main__":
     # for testing purposes
     from time import time
     start = time()
-    line = ProductionLine()
-    print(line(torch.tensor([0.5, 0.5, 0.5, 0.5])))
+    line = ProductionLine(repetitions=100)
+    print(line(torch.tensor([0.75, 0.5, 0.25, 0.3])))
     print('time: ', time()-start)

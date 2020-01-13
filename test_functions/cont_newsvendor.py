@@ -7,7 +7,6 @@ class ContinuousNewsvendor(SyntheticTestFunction):
     """
     This is the continuous news-vendor problem adopted from SimOpt.
     See the write-up for implementation details.
-    TODO: test this thoroughly, compare with matlab implementation etc - the optimal value matches up
     """
     dim = 3
     _bounds = [(0, 1) for _ in range(dim)]
@@ -84,5 +83,5 @@ if __name__ == "__main__":
     from time import time
     start = time()
     ctnv = ContinuousNewsvendor()
-    print(ctnv(torch.tensor([0.5, 0.5, 0.5])))
+    print(ctnv(torch.tensor([0.9, 0.5, 0.5])))
     print('time: ', time()-start)
