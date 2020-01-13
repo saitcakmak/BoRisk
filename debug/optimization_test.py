@@ -1,20 +1,23 @@
 """
 This is for testing whether we are optimizing VaRKG to a good level - the outputs should be reasonably uniform
 """
+import sys
+import os
+sys.path.append(os.path.join(sys.path[0], '..'))
 import torch
 from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from ..VaR_KG import VaRKG, InnerVaR
+from VaR_KG import VaRKG, InnerVaR
 from time import time
 from botorch.optim import optimize_acqf
 from plotter import contour_plotter
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from ..test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
-from ..test_functions.standardized_function import StandardizedFunction
+from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
+from test_functions.standardized_function import StandardizedFunction
 from botorch.test_functions import Powell, Branin
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
@@ -52,8 +55,8 @@ inner_raw_multiplier = 10
 # TODO: These are the ones to experiment with
 num_fantasies = int(input("num_fantasies: "))
 num_restarts = int(input("num_restarts: "))
-raw_multiplier = int(input("raw_multiplier"))
-repetitions = int(input("repetitions"))
+raw_multiplier = int(input("raw_multiplier: "))
+repetitions = int(input("repetitions: "))
 
 # samples used to get the current VaR value
 w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
