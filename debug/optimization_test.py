@@ -161,5 +161,5 @@ print("solutions", solutions)
 print("kg_values", kg_values)
 out = {'solutions': solutions, 'kg_values': kg_values, "num_fantasies": num_fantasies,
        'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier, "repetitions": repetitions}
-torch.save(out, 'debug_out/debug_%d_%d_%d_%d.pt' % (num_restarts, num_restarts, raw_multiplier, repetitions))
+torch.save(out, 'debug_out/debug_%d_%d_%d_%d.pt' % (num_fantasies, num_restarts, raw_multiplier, repetitions))
 input("press enter to end execution:")
