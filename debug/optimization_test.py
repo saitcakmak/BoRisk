@@ -46,7 +46,6 @@ train_X = torch.rand((n, d))
 train_Y = function(train_X)
 
 # the data for acquisition functions
-full_data = dict()
 num_samples = 100
 alpha = 0.7
 num_inner_restarts = 10 * d
@@ -162,5 +161,5 @@ print("solutions", solutions)
 print("kg_values", kg_values)
 out = {'solutions': solutions, 'kg_values': kg_values, "num_fantasies": num_fantasies,
        'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier, "repetitions": repetitions}
-torch.save(full_data, 'debug_out/debug_%d_%d_%d_%d.pt' % (num_restarts, num_restarts, raw_multiplier, repetitions))
+torch.save(out, 'debug_out/debug_%d_%d_%d_%d.pt' % (num_restarts, num_restarts, raw_multiplier, repetitions))
 input("press enter to end execution:")
