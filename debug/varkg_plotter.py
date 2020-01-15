@@ -23,6 +23,8 @@ from botorch.test_functions import Powell, Branin
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
+import numpy as np
+
 
 cpu_count = multiprocessing.cpu_count()
 torch.set_num_threads(cpu_count)
@@ -31,12 +33,15 @@ torch.set_num_interop_threads(cpu_count)
 # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
 torch.manual_seed(0)
 
+verbose = False
+
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
 function = SineQuadratic(noise_std=noise_std)
 # function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
+function_name = 'sinequad'
 
 CVaR = False  # if true, CVaRKG instead of VaRKG
 d = function.dim  # dimension of train_X
@@ -55,10 +60,11 @@ num_inner_restarts = 10 * d
 inner_raw_multiplier = 10
 
 # These are the ones to experiment with - we have an ok understanding of it
-num_fantasies = int(input("num_fantasies: "))
-num_restarts = int(input("num_restarts: "))
-raw_multiplier = int(input("raw_multiplier: "))
-repetitions = int(input("repetitions: "))
+num_fantasies = 100
+num_restarts = 100
+raw_multiplier = 10
+num_x = 20
+num_w = 20
 
 # samples used to get the current VaR value
 w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
@@ -80,8 +86,6 @@ num_lookahead_repetitions = 0
 # example below
 # lookahead_samples = torch.linspace(0, 1, 40).reshape(-1, 1)
 # num_lookahead_repetitions = 10
-
-verbose = True
 
 # for timing
 start = time()
@@ -134,11 +138,11 @@ def plot(x: Tensor, y: Tensor):
     plt.xlim(0, 1)
     plt.ylim(0, 1)
 
-    plt.contourf(x.numpy()[..., 0], x.numpy()[..., 1], y.squeeze().numpy())
+    plt.contourf(x.numpy()[..., 0], x.numpy()[..., 1], y.squeeze().numpy(), levels=10)
     plt.colorbar()
 
 
-def generate_values(num_x: int, num_w: int):
+def generate_values():
     """
     Generates the C/VaR-KG values on a grid.
     :param num_x: Number of x values to generate
@@ -147,36 +151,26 @@ def generate_values(num_x: int, num_w: int):
     """
     # generate x
     x = torch.linspace(0, 1, num_x)
-    if dim_x == 2:
-        xx, yy = np.meshgrid(x, x)
-        x = torch.cat([Tensor(xx).unsqueeze(-1), Tensor(yy).unsqueeze(-1)], -1)
-    else:
-        x = x.reshape(-1, 1)
+    x = x.reshape(-1, 1)
 
-    # generate w, i.i.d uniform(0, 1)
-    w = torch.rand((num_w, dim_w))
+    # generate w
+    w = torch.linspace(0, 1, num_w).reshape(-1, 1)
 
     # generate X = (x, w)
-    X = torch.cat((x.unsqueeze(-2).expand(*x.size()[:-1], num_w, dim_x), w.repeat(*x.size()[:-1], 1, 1)), dim=-1)
+    X = torch.cat((x.unsqueeze(-2).expand(num_x, num_w, 1), w.repeat(num_x, 1, 1)), dim=-1)
 
     # evaluate the function, sort and get the C/VaR value
-    values = function(X)
-    values, _ = values.sort(dim=-2)
-    if CVaR:
-        y = torch.mean(values[..., int(alpha * num_w):, :], dim=-2)
-    else:
-        y = values[..., int(alpha * num_w), :].squeeze(-2)
-    return x, y
+    values = var_kg.evaluate_kg(X, num_restarts=num_restarts, raw_multiplier=raw_multiplier)
+    return X, values.reshape(num_x, num_w)
 
 
-plot(*generate_values(100, 100, CVaR=CVaR))
-plt.show()
-
-# TODO: clear up this part
+X, values = generate_values()
 print("total time: ", time()-start)
-print("solutions", solutions)
-print("kg_values", kg_values)
-out = {'solutions': solutions, 'kg_values': kg_values, "num_fantasies": num_fantasies,
-       'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier, "repetitions": repetitions}
-torch.save(out, 'debug_out/branin_%d_%d_%d_%d.pt' % (num_fantasies, num_restarts, raw_multiplier, repetitions))
-input("press enter to end execution:")
+
+file_name = "varkg_plots/%s_%d_%d_%d_%d_%d.pt" % (function_name, num_x, num_w, num_fantasies, num_restarts, raw_multiplier)
+out = {'X': X, 'values': values, "num_x": num_x, "num_w": num_w, 'num_fantasies': num_fantasies,
+       'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier}
+torch.save(out, file_name)
+if verbose:
+    plot(X, values)
+    plt.show()
