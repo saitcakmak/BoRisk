@@ -33,9 +33,9 @@ torch.manual_seed(0)
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
-function = SineQuadratic(noise_std=noise_std)
+# function = SineQuadratic(noise_std=noise_std)
 # function = StandardizedFunction(Powell(noise_std=noise_std))
-# function = StandardizedFunction(Branin(noise_std=noise_std))
+function = StandardizedFunction(Branin(noise_std=noise_std))
 
 CVaR = False  # if true, CVaRKG instead of VaRKG
 d = function.dim  # dimension of train_X
@@ -51,7 +51,7 @@ alpha = 0.7
 num_inner_restarts = 10 * d
 inner_raw_multiplier = 10
 
-# TODO: These are the ones to experiment with
+# These are the ones to experiment with - we have an ok understanding of it
 num_fantasies = int(input("num_fantasies: "))
 num_restarts = int(input("num_restarts: "))
 raw_multiplier = int(input("raw_multiplier: "))
@@ -161,5 +161,5 @@ print("solutions", solutions)
 print("kg_values", kg_values)
 out = {'solutions': solutions, 'kg_values': kg_values, "num_fantasies": num_fantasies,
        'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier, "repetitions": repetitions}
-torch.save(out, 'debug_out/debug_%d_%d_%d_%d.pt' % (num_fantasies, num_restarts, raw_multiplier, repetitions))
+torch.save(out, 'debug_out/branin_%d_%d_%d_%d.pt' % (num_fantasies, num_restarts, raw_multiplier, repetitions))
 input("press enter to end execution:")
