@@ -1,5 +1,6 @@
 """
-this is for testing and debugging VaR_KG components only. Don't use it for other purposes, it is not clean.
+This is for testing and debugging VaR_KG components only.
+Don't use it for other purposes, it is not clean.
 To use VaR_KG, run full_loop with the appropriate problem and parameters specified.
 """
 

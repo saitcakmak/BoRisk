@@ -25,7 +25,6 @@ from botorch.models.transforms import Standardize
 import multiprocessing
 import numpy as np
 
-
 cpu_count = multiprocessing.cpu_count()
 torch.set_num_threads(cpu_count)
 torch.set_num_interop_threads(cpu_count)
@@ -33,7 +32,7 @@ torch.set_num_interop_threads(cpu_count)
 # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
 torch.manual_seed(0)
 
-verbose = False
+verbose = False  # this should be set False when running it on a server
 
 # Initialize the test function
 noise_std = 0.1  # observation noise level
@@ -138,7 +137,7 @@ def plot(x: Tensor, y: Tensor):
     plt.xlim(0, 1)
     plt.ylim(0, 1)
 
-    plt.contourf(x.numpy()[..., 0], x.numpy()[..., 1], y.squeeze().numpy(), levels=10)
+    plt.contourf(x.numpy()[..., 0], x.numpy()[..., 1], y.numpy(), levels=10)
     plt.colorbar()
 
 
@@ -164,13 +163,18 @@ def generate_values():
     return X, values.reshape(num_x, num_w)
 
 
-X, values = generate_values()
-print("total time: ", time()-start)
-
-file_name = "varkg_plots/%s_%d_%d_%d_%d_%d.pt" % (function_name, num_x, num_w, num_fantasies, num_restarts, raw_multiplier)
-out = {'X': X, 'values': values, "num_x": num_x, "num_w": num_w, 'num_fantasies': num_fantasies,
-       'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier}
-torch.save(out, file_name)
+file_name = "varkg_plots/%s_%d_%d_%d_%d_%d.pt" \
+            % (function_name, num_x, num_w, num_fantasies, num_restarts, raw_multiplier)
+try:
+    out = torch.load(file_name)
+    X = out['X']
+    values = out['values']
+except FileNotFoundError:
+    X, values = generate_values()
+    print("total time: ", time() - start)
+    out = {'X': X, 'values': values, "num_x": num_x, "num_w": num_w, 'num_fantasies': num_fantasies,
+           'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier}
+    torch.save(out, file_name)
 if verbose:
     plot(X, values)
     plt.show()

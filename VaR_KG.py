@@ -30,6 +30,7 @@ class InnerVaR(MCAcquisitionFunction):
                  alpha: Union[Tensor, float], dim_x: int,
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
+                 lookahead_seed: Optional[int] = None,
                  CVaR: bool = False):
         r"""
         Initialize the problem for sampling
@@ -40,6 +41,8 @@ class InnerVaR(MCAcquisitionFunction):
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
         :param lookahead_samples: if given, use this instead of generating the lookahead points. Just the w component
                                     num_lookahead_samples ('m' in the description) x dim_w
+        :param lookahead_seed: The seed to generate lookahead fantasies with, see VaRKG for more explanation.
+                                    if specified, the calls to forward of the object will share the same seed
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         """
         super().__init__(model)
@@ -52,6 +55,7 @@ class InnerVaR(MCAcquisitionFunction):
         self.dim_w = w_samples.size(-1)
         self.batch_shape = model._input_batch_shape
         self.CVaR = CVaR
+        self.lookahead_seed = lookahead_seed
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -112,6 +116,10 @@ class InnerVaR(MCAcquisitionFunction):
         """
         generate the lookahead points and obtain the lookahead model
         """
+        if self.lookahead_seed is None:
+            lookahead_seed = int(torch.randint(100000, (1,)))
+        else:
+            lookahead_seed = self.lookahead_seed
         # generate the lookahead points, w component
         if self.lookahead_samples.dim() != 2 or self.lookahead_samples.size(-1) != self.dim_w:
             raise ValueError("lookahead_samples must be of size num_lookahead_samples x dim_w")
@@ -119,7 +127,7 @@ class InnerVaR(MCAcquisitionFunction):
         # merge with X to generate full dimensional points
         lookahead_points = torch.cat((X.repeat(1, 1, self.lookahead_samples.size(0), 1), w), -1)
 
-        sampler = SobolQMCNormalSampler(self.num_lookahead_repetitions)
+        sampler = SobolQMCNormalSampler(self.num_lookahead_repetitions, seed=lookahead_seed)
         lookahead_model = self.model.fantasize(lookahead_points, sampler)
         # this is a batch fantasy model which works with batch evaluations.
         # Size is num_lookahead_rep x *batch_shape x num_lookahead_samples x 1 (5 dim with 3 dim batch).
@@ -133,10 +141,11 @@ class VaRKG(MCAcquisitionFunction):
 
     def __init__(self, model: Model,
                  num_samples: int, alpha: Union[Tensor, float],
-                 current_best_VaR: Optional[Tensor], num_fantasies: int, dim: int, dim_x: int,
+                 current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
+                 dim: int, dim_x: int,
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_lookahead_repetitions: int = 0,
-                 lookahead_samples: Tensor = None,
+                 lookahead_samples: Tensor = None, lookahead_seed: Optional[int] = None,
                  CVaR: bool = False):
         r"""
         Initialize the problem for sampling
@@ -144,6 +153,10 @@ class VaRKG(MCAcquisitionFunction):
         :param num_samples: number of samples to use to calculate VaR (samples of w)
         :param alpha: VaR risk level alpha
         :param current_best_VaR: the best VaR value form the current GP model
+        :param fantasy_seed: if specified this seed is used in the sampler for the fantasy models.
+                                it will result in fantasies being common across calls to the forward function of the
+                                constructed object, reducing the randomness in optimization.
+                                if None, then each forward call will generate an independent set of fantasies.
         :param num_fantasies: number of fantasies used to calculate VaR-KG (number of Z repetitions)
         :param dim: The full dimension of X = (x, w)
         :param dim_x: dimension of x in X = (x, w)
@@ -155,6 +168,9 @@ class VaRKG(MCAcquisitionFunction):
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
         :param lookahead_samples: the lookahead samples to use. shape: num_lookahead_samples ("m") x dim_w
                                     has no effect unless num_lookahead_repetitions > 0 and vice-versa
+        :param lookahead_seed: similar to fantasy_seed, used for lookahead fantasy generation
+                                if not specified, every call to forward will specify a new one to be used across
+                                solutions being evaluated.
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         """
         super().__init__(model)
@@ -170,6 +186,8 @@ class VaRKG(MCAcquisitionFunction):
         self.dim_w = dim - dim_x
         self.q = q
         self.CVaR = CVaR
+        self.fantasy_seed = fantasy_seed
+        self.lookahead_seed = lookahead_seed
 
         self.fix_samples = fix_samples
         if fixed_samples is not None:
@@ -229,6 +247,16 @@ class VaRKG(MCAcquisitionFunction):
         else:
             w_samples = torch.rand((self.num_samples, self.dim_w))
 
+        if self.fantasy_seed is None:
+            fantasy_seed = int(torch.randint(100000, (1,)))
+        else:
+            fantasy_seed = self.fantasy_seed
+
+        if self.lookahead_seed is None:
+            lookahead_seed = int(torch.randint(100000, (1,)))
+        else:
+            lookahead_seed = self.lookahead_seed
+
         for i in range(num_batches):
             left_index = i * self.mini_batch_size
             if i == num_batches - 1:
@@ -236,13 +264,14 @@ class VaRKG(MCAcquisitionFunction):
             else:
                 right_index = (i + 1) * self.mini_batch_size
             # construct the fantasy model
-            sampler = SobolQMCNormalSampler(self.num_fantasies)
+            sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
             fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler)
 
             inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
                                  num_lookahead_repetitions=self.num_lookahead_repetitions,
                                  lookahead_samples=self.lookahead_samples,
+                                 lookahead_seed=lookahead_seed,
                                  CVaR=self.CVaR)
             # sample and return
             with settings.propagate_grads(True):

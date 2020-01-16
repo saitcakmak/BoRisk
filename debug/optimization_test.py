@@ -33,10 +33,11 @@ torch.manual_seed(0)
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
-# function = SineQuadratic(noise_std=noise_std)
-function = StandardizedFunction(Powell(noise_std=noise_std))
+function = SineQuadratic(noise_std=noise_std)
+# function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
-function_name = 'powell'
+function_name = 'with_seed'
+verbose = False
 
 CVaR = False  # if true, CVaRKG instead of VaRKG
 d = function.dim  # dimension of train_X
@@ -68,20 +69,19 @@ fix_samples = True
 # fix_samples = False
 # fixed_samples = None
 
-# TODO: test whether this changes the optimization behavior, i.e. more resources needed if q larger?
 q = 1  # number of parallel solutions to evaluate, think qKG
 x_bounds = Tensor([[0], [1]]).repeat(1, dim_x)
 full_bounds = Tensor([[0], [1]]).repeat(1, q * d + num_fantasies * dim_x)
 
-# TODO: test this as well
 # specify if 'm' lookahead method is preferred
 lookahead_samples = None
 num_lookahead_repetitions = 0
+lookahead_seed = None
 # example below
 # lookahead_samples = torch.linspace(0, 1, 40).reshape(-1, 1)
 # num_lookahead_repetitions = 10
+# lookahead_seed = int(torch.randint(100000, (1,)))
 
-verbose = False
 plotter = contour_plotter
 # plotter = plotter_3D
 # filename = input('output file name: ')
@@ -108,7 +108,7 @@ fit_gpytorch_model(mll)
 
 inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                      num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                     CVaR=CVaR)
+                     lookahead_seed=lookahead_seed, CVaR=CVaR)
 current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
                                         raw_samples=num_inner_restarts * inner_raw_multiplier)
 current_best_value = - value
@@ -119,11 +119,18 @@ if d == 2 and verbose:
 if verbose:
     print("Current best value: ", current_best_value)
 
+# This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
+# fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
+# it will be random across for loop iteration but uniform within the optimize_acqf iterations.
+# IF using SAA approach, this should be specified to a fixed number.
+seed = int(torch.randint(100000, (1,)))
+
 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-               current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x, q=q,
+               current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=seed,
+               dim=d, dim_x=dim_x, q=q,
                fix_samples=fix_samples, fixed_samples=fixed_samples,
                num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-               CVaR=CVaR)
+               lookahead_seed=lookahead_seed, CVaR=CVaR)
 
 solutions = []
 kg_values = []

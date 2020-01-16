@@ -55,23 +55,19 @@ train_Y = function(train_X)
 full_data = dict()
 num_samples = 100
 alpha = 0.7
-num_fantasies = input("num_fantasies (press enter for defaults): ")
+num_fantasies = input("num_fantasies (press enter for defaults = 100): ")
 if num_fantasies:
     num_fantasies = int(num_fantasies)
 else:
-    num_fantasies = 40
-num_inner_restarts = 10 * d
-num_restarts = input("num_restarts (press enter for defaults): ")
+    num_fantasies = 100
+num_inner_restarts = 20 * d
+num_restarts = input("num_restarts (press enter for defaults = 100): ")
 if num_restarts:
     num_restarts = int(num_restarts)
 else:
-    num_restarts = 60
+    num_restarts = 100
 inner_raw_multiplier = 10
-raw_multiplier = input("raw_multiplier (press enter for defaults): ")
-if raw_multiplier:
-    raw_multiplier = int(raw_multiplier)
-else:
-    raw_multiplier = 10
+raw_multiplier = 10
 
 # samples used to get the current VaR value
 w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
@@ -99,7 +95,7 @@ plotter = contour_plotter
 # plotter = plotter_3D
 filename = input('output file name: ')
 
-iterations = input("iterations (press enter for defaults): ")
+iterations = input("iterations (press enter for defaults = 40): ")
 if iterations:
     iterations = int(iterations)
 else:
@@ -128,20 +124,30 @@ for i in range(iterations):
     mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
     fit_gpytorch_model(mll)
 
+    # similar to seed below, for the lookahead fantasies if used
+    lookahead_seed = int(torch.randint(100000, (1,)))
+
     inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                          num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                         CVaR=CVaR)
+                         lookahead_seed=lookahead_seed, CVaR=CVaR)
     current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
                                             raw_samples=num_inner_restarts * inner_raw_multiplier)
     current_best_value = - value
     if verbose:
         print("Current best value: ", current_best_value)
 
+    # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
+    # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
+    # it will be random across for loop iteration but uniform within the optimize_acqf iterations.
+    # IF using SAA approach, this should be specified to a fixed number.
+    seed = int(torch.randint(100000, (1,)))
+
     var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x, q=q,
+                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=seed,
+                   dim=d, dim_x=dim_x, q=q,
                    fix_samples=fix_samples, fixed_samples=fixed_samples,
                    num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                   CVaR=CVaR)
+                   lookahead_seed=lookahead_seed, CVaR=CVaR)
 
     # just for testing evaluate_kg, q=1
     # var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
