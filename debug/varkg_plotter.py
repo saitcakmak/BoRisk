@@ -40,7 +40,7 @@ noise_std = 0.1  # observation noise level
 # function = SineQuadratic(noise_std=noise_std)
 # function = StandardizedFunction(Powell(noise_std=noise_std))
 function = StandardizedFunction(Branin(noise_std=noise_std))
-function_name = 'branin'
+function_name = 'sinequad'
 
 CVaR = False  # if true, CVaRKG instead of VaRKG
 d = function.dim  # dimension of train_X
@@ -116,11 +116,13 @@ current_best_value = - value
 if verbose:
     print("Current best value: ", current_best_value)
 
+fantasy_seed = int(torch.randint(100000, (1,)))
+
 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x, q=q,
                fix_samples=fix_samples, fixed_samples=fixed_samples,
                num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-               CVaR=CVaR)
+               fantasy_seed=fantasy_seed, CVaR=CVaR)
 
 
 def plot(x: Tensor, y: Tensor):

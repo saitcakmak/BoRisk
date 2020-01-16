@@ -2,12 +2,12 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 
-num_fantasies = 100
+num_fantasies = 10
 num_restarts = 100
 raw_multiplier = 10
 repetitions = 100
 dim = 2
-function_name = 'debug'
+function_name = 'sinequad'
 file = 'debug_out/%s_%d_%d_%d_%d.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions)
 
 data = torch.load(file)
