@@ -5,7 +5,7 @@ import numpy as np
 num_fantasies = 10
 num_restarts = 100
 raw_multiplier = 10
-repetitions = 100
+repetitions = 25
 dim = 2
 function_name = 'sinequad'
 file = 'debug_out/%s_%d_%d_%d_%d.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions)
