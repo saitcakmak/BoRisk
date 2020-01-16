@@ -84,7 +84,8 @@ lookahead_seed = None
 
 plotter = contour_plotter
 # plotter = plotter_3D
-# filename = input('output file name: ')
+maxiter = int(input('maxiter: '))
+optimization_options = {'maxiter': maxiter}
 
 # for timing
 start = time()
@@ -110,7 +111,8 @@ inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                      num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                      lookahead_seed=lookahead_seed, CVaR=CVaR)
 current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
-                                        raw_samples=num_inner_restarts * inner_raw_multiplier)
+                                        raw_samples=num_inner_restarts * inner_raw_multiplier,
+                                        options=optimization_options)
 current_best_value = - value
 
 if d == 2 and verbose:
@@ -145,7 +147,8 @@ for i in range(repetitions):
     # candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
 
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
-                                     raw_samples=num_restarts * raw_multiplier)
+                                     raw_samples=num_restarts * raw_multiplier,
+                                     options=optimization_options)
     if verbose:
         print("Candidate: ", candidate, " KG value: ", value)
 
