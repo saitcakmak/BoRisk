@@ -121,30 +121,24 @@ if d == 2 and verbose:
 if verbose:
     print("Current best value: ", current_best_value)
 
-# This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
-# fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
-# it will be random across for loop iteration but uniform within the optimize_acqf iterations.
-# IF using SAA approach, this should be specified to a fixed number.
-seed = int(torch.randint(100000, (1,)))
-
-var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-               current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=seed,
-               dim=d, dim_x=dim_x, q=q,
-               fix_samples=fix_samples, fixed_samples=fixed_samples,
-               num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-               lookahead_seed=lookahead_seed, CVaR=CVaR)
-
 solutions = []
 kg_values = []
 # while not input("stop? (enter 1 to stop)"):
 for i in range(repetitions):
     iteration_start = time()
 
-    # just for testing evaluate_kg, q=1
-    # var_kg.evaluate_kg(Tensor([[[0.5, 0.5]], [[0.3, 0.3]]]))
+    # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
+    # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
+    # it will be random across for loop iteration but uniform within the optimize_acqf iterations.
+    # IF using SAA approach, this should be specified to a fixed number.
+    seed = int(torch.randint(100000, (1,)))
 
-    # for testing optimize_kg
-    # candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
+    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=seed,
+                   dim=d, dim_x=dim_x, q=q,
+                   fix_samples=fix_samples, fixed_samples=fixed_samples,
+                   num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                   lookahead_seed=lookahead_seed, CVaR=CVaR)
 
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
                                      raw_samples=num_restarts * raw_multiplier,
@@ -172,5 +166,5 @@ print("solutions", solutions)
 print("kg_values", kg_values)
 out = {'solutions': solutions, 'kg_values': kg_values, "num_fantasies": num_fantasies,
        'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier, "repetitions": repetitions}
-torch.save(out, 'debug_out/%s_%d_%d_%d_%d.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions))
+torch.save(out, 'debug_out/%s_%d_%d_%d_%d_%d_r.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions, maxiter))
 input("press enter to end execution:")

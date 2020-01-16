@@ -37,9 +37,9 @@ verbose = False  # this should be set False when running it on a server
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
-# function = SineQuadratic(noise_std=noise_std)
+function = SineQuadratic(noise_std=noise_std)
 # function = StandardizedFunction(Powell(noise_std=noise_std))
-function = StandardizedFunction(Branin(noise_std=noise_std))
+# function = StandardizedFunction(Branin(noise_std=noise_std))
 function_name = 'sinequad'
 
 CVaR = False  # if true, CVaRKG instead of VaRKG

@@ -6,9 +6,10 @@ num_fantasies = 10
 num_restarts = 100
 raw_multiplier = 10
 repetitions = 25
+max_iter = 50
 dim = 2
 function_name = 'sinequad'
-file = 'debug_out/%s_%d_%d_%d_%d.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions)
+file = 'debug_out/%s_%d_%d_%d_%d_%d.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions, max_iter)
 
 data = torch.load(file)
 solutions = data['solutions']
@@ -20,6 +21,8 @@ for i in range(repetitions):
 solutions = temp.numpy()
 
 plt.figure(1)
+plt.xlim(0, 1)
+plt.ylim(0, 1)
 plt.scatter(solutions[:, 0], solutions[:, 1])
 plt.title('Solutions')
 

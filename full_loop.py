@@ -117,6 +117,8 @@ likelihood = GaussianLikelihood(
     ),
 )
 
+optimization_options = {'maxiter': 50}
+
 for i in range(iterations):
     iteration_start = time()
     # construct and fit the GP
@@ -131,7 +133,8 @@ for i in range(iterations):
                          num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                          lookahead_seed=lookahead_seed, CVaR=CVaR)
     current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
-                                            raw_samples=num_inner_restarts * inner_raw_multiplier)
+                                            raw_samples=num_inner_restarts * inner_raw_multiplier,
+                                            options=optimization_options)
     current_best_value = - value
     if verbose:
         print("Current best value: ", current_best_value)
@@ -156,7 +159,8 @@ for i in range(iterations):
     # candidate, value = var_kg.optimize_kg(num_restarts=num_restarts, raw_multiplier=raw_multiplier)
 
     candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
-                                     raw_samples=num_restarts * raw_multiplier)
+                                     raw_samples=num_restarts * raw_multiplier,
+                                     options=optimization_options)
     if verbose:
         print("Candidate: ", candidate, " KG value: ", value)
 
@@ -180,3 +184,4 @@ for i in range(iterations):
     train_Y = torch.cat((train_Y, observation), dim=0)
 
 print("total time: ", time()-start)
+input("press enter to exit:")
