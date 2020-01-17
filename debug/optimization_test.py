@@ -33,10 +33,11 @@ torch.manual_seed(0)
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
-# function = SineQuadratic(noise_std=noise_std)
-function = StandardizedFunction(Powell(noise_std=noise_std))
+function = SineQuadratic(noise_std=noise_std)
+# function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
-function_name = 'powell'
+function_name = 'sinequadratic'
+suffix = '_ftol'
 verbose = False
 
 CVaR = False  # if true, CVaRKG instead of VaRKG
@@ -54,10 +55,13 @@ num_inner_restarts = 10 * d
 inner_raw_multiplier = 10
 
 # These are the ones to experiment with - we have an ok understanding of it
-num_fantasies = int(input("num_fantasies: "))
-num_restarts = int(input("num_restarts: "))
-raw_multiplier = int(input("raw_multiplier: "))
+# num_fantasies = int(input("num_fantasies: "))
+# num_restarts = int(input("num_restarts: "))
+# raw_multiplier = int(input("raw_multiplier: "))
 repetitions = int(input("repetitions: "))
+num_fantasies = 100
+num_restarts = 100
+raw_multiplier = 10
 
 # samples used to get the current VaR value
 w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
@@ -84,8 +88,10 @@ lookahead_seed = None
 
 plotter = contour_plotter
 # plotter = plotter_3D
-maxiter = int(input('maxiter: '))
-optimization_options = {'maxiter': maxiter}
+# maxiter = int(input('maxiter: '))
+maxiter = 1000
+ftol = float(input('ftol: '))
+optimization_options = {'maxiter': maxiter, 'ftol': ftol}
 
 # for timing
 start = time()
@@ -166,5 +172,5 @@ print("solutions", solutions)
 print("kg_values", kg_values)
 out = {'solutions': solutions, 'kg_values': kg_values, "num_fantasies": num_fantasies,
        'num_restarts': num_restarts, 'raw_multiplier': raw_multiplier, "repetitions": repetitions}
-torch.save(out, 'debug_out/%s_%d_%d_%d_%d_%d_r.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions, maxiter))
+torch.save(out, 'debug_out/%s_%d_%d_%d_%d_%d%s.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions, maxiter, suffix))
 input("press enter to end execution:")
