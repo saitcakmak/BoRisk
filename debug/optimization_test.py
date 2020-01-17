@@ -33,15 +33,15 @@ torch.manual_seed(0)
 # Initialize the test function
 noise_std = 0.1  # observation noise level
 # function = SimpleQuadratic(noise_std=noise_std)
-function = SineQuadratic(noise_std=noise_std)
-# function = StandardizedFunction(Powell(noise_std=noise_std))
+# function = SineQuadratic(noise_std=noise_std)
+function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
-function_name = 'sinequad'
+function_name = 'powell'
 verbose = False
 
 CVaR = False  # if true, CVaRKG instead of VaRKG
 d = function.dim  # dimension of train_X
-dim_w = 1  # dimension of w component
+dim_w = 2  # dimension of w component
 n = 2 * d + 2  # training samples
 dim_x = d - dim_w  # dimension of the x component
 train_X = torch.rand((n, d))
