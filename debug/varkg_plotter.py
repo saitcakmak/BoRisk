@@ -106,11 +106,18 @@ gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
+# LBFGS optimization options
+options = {'maxiter': 100}
+
+# seeds for fantasies
+lookahead_seed = int(torch.randint(100000, (1,)))
+
 inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                      num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                     CVaR=CVaR)
+                     lookahead_seed=lookahead_seed, CVaR=CVaR)
 current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
-                                        raw_samples=num_inner_restarts * inner_raw_multiplier)
+                                        raw_samples=num_inner_restarts * inner_raw_multiplier,
+                                        options=options)
 current_best_value = - value
 
 if verbose:
@@ -119,10 +126,11 @@ if verbose:
 fantasy_seed = int(torch.randint(100000, (1,)))
 
 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-               current_best_VaR=current_best_value, num_fantasies=num_fantasies, dim=d, dim_x=dim_x, q=q,
+               current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
+               dim=d, dim_x=dim_x, q=q,
                fix_samples=fix_samples, fixed_samples=fixed_samples,
                num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-               fantasy_seed=fantasy_seed, CVaR=CVaR)
+               lookahead_seed=lookahead_seed, CVaR=CVaR)
 
 
 def plot(x: Tensor, y: Tensor):

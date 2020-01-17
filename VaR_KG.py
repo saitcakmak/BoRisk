@@ -153,11 +153,11 @@ class VaRKG(MCAcquisitionFunction):
         :param num_samples: number of samples to use to calculate VaR (samples of w)
         :param alpha: VaR risk level alpha
         :param current_best_VaR: the best VaR value form the current GP model
+        :param num_fantasies: number of fantasies used to calculate VaR-KG (number of Z repetitions)
         :param fantasy_seed: if specified this seed is used in the sampler for the fantasy models.
                                 it will result in fantasies being common across calls to the forward function of the
                                 constructed object, reducing the randomness in optimization.
                                 if None, then each forward call will generate an independent set of fantasies.
-        :param num_fantasies: number of fantasies used to calculate VaR-KG (number of Z repetitions)
         :param dim: The full dimension of X = (x, w)
         :param dim_x: dimension of x in X = (x, w)
         :param q: for the q-batch parallel evaluation
@@ -296,6 +296,8 @@ class VaRKG(MCAcquisitionFunction):
         full_bounds = Tensor([[0], [1]]).repeat(1, self.q * self.dim + self.num_fantasies * self.dim_x)
 
         value = torch.empty(X.size(0))
+        # LBFGS optimization options
+        options = {'maxiter': 100}
         for i in range(X.size(0)):
             fixed_features = {}
             for j in range(self.q * self.dim):
@@ -303,7 +305,7 @@ class VaRKG(MCAcquisitionFunction):
 
             _, value[i] = optimize_acqf(self, bounds=full_bounds, q=1, num_restarts=num_restarts,
                                         raw_samples=num_restarts * raw_multiplier,
-                                        fixed_features=fixed_features)
+                                        fixed_features=fixed_features, options = options)
         return value
 
     def optimize_kg(self, num_restarts=50, raw_multiplier=10):
@@ -314,8 +316,10 @@ class VaRKG(MCAcquisitionFunction):
         :return: Optimal solution and KG value
         """
         full_bounds = Tensor([[0], [1]]).repeat(1, self.q * self.dim + self.num_fantasies * self.dim_x)
-
+        # LBFGS optimization options
+        options = {'maxiter': 100}
         candidate, value = optimize_acqf(self, bounds=full_bounds, q=1, num_restarts=num_restarts,
-                                         raw_samples=num_restarts * raw_multiplier)
+                                         raw_samples=num_restarts * raw_multiplier,
+                                         options=options)
 
         return candidate[:, 0: self.q * self.dim], value

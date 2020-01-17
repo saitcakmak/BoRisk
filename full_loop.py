@@ -117,7 +117,8 @@ likelihood = GaussianLikelihood(
     ),
 )
 
-optimization_options = {'maxiter': 50}
+# maximum iterations of LBFGS
+optimization_options = {'maxiter': 100}
 
 for i in range(iterations):
     iteration_start = time()

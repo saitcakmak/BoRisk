@@ -2,14 +2,15 @@ import torch
 import matplotlib.pyplot as plt
 import numpy as np
 
-num_fantasies = 10
+num_fantasies = 100
 num_restarts = 100
 raw_multiplier = 10
 repetitions = 25
-max_iter = 50
+max_iter = 1000
 dim = 2
-function_name = 'sinequad'
-file = 'debug_out/%s_%d_%d_%d_%d_%d.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions, max_iter)
+function_name = 'sinequadratic'
+suffix = '_ftol_0.001'
+file = 'debug_out/%s_%d_%d_%d_%d_%d%s.pt' % (function_name, num_fantasies, num_restarts, raw_multiplier, repetitions, max_iter, suffix)
 
 data = torch.load(file)
 solutions = data['solutions']
