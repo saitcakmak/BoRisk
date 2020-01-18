@@ -34,7 +34,8 @@ The aim is to see if we get convergence and find the true optimum in the end.
 """
 
 # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
-torch.manual_seed(0)
+seed = 0
+torch.manual_seed(seed=seed)
 
 # Initialize the test function
 noise_std = 0.1  # observation noise level
@@ -118,7 +119,8 @@ likelihood = GaussianLikelihood(
 )
 
 # maximum iterations of LBFGS
-optimization_options = {'maxiter': 100}
+maxiter = 100
+optimization_options = {'maxiter': maxiter}
 
 for i in range(iterations):
     iteration_start = time()
@@ -144,10 +146,10 @@ for i in range(iterations):
     # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
     # it will be random across for loop iteration but uniform within the optimize_acqf iterations.
     # IF using SAA approach, this should be specified to a fixed number.
-    seed = int(torch.randint(100000, (1,)))
+    fantasy_seed = int(torch.randint(100000, (1,)))
 
     var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=seed,
+                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
                    dim=d, dim_x=dim_x, q=q,
                    fix_samples=fix_samples, fixed_samples=fixed_samples,
                    num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
@@ -167,7 +169,12 @@ for i in range(iterations):
 
     data = {'state_dict': gp.state_dict(), 'train_targets': gp.train_targets, 'train_inputs': gp.train_inputs,
             'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
-            'candidate': candidate, 'kg_value': value.detach()}
+            'candidate': candidate, 'kg_value': value.detach(),
+            'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
+            'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
+            'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
+            'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed}
+
     full_data[i] = data
     torch.save(full_data, 'loop_output/%s.pt' % filename)
 
