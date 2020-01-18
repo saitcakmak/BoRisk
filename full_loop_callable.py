@@ -176,6 +176,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         train_Y = torch.cat((train_Y, observation), dim=0)
 
     print("total time: ", time()-start)
+    # printing the data in case something goes wrong with file save
+    print('data: ', full_data)
 
 
 def function_picker(function_name: str) -> SyntheticTestFunction:

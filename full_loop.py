@@ -192,4 +192,7 @@ for i in range(iterations):
     train_Y = torch.cat((train_Y, observation), dim=0)
 
 print("total time: ", time()-start)
-input("press enter to exit:")
+print('data: ', full_data)
+if verbose and d == 2:
+    input("press enter to exit:")
+
