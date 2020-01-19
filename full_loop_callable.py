@@ -1,6 +1,6 @@
 """
 This version is to be callable from some other python code.
-Sait will use this to run jobs on school clusters.
+Sait will use this to run jobs on school clusters, though it can be used for other purposes too.
 A full optimization loop of VaRKG with some pre-specified parameters.
 Specify the problem to use as the 'function', adjust the parameters and run.
 Make sure that the problem is defined over unit-hypercube, including the w components.
@@ -28,10 +28,10 @@ from botorch.models.transforms import Standardize
 import multiprocessing
 from typing import Optional
 
-"""
-In this code, we will initialize a random GP, then optimize it's KG, sample, update and repeat.
-The aim is to see if we get convergence and find the true optimum in the end.
-"""
+# set the number of cores for torch to use
+cpu_count = max(multiprocessing.cpu_count(), 8)
+torch.set_num_threads(cpu_count)
+torch.set_num_interop_threads(cpu_count)
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
@@ -41,7 +41,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               CVaR: bool = False):
     """
     The full_loop in callable form
-    :param fantasy_seed: Seed for manual seeding - most important for keeping initial samples consistent
+    :param seed: The seed for initializing things
     :param function_name: The problem function to be used. TODO: add options
     :param dim_w: Dimension of the w component.
     :param filename: Output file name.
@@ -58,26 +58,28 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
     :return: None - saves the output.
     """
-    # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
-    torch.manual_seed(seed=seed)
-
-    # set the number of cores for torch to use
-    cpu_count = max(multiprocessing.cpu_count(), 8)
-    torch.set_num_threads(cpu_count)
-    torch.set_num_interop_threads(cpu_count)
 
     # Initialize the test function
     function = function_picker(function_name)
-
     d = function.dim  # dimension of train_X
     n = 2 * d + 2  # training samples
     dim_x = d - dim_w  # dimension of the x component
-    train_X = torch.rand((n, d))
-    train_Y = function(train_X)
 
-    # the data for acquisition functions
-    full_data = dict()
-    raw_multiplier = 10
+    # If file already exists, we will do warm-starts, i.e. continue from where it was left.
+    try:
+        full_data = torch.load("loop_output/%s.pt" % filename)
+        last_iteration = max(full_data.keys())
+        last_data = full_data[last_iteration]
+        train_X = last_data['train_X']
+        train_Y = last_data['train_Y']
+
+    except FileNotFoundError:
+        # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
+        torch.manual_seed(seed=seed)
+        last_iteration = -1
+        full_data = dict()
+        train_X = torch.rand((n, d))
+        train_Y = function(train_X)
 
     # samples used to get the current VaR value
     if dim_w == 1:
@@ -95,6 +97,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # fix_samples = False
     # fixed_samples = None
 
+    raw_multiplier = 10
     x_bounds = Tensor([[0], [1]]).repeat(1, dim_x)
     full_bounds = Tensor([[0], [1]]).repeat(1, q * d + num_fantasies * dim_x)
 
@@ -119,7 +122,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # maximum iterations of LBFGS
     optimization_options = {'maxiter': maxiter}
 
-    for i in range(iterations):
+    for i in range(last_iteration+1, iterations):
         iteration_start = time()
         # construct and fit the GP
         gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
@@ -158,7 +161,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
 
-        data = {'state_dict': gp.state_dict(), 'train_targets': gp.train_targets, 'train_inputs': gp.train_inputs,
+        data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
                 'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
                 'candidate': candidate, 'kg_value': value.detach(),
                 'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,

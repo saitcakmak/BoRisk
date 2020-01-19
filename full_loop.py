@@ -173,7 +173,7 @@ for i in range(iterations):
     if verbose:
         print("Candidate: ", candidate, " KG value: ", value)
 
-    data = {'state_dict': gp.state_dict(), 'train_targets': gp.train_targets, 'train_inputs': gp.train_inputs,
+    data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
             'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
             'candidate': candidate, 'kg_value': value.detach(),
             'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
