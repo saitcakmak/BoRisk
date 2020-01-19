@@ -12,7 +12,7 @@ function_name, seed, dim_w, filename, iterations = sys.argv[1:]
 seed = int(seed)
 dim_w = int(dim_w)
 iterations = int(iterations)
-filename = "cluster_" + filename
+filename = "cluster_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
 
 full_loop(function_name, seed, dim_w, filename, iterations)
 print('Successfully completed!')
