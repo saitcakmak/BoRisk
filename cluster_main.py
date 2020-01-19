@@ -8,8 +8,8 @@ python cluster_main.py sinequad 0 1 test 10
 from full_loop_callable import *
 import sys
 
-argv = str(sys.argv[1:]).split(' ')
-function_name, seed, dim_w, filename, iterations = argv
+# argv = str(sys.argv[1:]).split(' ')
+function_name, seed, dim_w, filename, iterations = sys.argv[1:]
 seed = int(seed)
 dim_w = int(dim_w)
 iterations = int(iterations)
