@@ -71,10 +71,16 @@ inner_raw_multiplier = 10
 raw_multiplier = 10
 
 # samples used to get the current VaR value
-w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
+if dim_w == 1:
+    w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
+else:
+    w_samples = torch.rand((num_samples, dim_w))
 
 # fixed_samples and fix_samples makes it SAA approach.
-fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
+if dim_w == 1:
+    fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
+else:
+    fixed_samples = torch.rand((num_samples, dim_w))
 fix_samples = True
 # comment out above and uncomment below for SGD
 # fix_samples = False
