@@ -40,7 +40,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, alpha: float = 0.7, q: int = 1, num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False, ADAM = False):
+              CVaR: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -58,7 +58,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
-    :param ADAM: If true, uses ADAM for optimization, else L-BFGS-B.
     :return: None - saves the output.
     """
 
@@ -124,8 +123,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     # maximum iterations of LBFGS
     optimization_options = {'maxiter': maxiter}
-    # options for adam if needed
-    adam_options = {}
 
     for i in range(last_iteration+1, iterations):
         iteration_start = time()
@@ -141,23 +138,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                              num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                              lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        if not ADAM:
-            current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
-                                                    raw_samples=num_restarts * raw_multiplier,
-                                                    options=optimization_options)
-        else:
-            initial_conditions = gen_batch_initial_conditions(acq_function=inner_VaR,
-                                                              bounds=x_bounds, q=1,
-                                                              num_restarts=num_restarts,
-                                                              raw_samples=num_restarts * raw_multiplier)
-            current_best_sol, value = gen_candidates_torch(initial_conditions=initial_conditions,
-                                                           acquisition_function=inner_VaR,
-                                                           lower_bounds=x_bounds[0],
-                                                           upper_bounds=x_bounds[1],
-                                                           options=adam_options)
-            best = torch.argmax(value.view(-1), dim=0)
-            current_best_sol = current_best_sol[best]
-            value = value[best]
+        current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
+                                                raw_samples=num_restarts * raw_multiplier,
+                                                options=optimization_options)
+
         current_best_value = - value
         if verbose:
             print("Current best value: ", current_best_value)
@@ -175,23 +159,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                        num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                        lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        if not ADAM:
-            candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
-                                             raw_samples=num_restarts * raw_multiplier,
-                                             options=optimization_options)
-        else:
-            initial_conditions = gen_batch_initial_conditions(acq_function=var_kg,
-                                                              bounds=full_bounds, q=1,
-                                                              num_restarts=num_restarts,
-                                                              raw_samples=num_restarts * raw_multiplier)
-            candidate, value = gen_candidates_torch(initial_conditions=initial_conditions,
-                                                           acquisition_function=var_kg,
-                                                           lower_bounds=full_bounds[0],
-                                                           upper_bounds=full_bounds[1],
-                                                           options=adam_options)
-            best = torch.argmax(value.view(-1), dim=0)
-            candidate = candidate[best]
-            value = value[best]
+        candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
+                                         raw_samples=num_restarts * raw_multiplier,
+                                         options=optimization_options)
+
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
 
