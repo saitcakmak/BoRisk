@@ -28,6 +28,8 @@ from botorch.models.transforms import Standardize
 import multiprocessing
 from typing import Optional
 import platform
+from botorch.optim.initializers import gen_batch_initial_conditions
+from botorch.gen import gen_candidates_torch
 
 # The ISYE servers for some reason use a single core. This might help.
 if platform.system() != 'linux' or 'Red Hat' not in platform.linux_distribution()[0]:
@@ -41,7 +43,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, alpha: float = 0.7, q: int = 1, num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False):
+              CVaR: bool = False, ADAM: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -59,6 +61,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
+    :param ADAM: If true, uses ADAM for optimization, else L-BFGS-B.
     :return: None - saves the output.
     """
 
@@ -122,10 +125,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
-    # maximum iterations of LBFGS
+    # maximum iterations of LBFGS or ADAM
     optimization_options = {'maxiter': maxiter}
 
-    for i in range(last_iteration+1, iterations):
+    for i in range(last_iteration + 1, iterations):
         iteration_start = time()
         # construct and fit the GP
         gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
@@ -139,9 +142,23 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                              num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                              lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
-                                                raw_samples=num_restarts * raw_multiplier,
-                                                options=optimization_options)
+        if not ADAM:
+            current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
+                                                    raw_samples=num_restarts * raw_multiplier,
+                                                    options=optimization_options)
+        else:
+            initial_conditions = gen_batch_initial_conditions(acq_function=inner_VaR,
+                                                              bounds=x_bounds, q=1,
+                                                              num_restarts=num_restarts,
+                                                              raw_samples=num_restarts * raw_multiplier)
+            current_best_sol, value = gen_candidates_torch(initial_conditions=initial_conditions,
+                                                           acquisition_function=inner_VaR,
+                                                           lower_bounds=x_bounds[0],
+                                                           upper_bounds=x_bounds[1],
+                                                           options=optimization_options)
+            best = torch.argmax(value.view(-1), dim=0)
+            current_best_sol = current_best_sol[best].detach()
+            value = value[best].detach()
 
         current_best_value = - value
         if verbose:
@@ -160,9 +177,23 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                        num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                        lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
-                                         raw_samples=num_restarts * raw_multiplier,
-                                         options=optimization_options)
+        if not ADAM:
+            candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
+                                             raw_samples=num_restarts * raw_multiplier,
+                                             options=optimization_options)
+        else:
+            initial_conditions = gen_batch_initial_conditions(acq_function=var_kg,
+                                                              bounds=full_bounds, q=1,
+                                                              num_restarts=num_restarts,
+                                                              raw_samples=num_restarts * raw_multiplier)
+            candidate, value = gen_candidates_torch(initial_conditions=initial_conditions,
+                                                    acquisition_function=var_kg,
+                                                    lower_bounds=full_bounds[0],
+                                                    upper_bounds=full_bounds[1],
+                                                    options=optimization_options)
+            best = torch.argmax(value.view(-1), dim=0)
+            candidate = candidate[best].detach()
+            value = value[best].detach()
 
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -181,7 +212,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
         model_update_start = time()
-        candidate_point = candidate[:, 0:q*d].reshape(q, d)
+        candidate_point = candidate[:, 0:q * d].reshape(q, d)
         if verbose and d == 2:
             plt.close('all')
             plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
@@ -190,7 +221,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         train_X = torch.cat((train_X, candidate_point), dim=0)
         train_Y = torch.cat((train_Y, observation), dim=0)
 
-    print("total time: ", time()-start)
+    print("total time: ", time() - start)
     # printing the data in case something goes wrong with file save
     print('data: ', full_data)
 
