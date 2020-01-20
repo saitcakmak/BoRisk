@@ -40,6 +40,7 @@ plt.show()
 if problem_name == 'sinequad':
     full_solutions = torch.cat((best_solutions, torch.ones((iterations, 1)) * 0.7), dim=-1)
     true_values = function.evaluate_true(full_solutions)
+    true_optimal = -1 + 0.7 ** 2
 
 
 value_diff = true_values - true_optimal

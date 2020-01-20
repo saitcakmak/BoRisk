@@ -27,13 +27,14 @@ import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
 from typing import Optional
-from botorch.optim.initializers import gen_batch_initial_conditions
-from botorch.gen import gen_candidates_torch
+import platform
 
-# set the number of cores for torch to use
-cpu_count = max(multiprocessing.cpu_count(), 8)
-torch.set_num_threads(cpu_count)
-torch.set_num_interop_threads(cpu_count)
+# The ISYE servers for some reason use a single core. This might help.
+if platform.system() != 'linux' or 'Red Hat' not in platform.linux_distribution():
+    # set the number of cores for torch to use
+    cpu_count = max(multiprocessing.cpu_count(), 8)
+    torch.set_num_threads(cpu_count)
+    torch.set_num_interop_threads(cpu_count)
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
