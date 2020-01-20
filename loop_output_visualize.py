@@ -33,7 +33,7 @@ dist = Uniform(0, 1)
 
 for i in range(len(data.keys())):
     iteration_data = data[i]
-    gp = SingleTaskGP(iteration_data['train_inputs'][0], iteration_data['train_targets'].unsqueeze(-1), likelihood,
+    gp = SingleTaskGP(iteration_data['train_X'], iteration_data['train_Y'].unsqueeze(-1), likelihood,
                       outcome_transform=Standardize(m=1))
     gp.load_state_dict(iteration_data['state_dict'])
     inner_VaR = InnerVaR(model=gp, w_samples=fixed_samples, alpha=alpha, dim_x=1)

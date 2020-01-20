@@ -29,8 +29,8 @@ class SineQuadratic(SyntheticTestFunction):
     """
     dim = 2
     a = 10
-    _optimizers = ((3 * math.pi)/(a * 2), 0)
-    _optimal_value = -1.0
+    _optimizers = ((3 * math.pi)/(a * 2), 0)  # The first arg is the minimizer for C/VaR as well.
+    _optimal_value = -1.0  # -1 + alpha^2 for VaR and a similar thing for CVaR
 
     def __init__(self, noise_std: Optional[float] = None, negate: bool = False):
         self._bounds = [(0, 1) for _ in range(self.dim)]
