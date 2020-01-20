@@ -30,7 +30,7 @@ from typing import Optional
 import platform
 
 # The ISYE servers for some reason use a single core. This might help.
-if platform.system() != 'linux' or 'Red Hat' not in platform.linux_distribution():
+if platform.system() != 'linux' or 'Red Hat' not in platform.linux_distribution()[0]:
     # set the number of cores for torch to use
     cpu_count = max(multiprocessing.cpu_count(), 8)
     torch.set_num_threads(cpu_count)
