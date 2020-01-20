@@ -184,13 +184,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                                               bounds=full_bounds, q=1,
                                                               num_restarts=num_restarts,
                                                               raw_samples=num_restarts * raw_multiplier)
-            current_best_sol, value = gen_candidates_torch(initial_conditions=initial_conditions,
+            candidate, value = gen_candidates_torch(initial_conditions=initial_conditions,
                                                            acquisition_function=var_kg,
                                                            lower_bounds=full_bounds[0],
                                                            upper_bounds=full_bounds[1],
                                                            options=adam_options)
             best = torch.argmax(value.view(-1), dim=0)
-            current_best_sol = current_best_sol[best]
+            candidate = candidate[best]
             value = value[best]
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
