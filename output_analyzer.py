@@ -12,10 +12,12 @@ prefix = 'cluster_'
 problem_name = 'sinequad'
 seed = 0
 dim_w = 1
-iterations = 50
-file_name = 'testadam'
+iterations = 10
+file_name = 'inittest'
 suffix = '_adam'
-full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed, dim_w, iterations, file_name, suffix)
+full_file = input("file name: ")
+# full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed, dim_w, iterations, file_name, suffix)
+full_path = '%s%s' % (directory, full_file)
 
 function = function_picker(problem_name)
 data = torch.load(full_path)
@@ -32,8 +34,8 @@ full_train = data[iterations-1]['train_X']
 print(full_train)
 # plt.figure(3)
 # plt.scatter(best_solutions.numpy()[:, 0], best_solutions.numpy()[:, 1])
-plt.figure(4)
-plt.scatter(full_train.numpy()[:, 0], full_train.numpy()[:, 1])
+# plt.figure(4)
+# plt.scatter(full_train.numpy()[:, 0], full_train.numpy()[:, 1])
 # plt.figure(5)
 # plt.scatter(full_train.numpy()[:, 2], full_train.numpy()[:, 3])
 
@@ -46,9 +48,9 @@ if problem_name == 'sinequad':
 
 value_diff = true_values - true_optimal
 
-plt.figure(1)
-plt.plot(value_diff)
-plt.title('gap')
+# plt.figure(1)
+# plt.plot(value_diff)
+# plt.title('gap')
 plt.figure(2)
 plt.plot(torch.log10(value_diff))
 plt.title('log-gap')

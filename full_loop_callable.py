@@ -26,10 +26,8 @@ from botorch.test_functions import SyntheticTestFunction
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
-from typing import Optional
 import platform
-from botorch.optim.initializers import gen_batch_initial_conditions
-from botorch.gen import gen_candidates_torch, gen_candidates_scipy
+from botorch.gen import gen_candidates_scipy
 from initializer import gen_one_shot_VaRKG_initial_conditions
 
 # The ISYE servers for some reason use a single core. This might help.
@@ -44,7 +42,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, alpha: float = 0.7, q: int = 1, num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False, ADAM: bool = False):
+              CVaR: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -62,7 +60,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
-    :param ADAM: If true, uses ADAM for optimization, else L-BFGS-B.
     :return: None - saves the output.
     """
 
@@ -128,10 +125,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     # maximum iterations of LBFGS or ADAM
     optimization_options = {'maxiter': maxiter}
-    if ADAM:
-        optimizer = gen_candidates_torch
-    else:
-        optimizer = gen_candidates_scipy
 
     for i in range(last_iteration + 1, iterations):
         iteration_start = time()
@@ -178,12 +171,11 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                                                    bounds=full_bounds,
                                                                    num_restarts=num_restarts,
                                                                    raw_samples=num_restarts * raw_multiplier)
-
-        solutions, values = optimizer(initial_conditions=initial_conditions,
-                                      acquisition_function=var_kg,
-                                      lower_bounds=full_bounds[0],
-                                      upper_bounds=full_bounds[1],
-                                      options=optimization_options)
+        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
+                                                 acquisition_function=var_kg,
+                                                 lower_bounds=full_bounds[0],
+                                                 upper_bounds=full_bounds[1],
+                                                 options=optimization_options)
         best = torch.argmax(values.view(-1), dim=0)
         candidate = solutions[best].detach()
         value = values[best].detach()
@@ -239,5 +231,4 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 
 if __name__ == "__main__":
-    full_loop('sinequad', 0, 1, 'tester', 5, 100, 25, 5, ADAM=False)
-    full_loop('sinequad', 0, 1, 'testeradam', 5, 100, 25, 5, ADAM=True)
+    full_loop('sinequad', 0, 1, 'tester', 10, 100, 25, 10)
