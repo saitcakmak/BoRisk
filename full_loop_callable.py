@@ -29,7 +29,8 @@ import multiprocessing
 from typing import Optional
 import platform
 from botorch.optim.initializers import gen_batch_initial_conditions
-from botorch.gen import gen_candidates_torch
+from botorch.gen import gen_candidates_torch, gen_candidates_scipy
+from initializer import gen_one_shot_VaRKG_initial_conditions
 
 # The ISYE servers for some reason use a single core. This might help.
 if platform.system() != 'linux' or 'Red Hat' not in platform.linux_distribution()[0]:
@@ -127,6 +128,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     # maximum iterations of LBFGS or ADAM
     optimization_options = {'maxiter': maxiter}
+    if ADAM:
+        optimizer = gen_candidates_torch
+    else:
+        optimizer = gen_candidates_scipy
 
     for i in range(last_iteration + 1, iterations):
         iteration_start = time()
@@ -142,23 +147,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                              num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                              lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        if not ADAM:
-            current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
-                                                    raw_samples=num_restarts * raw_multiplier,
-                                                    options=optimization_options)
-        else:
-            initial_conditions = gen_batch_initial_conditions(acq_function=inner_VaR,
-                                                              bounds=x_bounds, q=1,
-                                                              num_restarts=num_restarts,
-                                                              raw_samples=num_restarts * raw_multiplier)
-            current_best_sol, value = gen_candidates_torch(initial_conditions=initial_conditions,
-                                                           acquisition_function=inner_VaR,
-                                                           lower_bounds=x_bounds[0],
-                                                           upper_bounds=x_bounds[1],
-                                                           options=optimization_options)
-            best = torch.argmax(value.view(-1), dim=0)
-            current_best_sol = current_best_sol[best].detach()
-            value = value[best].detach()
+        solutions, values = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
+                                          raw_samples=num_restarts * raw_multiplier,
+                                          options=optimization_options,
+                                          return_best_only=False)
+        best = torch.argmax(values.view(-1), dim=0)
+        current_best_sol = solutions[best].detach()
+        value = values[best].detach()
 
         current_best_value = - value
         if verbose:
@@ -177,23 +172,21 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                        num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                        lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        if not ADAM:
-            candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
-                                             raw_samples=num_restarts * raw_multiplier,
-                                             options=optimization_options)
-        else:
-            initial_conditions = gen_batch_initial_conditions(acq_function=var_kg,
-                                                              bounds=full_bounds, q=1,
-                                                              num_restarts=num_restarts,
-                                                              raw_samples=num_restarts * raw_multiplier)
-            candidate, value = gen_candidates_torch(initial_conditions=initial_conditions,
-                                                    acquisition_function=var_kg,
-                                                    lower_bounds=full_bounds[0],
-                                                    upper_bounds=full_bounds[1],
-                                                    options=optimization_options)
-            best = torch.argmax(value.view(-1), dim=0)
-            candidate = candidate[best].detach()
-            value = value[best].detach()
+        initial_conditions = gen_one_shot_VaRKG_initial_conditions(acq_function=var_kg,
+                                                                   inner_solutions=solutions,
+                                                                   inner_vals=values,
+                                                                   bounds=full_bounds,
+                                                                   num_restarts=num_restarts,
+                                                                   raw_samples=num_restarts * raw_multiplier)
+
+        solutions, values = optimizer(initial_conditions=initial_conditions,
+                                      acquisition_function=var_kg,
+                                      lower_bounds=full_bounds[0],
+                                      upper_bounds=full_bounds[1],
+                                      options=optimization_options)
+        best = torch.argmax(values.view(-1), dim=0)
+        candidate = solutions[best].detach()
+        value = values[best].detach()
 
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -243,3 +236,8 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
         function = StandardizedFunction(Branin(noise_std=noise_std))
 
     return function
+
+
+if __name__ == "__main__":
+    full_loop('sinequad', 0, 1, 'tester', 5, 100, 25, 5, ADAM=False)
+    full_loop('sinequad', 0, 1, 'testeradam', 5, 100, 25, 5, ADAM=True)

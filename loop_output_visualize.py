@@ -1,7 +1,6 @@
 import torch
 from torch import Tensor
 from botorch.models import SingleTaskGP
-from torch.distributions import Uniform, Gamma
 from VaR_KG import VaRKG, InnerVaR
 from time import time, sleep
 from plotter import plotter_3D, contour_plotter
@@ -28,12 +27,11 @@ likelihood = GaussianLikelihood(
 num_samples = 100
 alpha = 0.7
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
-dist = Uniform(0, 1)
 
 
 for i in range(len(data.keys())):
     iteration_data = data[i]
-    gp = SingleTaskGP(iteration_data['train_X'], iteration_data['train_Y'].unsqueeze(-1), likelihood,
+    gp = SingleTaskGP(iteration_data['train_X'], iteration_data['train_Y'].reshape(-1, 1), likelihood,
                       outcome_transform=Standardize(m=1))
     gp.load_state_dict(iteration_data['state_dict'])
     inner_VaR = InnerVaR(model=gp, w_samples=fixed_samples, alpha=alpha, dim_x=1)

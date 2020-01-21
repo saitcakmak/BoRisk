@@ -9,12 +9,13 @@ import matplotlib.pyplot as plt
 
 directory = 'loop_output/'
 prefix = 'cluster_'
-problem_name = 'powell'
+problem_name = 'sinequad'
 seed = 0
-dim_w = 2
+dim_w = 1
 iterations = 50
-file_name = 'test2'
-full_path = "%s%s%s_%s_%s_%s_%s.pt" % (directory, prefix, problem_name, seed, dim_w, iterations, file_name)
+file_name = 'testadam'
+suffix = '_adam'
+full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed, dim_w, iterations, file_name, suffix)
 
 function = function_picker(problem_name)
 data = torch.load(full_path)
@@ -29,12 +30,12 @@ for i in range(iterations):
 print(best_solutions)
 full_train = data[iterations-1]['train_X']
 print(full_train)
-plt.figure(3)
-plt.scatter(best_solutions.numpy()[:, 0], best_solutions.numpy()[:, 1])
+# plt.figure(3)
+# plt.scatter(best_solutions.numpy()[:, 0], best_solutions.numpy()[:, 1])
 plt.figure(4)
 plt.scatter(full_train.numpy()[:, 0], full_train.numpy()[:, 1])
-plt.figure(5)
-plt.scatter(full_train.numpy()[:, 2], full_train.numpy()[:, 3])
+# plt.figure(5)
+# plt.scatter(full_train.numpy()[:, 2], full_train.numpy()[:, 3])
 
 plt.show()
 if problem_name == 'sinequad':
@@ -47,6 +48,8 @@ value_diff = true_values - true_optimal
 
 plt.figure(1)
 plt.plot(value_diff)
+plt.title('gap')
 plt.figure(2)
-plt.plot(torch.log(value_diff))
+plt.plot(torch.log10(value_diff))
+plt.title('log-gap')
 plt.show()
