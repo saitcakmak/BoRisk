@@ -144,6 +144,7 @@ for i in range(iterations):
     current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_inner_restarts,
                                             raw_samples=num_inner_restarts * inner_raw_multiplier,
                                             options=optimization_options)
+
     current_best_value = - value
     if verbose:
         print("Current best value: ", current_best_value)
@@ -173,6 +174,7 @@ for i in range(iterations):
     if verbose:
         print("Candidate: ", candidate, " KG value: ", value)
 
+
     data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
             'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
             'candidate': candidate, 'kg_value': value.detach(),
@@ -201,4 +203,3 @@ print("total time: ", time()-start)
 print('data: ', full_data)
 if verbose and d == 2:
     input("press enter to exit:")
-
