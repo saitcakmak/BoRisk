@@ -37,11 +37,12 @@ class ContinuousNewsvendor(SyntheticTestFunction):
     def forward(self, X: Tensor, noise: bool = True) -> Tensor:
         """
         Simulates the demand for run_length days and returns the objective value.
+        The result is negated to get a minimization problem
         :param X: First dimension is x, last two dimensions are alpha and beta of the distribution.
                     Should be standardized to unit-hypercube, see bounds defined above.
                     Tensor of size(-1) = 3. Return is of appropriate batch shape.
         :param noise: Noise free evaluation is not available, leave as True.
-        :return: Profit after run_length days, same batch shape as X
+        :return: - Profit after run_length days, same batch shape as X
         """
         if not noise:
             raise ValueError("Noise free evaluation is not available.")
@@ -72,7 +73,7 @@ class ContinuousNewsvendor(SyntheticTestFunction):
         salvage_revenue = self.salvage * (x.expand(*x.size()[:-1], self.run_length) - sales)
         profit = sales_revenue + salvage_revenue - period_cost
 
-        return torch.mean(profit, dim=-1, keepdim=True)
+        return -torch.mean(profit, dim=-1, keepdim=True)
 
     def evaluate_true(self, X: Tensor) -> Tensor:
         raise NotImplementedError("True function evaluation is not available.")

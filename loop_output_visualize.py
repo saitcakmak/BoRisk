@@ -39,4 +39,4 @@ for i in range(len(data.keys())):
     inner_VaR = InnerVaR(model=gp, w_samples=fixed_samples, alpha=alpha, dim_x=1)
     plotter(gp, inner_VaR, iteration_data['current_best_sol'], iteration_data['current_best_value'], iteration_data['candidate'])
     # input("Next?")
-    sleep(2)
+    sleep(1)

@@ -16,6 +16,7 @@ class StandardizedFunction:
 
         :param function: the function to sample from, initialized with relevant parameters
         """
+        super().__init__()
         try:
             self.function = function
             self.dim = function.dim
@@ -38,3 +39,14 @@ class StandardizedFunction:
         X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
         return self.function(X).unsqueeze(-1)
 
+    def evaluate_true(self, X: Tensor) -> Tensor:
+        """
+        Calls evaluate true of the function
+        Scales the solutions to the function domain and returns the function value.
+        :param X: Solutions from the relative scale of [0, 1]
+        :return: function value
+        """
+        shape = list(X.size())
+        shape[-1] = 1
+        X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
+        return self.function.evaluate_true(X).unsqueeze(-1)

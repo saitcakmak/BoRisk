@@ -18,6 +18,8 @@ suffix = '_adam'
 full_file = input("file name: ")
 # full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed, dim_w, iterations, file_name, suffix)
 full_path = '%s%s' % (directory, full_file)
+k = 1000  # number of w to draw to evaluate the true values, linspace if dim_w == 1, rand otherwise
+alpha = 0.7  # risk level
 
 function = function_picker(problem_name)
 data = torch.load(full_path)
@@ -41,16 +43,27 @@ print(full_train)
 
 plt.show()
 if problem_name == 'sinequad':
-    full_solutions = torch.cat((best_solutions, torch.ones((iterations, 1)) * 0.7), dim=-1)
+    full_solutions = torch.cat((best_solutions, torch.ones((iterations, 1)) * alpha), dim=-1)
     true_values = function.evaluate_true(full_solutions)
-    true_optimal = -1 + 0.7 ** 2
+    true_optimal = -1 + alpha ** 2
+    value_diff = true_values - true_optimal
+else:
+    true_values = torch.empty((iterations, 1))
+    for i in range(iterations):
+        sol = best_solutions[i].reshape(1, -1).repeat(k, 1)
+        if dim_w == 1:
+            w = torch.linspace(0, 1, k).reshape(k, 1)
+        else:
+            w = torch.rand((k, 2))
+        full_sol = torch.cat((sol, w), dim=-1)
+        values = function.evaluate_true(full_sol)
+        values, index = torch.sort(values, dim=-2)
+        true_values[i] = values[int(k * alpha)]
+    value_diff = true_values
 
-
-value_diff = true_values - true_optimal
-
-# plt.figure(1)
-# plt.plot(value_diff)
-# plt.title('gap')
+plt.figure(1)
+plt.plot(value_diff)
+plt.title('gap')
 plt.figure(2)
 plt.plot(torch.log10(value_diff))
 plt.title('log-gap')

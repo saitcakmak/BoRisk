@@ -21,6 +21,8 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
 from test_functions.standardized_function import StandardizedFunction
+from test_functions.cont_newsvendor import ContinuousNewsvendor
+from test_functions.prod_line import ProductionLine
 from botorch.test_functions import Powell, Branin
 from botorch.test_functions import SyntheticTestFunction
 import matplotlib.pyplot as plt
@@ -233,10 +235,15 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
         function = StandardizedFunction(Powell(noise_std=noise_std))
     elif function_name == 'branin':
         function = StandardizedFunction(Branin(noise_std=noise_std))
+    elif function_name == 'newsvendor':
+        function = ContinuousNewsvendor()
+    elif function_name == 'prod_line':
+        function = ProductionLine()
 
     return function
 
 
 if __name__ == "__main__":
-    full_loop('sinequad', 0, 1, 'tester', 50, 100, 25, 10, random_sampling=True)
+    # this is for momentary testing of changes to the code
+    full_loop('sinequad', 0, 1, 'tester', 50, 100, 25, 10, random_sampling=False)
 

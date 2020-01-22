@@ -43,6 +43,7 @@ class ProductionLine(SyntheticTestFunction):
     def forward(self, X: Tensor, noise: bool = True) -> Tensor:
         """
         Handles the input processing and returns the average revenue
+        Returns the negative revenue for minimization
         :param X: First dimensions are for server rates, the last dimension is for arrival rate lambda.
                     Should be standardized to unit-hypercube, see bounds defined above for scaling.
                     Tensor of size(-1) = dim. Return is of appropriate batch shape.
