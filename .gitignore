@@ -5,6 +5,7 @@ tasks.xml
 workspace.xml
 *.iml
 *.dat
+*.cmd
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
