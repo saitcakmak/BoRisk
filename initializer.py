@@ -5,26 +5,27 @@ It uses either LBFGS or ADAM to optimize the problem.
 The code here assumes the standard variable bounds of unit-hypercube.
 """
 import torch
-from botorch.optim import gen_batch_initial_conditions
-from botorch.utils import standardize
+from botorch.utils import standardize, draw_sobol_samples
 from torch import Tensor
 from typing import Optional, Union, Dict
 from VaR_KG import VaRKG, InnerVaR
-from botorch.gen import gen_candidates_scipy, gen_candidates_torch
 
 
 def gen_one_shot_VaRKG_initial_conditions(
-    acq_function: VaRKG,
-    inner_solutions: Tensor,
-    inner_vals: Tensor,
-    bounds: Tensor,
-    num_restarts: int,
-    raw_samples: int,
-    options: Optional[Dict[str, Union[bool, float, int]]] = None,
+        acq_function: VaRKG,
+        inner_solutions: Tensor,
+        inner_vals: Tensor,
+        bounds: Tensor,
+        num_restarts: int,
+        raw_samples: int,
+        options: Optional[Dict[str, Union[bool, float, int]]] = None,
 ) -> Optional[Tensor]:
     r"""
     See the explanation below to get an idea of how this works, though it is not completely accurate anymore.
     The code has been modified to work with VaRKG instead.
+    It has been modified significantly and combined with gen_batch_initial_conditions for optimal candidate
+    generation.
+
     Generate a batch of smart initializations for qKnowledgeGradient.
 
     This function generates initial conditions for optimizing one-shot KG using
@@ -80,20 +81,12 @@ def gen_one_shot_VaRKG_initial_conditions(
         raise ValueError(
             f"frac_random must take on values in (0,1). Value: {frac_random}"
         )
-    # q = acq_function.q
     num_fantasies = acq_function.num_fantasies
-    # d = acq_function.dim
     dim_x = acq_function.dim_x
-    # bounds = Tensor([[0], [1]]).repeat(1, q * d + num_fantasies * dim_x)
 
-    ics = gen_batch_initial_conditions(
-        acq_function=acq_function,
-        bounds=bounds,
-        q=1,
-        num_restarts=num_restarts,
-        raw_samples=raw_samples,
-        options=options,
-    )
+    q = 1
+    n = raw_samples
+    X_rnd = draw_sobol_samples(bounds=bounds, n=n, q=q)
 
     fantasy_cands, fantasy_vals = inner_solutions, inner_vals
 
@@ -104,6 +97,71 @@ def gen_one_shot_VaRKG_initial_conditions(
     idx = torch.multinomial(weights, num_restarts * n_value, replacement=True)
 
     # set the respective initial conditions to the sampled optimizers
-    # ics[..., -n_value:, :] = fantasy_cands[idx, 0].view(num_restarts, n_value, -1)
-    ics[..., -n_value * dim_x:] = fantasy_cands[idx, 0].view(num_restarts, 1, n_value * dim_x)
-    return ics
+    # we add some extra noise here to avoid all the samples being the same
+    X_rnd[..., -n_value * dim_x:] = fantasy_cands[idx, 0].view(num_restarts, 1, n_value * dim_x)\
+                                        .repeat(int(raw_samples/num_restarts), 1, 1) \
+                                        + torch.randn((raw_samples, 1, n_value * dim_x)) * 0.01
+
+    with torch.no_grad():
+        Y_rnd = acq_function(X_rnd)
+    batch_initial_conditions = initialize_q_batch(
+        X=X_rnd, Y=Y_rnd, n=num_restarts
+    )
+    return batch_initial_conditions
+
+
+def initialize_q_batch(X: Tensor, Y: Tensor, n: int, eta: float = 1.0) -> Tensor:
+    r"""Heuristic for selecting initial conditions for candidate generation.
+
+    This heuristic selects points from `X` (without replacement) with probability
+    proportional to `exp(eta * Z)`, where `Z = (Y - mean(Y)) / std(Y)` and `eta`
+    is a temperature parameter.
+
+    When using an acquisiton function that is non-negative and possibly zero
+    over large areas of the feature space (e.g. qEI), you should use
+    `initialize_q_batch_nonneg` instead.
+
+    Args:
+        X: A `b x q x d` tensor of `b` samples of `q`-batches from a `d`-dim.
+            feature space. Typically, these are generated using qMC sampling.
+        Y: A tensor of `b` outcomes associated with the samples. Typically, this
+            is the value of the batch acquisition function to be maximized.
+        n: The number of initial condition to be generated. Must be less than `b`.
+        eta: Temperature parameter for weighting samples.
+
+    Returns:
+        A `n x q x d` tensor of `n` `q`-batch initial conditions.
+
+    Example:
+
+    """
+    n_samples = X.shape[0]
+    if n > n_samples:
+        raise RuntimeError(
+            f"n ({n}) cannot be larger than the number of "
+            f"provided samples ({n_samples})"
+        )
+    elif n == n_samples:
+        return X
+
+    Ystd = Y.std()
+    if Ystd == 0:
+        warnings.warn(
+            "All acqusition values for raw samples points are the same. "
+            "Choosing initial conditions at random.",
+            BadInitialCandidatesWarning,
+        )
+        return X[torch.randperm(n=n_samples, device=X.device)][:n]
+
+    max_val, max_idx = torch.max(Y, dim=0)
+    Z = (Y - Y.mean()) / Ystd
+    etaZ = eta * Z
+    weights = torch.exp(etaZ)
+    while torch.isinf(weights).any():
+        etaZ *= 0.5
+        weights = torch.exp(etaZ)
+    idcs = torch.multinomial(weights, n)
+    # make sure we get the maximum
+    if max_idx not in idcs:
+        idcs[-1] = max_idx
+    return X[idcs]
