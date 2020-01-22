@@ -42,7 +42,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, alpha: float = 0.7, q: int = 1, num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False):
+              CVaR: bool = False, random_sampling: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -60,6 +60,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
+    :param random_sampling: If true, we will use random sampling to generate samples - no KG.
     :return: None - saves the output.
     """
 
@@ -70,6 +71,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     dim_x = d - dim_w  # dimension of the x component
 
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
+    if random_sampling:
+        filename = filename + '_random'
     try:
         full_data = torch.load("loop_output/%s.pt" % filename)
         last_iteration = max(full_data.keys())
@@ -158,27 +161,31 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         # IF using SAA approach, this should be specified to a fixed number.
         fantasy_seed = int(torch.randint(100000, (1,)))
 
-        var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                       current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                       dim=d, dim_x=dim_x, q=q,
-                       fix_samples=fix_samples, fixed_samples=fixed_samples,
-                       num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                       lookahead_seed=lookahead_seed, CVaR=CVaR)
+        if random_sampling:
+            candidate = torch.rand((1, q*d))
+            value = torch.tensor([0])
+        else:
+            var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                           current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
+                           dim=d, dim_x=dim_x, q=q,
+                           fix_samples=fix_samples, fixed_samples=fixed_samples,
+                           num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                           lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        initial_conditions = gen_one_shot_VaRKG_initial_conditions(acq_function=var_kg,
-                                                                   inner_solutions=solutions,
-                                                                   inner_vals=values,
-                                                                   bounds=full_bounds,
-                                                                   num_restarts=num_restarts,
-                                                                   raw_samples=num_restarts * raw_multiplier)
-        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
-                                                 acquisition_function=var_kg,
-                                                 lower_bounds=full_bounds[0],
-                                                 upper_bounds=full_bounds[1],
-                                                 options=optimization_options)
-        best = torch.argmax(values.view(-1), dim=0)
-        candidate = solutions[best].detach()
-        value = values[best].detach()
+            initial_conditions = gen_one_shot_VaRKG_initial_conditions(acq_function=var_kg,
+                                                                       inner_solutions=solutions,
+                                                                       inner_vals=values,
+                                                                       bounds=full_bounds,
+                                                                       num_restarts=num_restarts,
+                                                                       raw_samples=num_restarts * raw_multiplier)
+            solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
+                                                     acquisition_function=var_kg,
+                                                     lower_bounds=full_bounds[0],
+                                                     upper_bounds=full_bounds[1],
+                                                     options=optimization_options)
+            best = torch.argmax(values.view(-1), dim=0)
+            candidate = solutions[best].detach()
+            value = values[best].detach()
 
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -231,4 +238,5 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 
 if __name__ == "__main__":
-    full_loop('sinequad', 0, 1, 'tester', 10, 100, 25, 10)
+    full_loop('sinequad', 0, 1, 'tester', 50, 100, 25, 10, random_sampling=True)
+

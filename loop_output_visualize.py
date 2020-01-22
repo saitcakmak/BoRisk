@@ -10,6 +10,8 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 
 file_name = input("file name (w/o extension): ")
+if file_name[-3:] == '.pt':
+    file_name = file_name[:-3]
 file_path = "loop_output/%s.pt" % file_name
 plotter = contour_plotter
 data = torch.load(file_path)
