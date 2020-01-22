@@ -36,5 +36,5 @@ class StandardizedFunction:
         shape = list(X.size())
         shape[-1] = 1
         X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
-        return self.function(X).unsqueeze(1)
+        return self.function(X).unsqueeze(-1)
 
