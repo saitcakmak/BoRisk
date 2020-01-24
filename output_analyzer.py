@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 
 directory = 'loop_output/'
 prefix = 'cluster_'
+# prefix = ''
 problem_name = 'powell'
 dim_w = 2
 iterations = 50
@@ -22,6 +23,7 @@ file_name = []
 for i in range(1, 11):
     file_name.append('run' + str(i))
 suffix = ''
+# suffix = '_random'
 
 file_list = []
 # if you just want to play around with a single output, use this. - still need prob name, dim_w and iterations
