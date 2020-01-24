@@ -21,15 +21,16 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
 from test_functions.standardized_function import StandardizedFunction
+from test_functions.cont_newsvendor import ContinuousNewsvendor
+from test_functions.prod_line import ProductionLine
 from botorch.test_functions import Powell, Branin
 from botorch.test_functions import SyntheticTestFunction
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
-from typing import Optional
 import platform
-from botorch.optim.initializers import gen_batch_initial_conditions
-from botorch.gen import gen_candidates_torch
+from botorch.gen import gen_candidates_scipy
+from initializer import gen_one_shot_VaRKG_initial_conditions
 
 # The ISYE servers for some reason use a single core. This might help.
 if platform.system() != 'linux' or 'Red Hat' not in platform.linux_distribution()[0]:
@@ -43,7 +44,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, alpha: float = 0.7, q: int = 1, num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False, ADAM: bool = False):
+              CVaR: bool = False, random_sampling: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -61,7 +62,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
-    :param ADAM: If true, uses ADAM for optimization, else L-BFGS-B.
+    :param random_sampling: If true, we will use random sampling to generate samples - no KG.
     :return: None - saves the output.
     """
 
@@ -72,16 +73,20 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     dim_x = d - dim_w  # dimension of the x component
 
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
+    if random_sampling:
+        filename = filename + '_random'
     try:
         full_data = torch.load("loop_output/%s.pt" % filename)
         last_iteration = max(full_data.keys())
         last_data = full_data[last_iteration]
+        seed_list = last_data['seed_list']
         train_X = last_data['train_X']
         train_Y = last_data['train_Y']
 
     except FileNotFoundError:
         # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
         torch.manual_seed(seed=seed)
+        seed_list = torch.randint(1000000, (1000,))
         last_iteration = -1
         full_data = dict()
         train_X = torch.rand((n, d))
@@ -142,23 +147,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                              num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                              lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        if not ADAM:
-            current_best_sol, value = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
-                                                    raw_samples=num_restarts * raw_multiplier,
-                                                    options=optimization_options)
-        else:
-            initial_conditions = gen_batch_initial_conditions(acq_function=inner_VaR,
-                                                              bounds=x_bounds, q=1,
-                                                              num_restarts=num_restarts,
-                                                              raw_samples=num_restarts * raw_multiplier)
-            current_best_sol, value = gen_candidates_torch(initial_conditions=initial_conditions,
-                                                           acquisition_function=inner_VaR,
-                                                           lower_bounds=x_bounds[0],
-                                                           upper_bounds=x_bounds[1],
-                                                           options=optimization_options)
-            best = torch.argmax(value.view(-1), dim=0)
-            current_best_sol = current_best_sol[best].detach()
-            value = value[best].detach()
+        solutions, values = optimize_acqf(inner_VaR, x_bounds, q=1, num_restarts=num_restarts,
+                                          raw_samples=num_restarts * raw_multiplier,
+                                          options=optimization_options,
+                                          return_best_only=False)
+        best = torch.argmax(values.view(-1), dim=0)
+        current_best_sol = solutions[best].detach()
+        value = values[best].detach()
 
         current_best_value = - value
         if verbose:
@@ -170,30 +165,31 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         # IF using SAA approach, this should be specified to a fixed number.
         fantasy_seed = int(torch.randint(100000, (1,)))
 
-        var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                       current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                       dim=d, dim_x=dim_x, q=q,
-                       fix_samples=fix_samples, fixed_samples=fixed_samples,
-                       num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                       lookahead_seed=lookahead_seed, CVaR=CVaR)
-
-        if not ADAM:
-            candidate, value = optimize_acqf(var_kg, bounds=full_bounds, q=1, num_restarts=num_restarts,
-                                             raw_samples=num_restarts * raw_multiplier,
-                                             options=optimization_options)
+        if random_sampling:
+            candidate = torch.rand((1, q*d))
+            value = torch.tensor([0])
         else:
-            initial_conditions = gen_batch_initial_conditions(acq_function=var_kg,
-                                                              bounds=full_bounds, q=1,
-                                                              num_restarts=num_restarts,
-                                                              raw_samples=num_restarts * raw_multiplier)
-            candidate, value = gen_candidates_torch(initial_conditions=initial_conditions,
-                                                    acquisition_function=var_kg,
-                                                    lower_bounds=full_bounds[0],
-                                                    upper_bounds=full_bounds[1],
-                                                    options=optimization_options)
-            best = torch.argmax(value.view(-1), dim=0)
-            candidate = candidate[best].detach()
-            value = value[best].detach()
+            var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                           current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
+                           dim=d, dim_x=dim_x, q=q,
+                           fix_samples=fix_samples, fixed_samples=fixed_samples,
+                           num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                           lookahead_seed=lookahead_seed, CVaR=CVaR)
+
+            initial_conditions = gen_one_shot_VaRKG_initial_conditions(acq_function=var_kg,
+                                                                       inner_solutions=solutions,
+                                                                       inner_vals=values,
+                                                                       bounds=full_bounds,
+                                                                       num_restarts=num_restarts,
+                                                                       raw_samples=num_restarts * raw_multiplier)
+            solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
+                                                     acquisition_function=var_kg,
+                                                     lower_bounds=full_bounds[0],
+                                                     upper_bounds=full_bounds[1],
+                                                     options=optimization_options)
+            best = torch.argmax(values.view(-1), dim=0)
+            candidate = solutions[best].detach()
+            value = values[best].detach()
 
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -204,7 +200,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
                 'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
                 'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
-                'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed}
+                'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
+                'seed_list': seed_list}
         full_data[i] = data
         torch.save(full_data, 'loop_output/%s.pt' % filename)
 
@@ -216,7 +213,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         if verbose and d == 2:
             plt.close('all')
             plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
-        observation = function(candidate_point)
+        observation = function(candidate_point, seed=seed_list[i])
         # update the model input data for refitting
         train_X = torch.cat((train_X, candidate_point), dim=0)
         train_Y = torch.cat((train_Y, observation), dim=0)
@@ -229,17 +226,30 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 def function_picker(function_name: str) -> SyntheticTestFunction:
     """
     Returns the appropriate function callable
+    If adding new BoTorch test functions, run them through StandardizedFunction.
+    StandardizedFunction and all others listed here allow for a seed to be specified.
+    If adding something else, make sure the forward (or __call__) takes a seed argument.
     :param function_name: Function to be used
     :return: Function callable
     """
     noise_std = 0.1  # observation noise level
     if function_name == 'simplequad':
-        function = SimpleQuadratic(noise_std=noise_std)
+        function = StandardizedFunction(SimpleQuadratic(noise_std=noise_std))
     elif function_name == 'sinequad':
-        function = SineQuadratic(noise_std=noise_std)
+        function = StandardizedFunction(SineQuadratic(noise_std=noise_std))
     elif function_name == 'powell':
         function = StandardizedFunction(Powell(noise_std=noise_std))
     elif function_name == 'branin':
         function = StandardizedFunction(Branin(noise_std=noise_std))
+    elif function_name == 'newsvendor':
+        function = ContinuousNewsvendor()
+    elif function_name == 'prod_line':
+        function = ProductionLine()
 
     return function
+
+
+if __name__ == "__main__":
+    # this is for momentary testing of changes to the code
+    full_loop('sinequad', 0, 1, 'tester', 50, 100, 5, 10, random_sampling=False)
+

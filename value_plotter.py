@@ -9,16 +9,23 @@ import numpy as np
 from botorch.test_functions import Powell, Branin
 from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
 from test_functions.standardized_function import StandardizedFunction
+from test_functions.cont_newsvendor import ContinuousNewsvendor
+from typing import List
 
 
 # Initialize the test function
 noise_std = 0  # observation noise level - no noise allows for a more precise evaluation
 # function = SimpleQuadratic(noise_std=noise_std)
 # function = SineQuadratic(noise_std=noise_std)
-function = StandardizedFunction(Powell(noise_std=noise_std))
+# function = StandardizedFunction(Powell(noise_std=noise_std))
 # function = StandardizedFunction(Branin(noise_std=noise_std))
+function = ContinuousNewsvendor(run_length=10000, crn=True)
 
 CVaR = False  # if true, calculate CVaR instead of VaR
+lb = [0.0120, 0.0]
+ub = [0.0135, 1.0]
+num_x = 10
+num_w = 100
 d = function.dim  # dimension of train_X
 dim_w = 2  # dimension of w component
 n = 2 * d + 2  # training samples
@@ -28,9 +35,11 @@ if dim_x > 2:
     raise ValueError("dim_x of the function must be <= 2 for it to be plotted.")
 
 
-def plot(x: Tensor, y: Tensor):
+def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1]):
     """
     plots the appropriate plot
+    :param lb: lower bound
+    :param ub: upper bound
     :param x: x values evaluated, assumes ordered if dim_x == 1
     :param y: corresponding C/VaR values
     """
@@ -41,9 +50,9 @@ def plot(x: Tensor, y: Tensor):
         plt.ylabel("$x_2$")
     else:
         plt.ylabel("C/VaR")
-    plt.xlim(0, 1)
+    plt.xlim(lb[0], ub[0])
     if dim_x == 2:
-        plt.ylim(0, 1)
+        plt.ylim(lb[1], ub[1])
 
     if dim_x == 1:
         plt.plot(x.numpy(), y.numpy())
@@ -53,24 +62,39 @@ def plot(x: Tensor, y: Tensor):
     plt.show()
 
 
-def generate_values(num_x: int, num_w: int, CVaR: bool = False):
+def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0, 0], ub: List[float] = [1, 1]):
     """
     Generates the C/VaR values on a grid.
     :param num_x: Number of x values to generate on a given dimension, if dim_x == 2 generates dim_x^2 points
-    :param num_w: Number of w values to use to calculate C/VaR
+    :param num_w: Number of w values to use to calculate C/VaR, squared if dim_w == 2
     :param CVaR: If true, returns CVaR instead of VaR
+    :param lb: lower bound of sample generation range
+    :param ub: upper bound of sample generation range
     :return: resulting x, y values
     """
     # generate x
-    x = torch.linspace(0, 1, num_x)
     if dim_x == 2:
-        xx, yy = np.meshgrid(x, x)
+        x = torch.linspace(lb[0], ub[0], num_x)
+        y = torch.linspace(lb[1], ub[1], num_x)
+        xx, yy = np.meshgrid(x, y)
         x = torch.cat([Tensor(xx).unsqueeze(-1), Tensor(yy).unsqueeze(-1)], -1)
-    else:
+    elif dim_x == 1:
+        x = torch.linspace(lb[0], ub[0], num_x)
         x = x.reshape(-1, 1)
+    else:
+        raise ValueError('dim_x must be 1 or 2')
 
     # generate w, i.i.d uniform(0, 1)
-    w = torch.rand((num_w, dim_w))
+    if dim_w == 1:
+        w = torch.linspace(0, 1, num_w).reshape(-1, 1)
+    elif dim_w == 2:
+        w = torch.linspace(0, 1, num_w)
+        xx, yy = np.meshgrid(w, w)
+        w = torch.cat([Tensor(xx).unsqueeze(-1), Tensor(yy).unsqueeze(-1)], -1).reshape(-1, 2)
+        num_w = num_w ** 2
+    else:
+        w = torch.rand((num_w, dim_w))
+
 
     # generate X = (x, w)
     X = torch.cat((x.unsqueeze(-2).expand(*x.size()[:-1], num_w, dim_x), w.repeat(*x.size()[:-1], 1, 1)), dim=-1)
@@ -85,4 +109,5 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False):
     return x, y
 
 
-plot(*generate_values(100, 1000, CVaR=CVaR))
+values = generate_values(num_x, num_w, CVaR=CVaR, lb=lb, ub=ub)
+plot(*values, lb=lb, ub=ub)

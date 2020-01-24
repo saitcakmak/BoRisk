@@ -15,5 +15,5 @@ dim_w = int(dim_w)
 iterations = int(iterations)
 filename = "cluster_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
 
-full_loop(function_name, seed, dim_w, filename, iterations)
+full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=100, num_fantasies=100)
 print('Successfully completed!')

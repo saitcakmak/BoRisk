@@ -9,12 +9,17 @@ import matplotlib.pyplot as plt
 
 directory = 'loop_output/'
 prefix = 'cluster_'
-problem_name = 'powell'
+problem_name = 'sinequad'
 seed = 0
-dim_w = 2
-iterations = 50
-file_name = 'test2'
-full_path = "%s%s%s_%s_%s_%s_%s.pt" % (directory, prefix, problem_name, seed, dim_w, iterations, file_name)
+dim_w = 1
+iterations = 200
+file_name = 'inittest'
+suffix = '_adam'
+full_file = input("file name: ")
+# full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed, dim_w, iterations, file_name, suffix)
+full_path = '%s%s' % (directory, full_file)
+k = 1000  # number of w to draw to evaluate the true values, linspace if dim_w == 1, rand otherwise
+alpha = 0.7  # risk level
 
 function = function_picker(problem_name)
 data = torch.load(full_path)
@@ -29,24 +34,49 @@ for i in range(iterations):
 print(best_solutions)
 full_train = data[iterations-1]['train_X']
 print(full_train)
-plt.figure(3)
-plt.scatter(best_solutions.numpy()[:, 0], best_solutions.numpy()[:, 1])
-plt.figure(4)
-plt.scatter(full_train.numpy()[:, 0], full_train.numpy()[:, 1])
-plt.figure(5)
-plt.scatter(full_train.numpy()[:, 2], full_train.numpy()[:, 3])
+# plt.figure(3)
+# plt.scatter(best_solutions.numpy()[:, 0], best_solutions.numpy()[:, 1])
+# plt.figure(4)
+# plt.scatter(full_train.numpy()[:, 0], full_train.numpy()[:, 1])
+# plt.figure(5)
+# plt.scatter(full_train.numpy()[:, 2], full_train.numpy()[:, 3])
 
-plt.show()
 if problem_name == 'sinequad':
-    full_solutions = torch.cat((best_solutions, torch.ones((iterations, 1)) * 0.7), dim=-1)
-    true_values = function.evaluate_true(full_solutions)
-    true_optimal = -1 + 0.7 ** 2
+    true_optimal = -1 + alpha ** 2
+elif problem_name == 'branin':
+    true_optimal = 33.36377
+# elif problem_name == 'powell':
+#     true_optimal = 3160  # approximate
+elif problem_name == 'newsvendor':
+    true_optimal = -0.2820  # approximate
+else:
+    true_optimal = 0
 
+if problem_name == 'sinequad':
+    full_solutions = torch.cat((best_solutions, torch.ones((iterations, 1)) * alpha), dim=-1)
+    true_values = function.evaluate_true(full_solutions)
+else:
+    true_values = torch.empty((iterations, 1))
+    for i in range(iterations):
+        sol = best_solutions[i].reshape(1, -1).repeat(k, 1)
+        if dim_w == 1:
+            w = torch.linspace(0, 1, k).reshape(k, 1)
+        else:
+            w = torch.rand((k, 2))
+        full_sol = torch.cat((sol, w), dim=-1)
+        try:
+            values = function.evaluate_true(full_sol)
+        except NotImplementedError:
+            values = function(full_sol)
+        values, index = torch.sort(values, dim=-2)
+        true_values[i] = values[int(k * alpha)]
 
 value_diff = true_values - true_optimal
 
 plt.figure(1)
 plt.plot(value_diff)
+plt.title('gap')
 plt.figure(2)
-plt.plot(torch.log(value_diff))
+plt.plot(torch.log10(value_diff))
+plt.title('log-gap')
 plt.show()
