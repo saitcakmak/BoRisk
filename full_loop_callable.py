@@ -165,6 +165,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         # IF using SAA approach, this should be specified to a fixed number.
         fantasy_seed = int(torch.randint(100000, (1,)))
 
+        # TODO: more baselines
         if random_sampling:
             candidate = torch.rand((1, q*d))
             value = torch.tensor([0])
@@ -208,7 +209,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         iteration_end = time()
         print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
-        model_update_start = time()
+        # TODO: the seed use have to be modified to make q-replications comparable to non-q ones
         candidate_point = candidate[:, 0:q * d].reshape(q, d)
         if verbose and d == 2:
             plt.close('all')
