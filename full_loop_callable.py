@@ -33,7 +33,7 @@ from botorch.gen import gen_candidates_scipy
 from initializer import gen_one_shot_VaRKG_initial_conditions
 
 # The ISYE servers for some reason use a single core. This might help.
-if platform.system() != 'linux' or 'Red Hat' not in platform.linux_distribution()[0]:
+if platform.system() != 'Linux' or 'Red Hat' not in platform.linux_distribution()[0]:
     # set the number of cores for torch to use
     cpu_count = max(multiprocessing.cpu_count(), 8)
     torch.set_num_threads(cpu_count)

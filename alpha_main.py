@@ -18,7 +18,7 @@ function_name = 'powell'
 dim_w = 1
 alpha = 0.9
 iterations = 50
-filename = "cluster_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename + "_cvar_a%s" % alpha
+filename = "cluster_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename + "_a%s" % alpha
 
-full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=100, num_fantasies=100, alpha=0.9, CVaR=True)
+full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=100, num_fantasies=100, alpha=0.9, CVaR=False)
 print('Successfully completed!')
