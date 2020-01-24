@@ -79,12 +79,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         full_data = torch.load("loop_output/%s.pt" % filename)
         last_iteration = max(full_data.keys())
         last_data = full_data[last_iteration]
+        seed_list = last_data['seed_list']
         train_X = last_data['train_X']
         train_Y = last_data['train_Y']
 
     except FileNotFoundError:
         # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
         torch.manual_seed(seed=seed)
+        seed_list = torch.randint(1000000, (1000,))
         last_iteration = -1
         full_data = dict()
         train_X = torch.rand((n, d))
@@ -198,7 +200,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
                 'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
                 'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
-                'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed}
+                'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
+                'seed_list': seed_list}
         full_data[i] = data
         torch.save(full_data, 'loop_output/%s.pt' % filename)
 
@@ -210,7 +213,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         if verbose and d == 2:
             plt.close('all')
             plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
-        observation = function(candidate_point)
+        observation = function(candidate_point, seed=seed_list[i])
         # update the model input data for refitting
         train_X = torch.cat((train_X, candidate_point), dim=0)
         train_Y = torch.cat((train_Y, observation), dim=0)
@@ -223,14 +226,17 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 def function_picker(function_name: str) -> SyntheticTestFunction:
     """
     Returns the appropriate function callable
+    If adding new BoTorch test functions, run them through StandardizedFunction.
+    StandardizedFunction and all others listed here allow for a seed to be specified.
+    If adding something else, make sure the forward (or __call__) takes a seed argument.
     :param function_name: Function to be used
     :return: Function callable
     """
     noise_std = 0.1  # observation noise level
     if function_name == 'simplequad':
-        function = SimpleQuadratic(noise_std=noise_std)
+        function = StandardizedFunction(SimpleQuadratic(noise_std=noise_std))
     elif function_name == 'sinequad':
-        function = SineQuadratic(noise_std=noise_std)
+        function = StandardizedFunction(SineQuadratic(noise_std=noise_std))
     elif function_name == 'powell':
         function = StandardizedFunction(Powell(noise_std=noise_std))
     elif function_name == 'branin':
@@ -245,5 +251,5 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    full_loop('sinequad', 0, 1, 'tester', 50, 100, 25, 10, random_sampling=False)
+    full_loop('sinequad', 0, 1, 'tester', 50, 100, 5, 10, random_sampling=False)
 

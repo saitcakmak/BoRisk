@@ -2,6 +2,7 @@ import torch
 from torch import Tensor
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from numpy.random import exponential
+import numpy as np
 
 
 class ProductionLine(SyntheticTestFunction):
@@ -40,7 +41,7 @@ class ProductionLine(SyntheticTestFunction):
         self.run_length = run_length
         self.repetitions = repetitions
 
-    def forward(self, X: Tensor, noise: bool = True) -> Tensor:
+    def forward(self, X: Tensor, noise: bool = True, seed: int = None) -> Tensor:
         """
         Handles the input processing and returns the average revenue
         Returns the negative revenue for minimization
@@ -48,12 +49,17 @@ class ProductionLine(SyntheticTestFunction):
                     Should be standardized to unit-hypercube, see bounds defined above for scaling.
                     Tensor of size(-1) = dim. Return is of appropriate batch shape.
         :param noise: Noise free evaluation is not available, leave as True.
+        :param seed: If given, this is the seed for random number generation
         :return: Average revenue after run_length replications, same batch shape as X, negated
         """
         if not noise:
             raise ValueError("Noise free evaluation is not available.")
         if X.size(-1) != self.dim:
             raise ValueError("X must have size(-1) = num_servers + 1.")
+        # store the old random state and set the seed
+        old_state = np.random.get_state()
+        np.random.seed(seed)
+
         # process the input and scale it back to true values
         flat_X = X.reshape(-1, self.dim)
         rates, arrival = torch.split(flat_X, [self.num_servers, 1], dim=-1)
@@ -66,6 +72,9 @@ class ProductionLine(SyntheticTestFunction):
             for j in range(self.repetitions):
                 inner_results[j] = self._simulate_system(rates[i], arrival[i])
             results[i] = torch.mean(inner_results)
+        # restore the old random state
+        np.random.set_state(old_state)
+
         # return the results in same batch shape as X, negate since we're minimizing a risk function
         return -results.reshape(*X.size()[:-1], 1)
 
@@ -201,6 +210,6 @@ if __name__ == "__main__":
     # for testing purposes
     from time import time
     start = time()
-    line = ProductionLine(repetitions=100)
+    line = ProductionLine(repetitions=10)
     print(line(torch.tensor([0.75, 0.5, 0.25, 0.3])))
     print('time: ', time()-start)

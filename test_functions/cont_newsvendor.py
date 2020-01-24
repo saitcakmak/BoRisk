@@ -20,7 +20,7 @@ class ContinuousNewsvendor(SyntheticTestFunction):
     beta_lb = 10  # lower bound of beta range
     beta_range = 20  # spread of beta range, same as alpha
     x_lb = 0  # same
-    x_range = 10  # same
+    x_range = 1  # same
 
     def __init__(self, run_length: int = 10, crn: bool = False):
         """
@@ -34,7 +34,7 @@ class ContinuousNewsvendor(SyntheticTestFunction):
         self.run_length = run_length
         self.crn = crn
 
-    def forward(self, X: Tensor, noise: bool = True) -> Tensor:
+    def forward(self, X: Tensor, noise: bool = True, seed: int = None) -> Tensor:
         """
         Simulates the demand for run_length days and returns the objective value.
         The result is negated to get a minimization problem
@@ -42,6 +42,7 @@ class ContinuousNewsvendor(SyntheticTestFunction):
                     Should be standardized to unit-hypercube, see bounds defined above.
                     Tensor of size(-1) = 3. Return is of appropriate batch shape.
         :param noise: Noise free evaluation is not available, leave as True.
+        :param seed: If given, this is the seed for random number generation.
         :return: - Profit after run_length days, same batch shape as X
         """
         if not noise:
@@ -49,7 +50,12 @@ class ContinuousNewsvendor(SyntheticTestFunction):
         if X.size(-1) != self.dim:
             raise ValueError("X must have size(-1) = 3.")
         x, alpha, beta = torch.split(X, 1, dim=-1)
-
+        # store the old state and set the seed
+        old_state = torch.random.get_rng_state()
+        try:
+            torch.manual_seed(seed=seed)
+        except TypeError:
+            torch.random.seed()
         # project the variables back from the unit domain
         x = self.x_lb + x * self.x_range
         alpha = self.alpha_lb + alpha * self.alpha_range
@@ -72,6 +78,9 @@ class ContinuousNewsvendor(SyntheticTestFunction):
         sales_revenue = self.sell_price * sales
         salvage_revenue = self.salvage * (x.expand(*x.size()[:-1], self.run_length) - sales)
         profit = sales_revenue + salvage_revenue - period_cost
+
+        # restore old random state
+        torch.random.set_rng_state(old_state)
 
         return -torch.mean(profit, dim=-1, keepdim=True)
 

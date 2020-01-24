@@ -28,16 +28,24 @@ class StandardizedFunction:
             # construct the object with noise_std = 0.1
             self.__init__(function(noise_std=0.1))
 
-    def __call__(self, X: Tensor) -> Tensor:
+    def __call__(self, X: Tensor, seed: int = None) -> Tensor:
         """
         Scales the solutions to the function domain and returns the function value.
         :param X: Solutions from the relative scale of [0, 1]
+        :param seed: If given, the seed is set for random number generation
         :return: function value
         """
+        old_state = torch.random.get_rng_state()
+        try:
+            torch.random.manual_seed(seed=seed)
+        except TypeError:
+            torch.random.seed()
         shape = list(X.size())
         shape[-1] = 1
         X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
-        return self.function(X).unsqueeze(-1)
+        result = self.function(X).reshape(shape)
+        torch.random.set_rng_state(old_state)
+        return result
 
     def evaluate_true(self, X: Tensor) -> Tensor:
         """

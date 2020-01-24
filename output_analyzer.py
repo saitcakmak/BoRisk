@@ -12,7 +12,7 @@ prefix = 'cluster_'
 problem_name = 'sinequad'
 seed = 0
 dim_w = 1
-iterations = 50
+iterations = 200
 file_name = 'inittest'
 suffix = '_adam'
 full_file = input("file name: ")
@@ -41,12 +41,20 @@ print(full_train)
 # plt.figure(5)
 # plt.scatter(full_train.numpy()[:, 2], full_train.numpy()[:, 3])
 
-plt.show()
+if problem_name == 'sinequad':
+    true_optimal = -1 + alpha ** 2
+elif problem_name == 'branin':
+    true_optimal = 33.36377
+# elif problem_name == 'powell':
+#     true_optimal = 3160  # approximate
+elif problem_name == 'newsvendor':
+    true_optimal = -0.2820  # approximate
+else:
+    true_optimal = 0
+
 if problem_name == 'sinequad':
     full_solutions = torch.cat((best_solutions, torch.ones((iterations, 1)) * alpha), dim=-1)
     true_values = function.evaluate_true(full_solutions)
-    true_optimal = -1 + alpha ** 2
-    value_diff = true_values - true_optimal
 else:
     true_values = torch.empty((iterations, 1))
     for i in range(iterations):
@@ -56,10 +64,14 @@ else:
         else:
             w = torch.rand((k, 2))
         full_sol = torch.cat((sol, w), dim=-1)
-        values = function.evaluate_true(full_sol)
+        try:
+            values = function.evaluate_true(full_sol)
+        except NotImplementedError:
+            values = function(full_sol)
         values, index = torch.sort(values, dim=-2)
         true_values[i] = values[int(k * alpha)]
-    value_diff = true_values
+
+value_diff = true_values - true_optimal
 
 plt.figure(1)
 plt.plot(value_diff)

@@ -3,11 +3,11 @@ This is to run the random sampling and save the output with a proper name
 """
 from full_loop_callable import full_loop
 
-function_name = 'powell'
+function_name = 'sinequad'
 seed = 0
-dim_w = 2
+dim_w = 1
 filename = 'test'
-iterations = 50
+iterations = 200
 # full_loop by default adds _random in the end
 filename = function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
 
