@@ -64,8 +64,10 @@ def _get_w_samples(seed, d, dim_w, function):
 iter = 0
 for file in file_list:
     if iter < skip or iter >= end:
+        iter += 1
         continue
-    iter += 1
+    else:
+        iter += 1
     try:
         if file.name[-3:] != '.pt':
             continue
