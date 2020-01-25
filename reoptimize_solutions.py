@@ -61,6 +61,8 @@ def _get_w_samples(seed, d, dim_w, function):
 
 for file in file_list:
     try:
+        if file.name[-3:] != '.pt':
+            continue
         data = torch.load(directory + file.name)
         out_file = 'reoptimized/%s' % file.name
         try:
