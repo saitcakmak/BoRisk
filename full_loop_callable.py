@@ -209,7 +209,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         iteration_end = time()
         print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
-        # TODO: the seed use have to be modified to make q-replications comparable to non-q ones
         candidate_point = candidate[:, 0:q * d].reshape(q, d)
         if verbose and d == 2:
             plt.close('all')

@@ -9,27 +9,28 @@ from value_plotter import generate_values
 
 
 directory = 'loop_output/'
-prefix = 'cluster_'
-# prefix = ''
-problem_name = 'powell'
-dim_w = 1
+# prefix = 'cluster_'
+prefix = ''
+problem_name = 'newsvendor'
+dim_w = 2
 iterations = 50
 k = 1000  # number of w to draw to evaluate the true values, linspace if dim_w == 1, rand otherwise
-alpha = 0.7  # risk level
+alpha = 0.9  # risk level
 eval_seed = 0  # seed used during final evaluations for both function eval and w generation if random
-CVaR = True
+CVaR = False
 
 # this is the powell seed list. Comment out and make others if needed.
 # seed = [123, 127, 1599, 18990, 2355, 234556, 9876, 7565, 45363, 243456]
 # seed = [2154, 24578, 75674, 57482, 573832, 578392, 3143523, 93846, 435236, 29385, 47582, 34526, 877634, 37849, 48472]
 # seed = [3452, 44331, 34535, 7855, 9374, 38275]
 # seed = [34578, 7563, 59274, 47238, 1946, 37521]
-
+# newsvendor CVaR 0.9
+seed = [23856, 83742, 75624, 34755, 38523, 57633, 73485, 12654, 93832, 43566]
 
 file_name = []
 for i in range(len(seed)):
     file_name.append('run' + str(i+1))
-suffix = '_a0.9'
+suffix = '_cvar_a0.9_random'
 
 file_list = []
 # if you just want to play around with a single output, use this. - still need prob name, dim_w and iterations
@@ -100,7 +101,7 @@ for j in range(len(seed)):
                 true_values[i] = torch.mean(values[int(k * alpha):])
             else:
                 true_values[i] = values[int(k * alpha)]
-    _, true_optimal = generate_values(10000, k, plug_in_w=w, CVaR=CVaR)
+    _, true_optimal = generate_values(10000, k, plug_in_w=w, CVaR=CVaR, function=function, dim_x=dim_x, dim_w=dim_w)
     true_optimal = torch.min(true_optimal)
 
     value_diff_list[j] = true_values - true_optimal

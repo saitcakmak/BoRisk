@@ -33,7 +33,6 @@ dim_x = d - dim_w  # dimension of the x component
 alpha = 0.7  # alpha of the risk function
 
 
-
 def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1]):
     """
     plots the appropriate plot
@@ -64,7 +63,7 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1
 
 
 def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0, 0], ub: List[float] = [1, 1],
-                    plug_in_w: Tensor = None):
+                    plug_in_w: Tensor = None, function=function, dim_x=dim_x, dim_w=dim_w):
     """
     Generates the C/VaR values on a grid.
     :param num_x: Number of x values to generate on a given dimension, if dim_x == 2 generates dim_x^2 points
@@ -73,6 +72,9 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
     :param lb: lower bound of sample generation range
     :param ub: upper bound of sample generation range
     :param plug_in_w: if given, these w are used
+    :param function: for calling this from outside
+    :param dim_x: same
+    :param dim_w: same
     :return: resulting x, y values
     """
     # generate x
@@ -112,6 +114,7 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
     else:
         y = values[..., int(alpha * num_w), :].squeeze(-2)
     return x, y
+
 
 if __name__ == "__main__":
     values = generate_values(num_x, num_w, CVaR=CVaR, lb=lb, ub=ub)

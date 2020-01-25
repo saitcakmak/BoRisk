@@ -3,10 +3,10 @@ This is to run the random sampling and save the output with a proper name
 """
 from full_loop_callable import full_loop
 
-function_name = 'powell'
-dim_w = 1
+function_name = 'newsvendor'
+dim_w = 2
 iterations = 50
-CVaR = False
+CVaR = True
 alpha = 0.9
 
 # powell VaR dim_w=2:
@@ -16,7 +16,9 @@ alpha = 0.9
 # powell CVaR 0.9 dim_w=1:
 # seed = [3452, 44331, 34535, 7855, 9374, 38275]
 # powell VaR 0.9 dim_w=1:
-seed = [34578, 7563, 59274, 47238, 1946, 37521]
+# seed = [34578, 7563, 59274, 47238, 1946, 37521]
+# newsvendor CVaR 0.9
+seed = [23856, 83742, 75624, 34755, 38523, 57633, 73485, 12654, 93832, 43566]
 
 if CVaR:
     suffix = '_cvar'
