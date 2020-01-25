@@ -16,7 +16,7 @@ from gpytorch.priors.torch_priors import GammaPrior
 import os
 from full_loop_callable import function_picker
 
-directory = 'loop_output/powell/'
+directory = input('the directory to work on:')
 file_list = os.scandir(directory)
 iterations = 50
 num_restarts = 200
