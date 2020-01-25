@@ -16,7 +16,9 @@ from gpytorch.priors.torch_priors import GammaPrior
 import os
 from full_loop_callable import function_picker
 
-directory = input('the directory to work on:')
+directory = input('the directory to work on: ')
+skip = int(input('# to skip: '))
+end = int(input('# to end: '))
 file_list = os.scandir(directory)
 iterations = 50
 num_restarts = 200
@@ -59,7 +61,11 @@ def _get_w_samples(seed, d, dim_w, function):
     return w_samples
 
 
+iter = 0
 for file in file_list:
+    if iter < skip or iter >= end:
+        continue
+    iter += 1
     try:
         if file.name[-3:] != '.pt':
             continue
