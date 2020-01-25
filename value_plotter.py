@@ -27,12 +27,11 @@ ub = [0.6, 0.6]
 num_x = 20
 num_w = 100
 d = function.dim  # dimension of train_X
-dim_w = 2  # dimension of w component
+dim_w = 1  # dimension of w component
 n = 2 * d + 2  # training samples
 dim_x = d - dim_w  # dimension of the x component
 alpha = 0.7  # alpha of the risk function
-if dim_x > 2:
-    raise ValueError("dim_x of the function must be <= 2 for it to be plotted.")
+
 
 
 def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1]):
@@ -43,6 +42,8 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1
     :param x: x values evaluated, assumes ordered if dim_x == 1
     :param y: corresponding C/VaR values
     """
+    if dim_x > 2:
+        raise ValueError("dim_x of the function must be <= 2 for it to be plotted.")
     plt.figure(figsize=(8, 6))
     plt.title("C/VaR")
     plt.xlabel("$x_1$")
@@ -62,7 +63,8 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1
     plt.show()
 
 
-def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0, 0], ub: List[float] = [1, 1]):
+def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0, 0], ub: List[float] = [1, 1],
+                    plug_in_w: Tensor = None):
     """
     Generates the C/VaR values on a grid.
     :param num_x: Number of x values to generate on a given dimension, if dim_x == 2 generates dim_x^2 points
@@ -70,6 +72,7 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
     :param CVaR: If true, returns CVaR instead of VaR
     :param lb: lower bound of sample generation range
     :param ub: upper bound of sample generation range
+    :param plug_in_w: if given, these w are used
     :return: resulting x, y values
     """
     # generate x
@@ -82,19 +85,21 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
         x = torch.linspace(lb[0], ub[0], num_x)
         x = x.reshape(-1, 1)
     else:
-        raise ValueError('dim_x must be 1 or 2')
+        x = torch.rand((num_x, dim_x))
 
     # generate w, i.i.d uniform(0, 1)
-    if dim_w == 1:
-        w = torch.linspace(0, 1, num_w).reshape(-1, 1)
-    elif dim_w == 2:
-        w = torch.linspace(0, 1, num_w)
-        xx, yy = np.meshgrid(w, w)
-        w = torch.cat([Tensor(xx).unsqueeze(-1), Tensor(yy).unsqueeze(-1)], -1).reshape(-1, 2)
-        num_w = num_w ** 2
+    if plug_in_w is None:
+        if dim_w == 1:
+            w = torch.linspace(0, 1, num_w).reshape(-1, 1)
+        elif dim_w == 2:
+            w = torch.linspace(0, 1, num_w)
+            xx, yy = np.meshgrid(w, w)
+            w = torch.cat([Tensor(xx).unsqueeze(-1), Tensor(yy).unsqueeze(-1)], -1).reshape(-1, 2)
+            num_w = num_w ** 2
+        else:
+            w = torch.rand((num_w, dim_w))
     else:
-        w = torch.rand((num_w, dim_w))
-
+        w = plug_in_w
 
     # generate X = (x, w)
     X = torch.cat((x.unsqueeze(-2).expand(*x.size()[:-1], num_w, dim_x), w.repeat(*x.size()[:-1], 1, 1)), dim=-1)
@@ -108,6 +113,6 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
         y = values[..., int(alpha * num_w), :].squeeze(-2)
     return x, y
 
-
-values = generate_values(num_x, num_w, CVaR=CVaR, lb=lb, ub=ub)
-plot(*values, lb=lb, ub=ub)
+if __name__ == "__main__":
+    values = generate_values(num_x, num_w, CVaR=CVaR, lb=lb, ub=ub)
+    plot(*values, lb=lb, ub=ub)

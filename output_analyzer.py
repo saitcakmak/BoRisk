@@ -5,25 +5,31 @@ It is essentially a collection of code that I didn't want to lose in console log
 import torch
 from full_loop_callable import function_picker
 import matplotlib.pyplot as plt
+from value_plotter import generate_values
 
 
 directory = 'loop_output/'
 prefix = 'cluster_'
 # prefix = ''
 problem_name = 'powell'
-dim_w = 2
+dim_w = 1
 iterations = 50
 k = 1000  # number of w to draw to evaluate the true values, linspace if dim_w == 1, rand otherwise
 alpha = 0.7  # risk level
 eval_seed = 0  # seed used during final evaluations for both function eval and w generation if random
+CVaR = True
 
 # this is the powell seed list. Comment out and make others if needed.
-seed = [123, 127, 1599, 18990, 2355, 234556, 9876, 7565, 45363, 243456]
+# seed = [123, 127, 1599, 18990, 2355, 234556, 9876, 7565, 45363, 243456]
+# seed = [2154, 24578, 75674, 57482, 573832, 578392, 3143523, 93846, 435236, 29385, 47582, 34526, 877634, 37849, 48472]
+# seed = [3452, 44331, 34535, 7855, 9374, 38275]
+# seed = [34578, 7563, 59274, 47238, 1946, 37521]
+
+
 file_name = []
-for i in range(1, 11):
-    file_name.append('run' + str(i))
-suffix = ''
-# suffix = '_random'
+for i in range(len(seed)):
+    file_name.append('run' + str(i+1))
+suffix = '_a0.9'
 
 file_list = []
 # if you just want to play around with a single output, use this. - still need prob name, dim_w and iterations
@@ -74,22 +80,28 @@ for j in range(len(seed)):
         true_values = function.evaluate_true(full_solutions)
     else:
         true_values = torch.empty((iterations, 1))
+        if dim_w == 1:
+            w = torch.linspace(0, 1, k).reshape(k, 1)
+        else:
+            old_state = torch.random.get_rng_state()
+            torch.random.manual_seed(eval_seed)
+            w = torch.rand((k, 2))
+            torch.random.set_rng_state(old_state)
         for i in range(iterations):
             sol = best_solutions[i].reshape(1, -1).repeat(k, 1)
-            if dim_w == 1:
-                w = torch.linspace(0, 1, k).reshape(k, 1)
-            else:
-                old_state = torch.random.get_rng_state()
-                torch.random.manual_seed(eval_seed)
-                w = torch.rand((k, 2))
-                torch.random.set_rng_state(old_state)
+
             full_sol = torch.cat((sol, w), dim=-1)
             try:
                 values = function.evaluate_true(full_sol)
             except NotImplementedError:
                 values = function(full_sol, seed=eval_seed)
             values, index = torch.sort(values, dim=-2)
-            true_values[i] = values[int(k * alpha)]
+            if CVaR:
+                true_values[i] = torch.mean(values[int(k * alpha):])
+            else:
+                true_values[i] = values[int(k * alpha)]
+    _, true_optimal = generate_values(10000, k, plug_in_w=w, CVaR=CVaR)
+    true_optimal = torch.min(true_optimal)
 
     value_diff_list[j] = true_values - true_optimal
 
