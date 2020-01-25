@@ -103,6 +103,6 @@ for file in file_list:
             output = {'solutions': reoptimized_solutions, 'values': reoptimized_values}
             torch.save(output, out_file)
             print('%s is completed in %s!' % (file.name, time()-file_start))
-    except FileNotFoundError:
+    except FileNotFoundError or IsADirectoryError:
         print('%s not found, skipping!' % file.name)
 
