@@ -9,9 +9,16 @@ python cluster_main.py sinequad 0 1 test 10
 from time import time
 from loop_compare import full_loop
 from kg_comparison import kg_compare
+import sys
 
-seed_list = [56234, 13452, 64357, 12367, 34678, 86534, 13478, 46883, 67426, 90872, 56712]
-function_name = 'sinequad'
+function_name = sys.argv[1]
+
+if function_name == 'sinequad':
+    seed_list = [56234, 13452, 64357, 12367, 34678, 86534, 13478, 46883, 67426, 90872, 56712]
+elif function_name == 'branin':
+    seed_list = [44924, 19994, 76206, 26281, 52821, 83620,  10237,  28365, 64531,  24943]
+else:
+    raise ValueError('Specify seed_list first!')
 dim_w = 1
 alpha = 0.66
 iterations = 50
