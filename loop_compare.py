@@ -1,4 +1,5 @@
 """
+Edited for comparison with kg
 This version is to be callable from some other python code.
 Sait will use this to run jobs on school clusters, though it can be used for other purposes too.
 A full optimization loop of VaRKG with some pre-specified parameters.
@@ -19,26 +20,45 @@ from plotter import contour_plotter
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
-from test_functions.standardized_function import StandardizedFunction
-from test_functions.cont_newsvendor import ContinuousNewsvendor
-from test_functions.prod_line import ProductionLine
-from botorch.test_functions import Powell, Branin
-from botorch.test_functions import SyntheticTestFunction
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
-import multiprocessing
-import platform
 from botorch.gen import gen_candidates_scipy
 from initializer import gen_one_shot_VaRKG_initial_conditions
+from full_loop_callable import function_picker
 
-try:
-    # set the number of cores for torch to use
-    cpu_count = max(multiprocessing.cpu_count(), 8)
-    torch.set_num_threads(cpu_count)
-    torch.set_num_interop_threads(cpu_count)
-finally:
-    pass
+
+def _sampler(function, X: Tensor, num_samples: int):
+    """
+    Samples C/VaR
+    :param function:
+    :param X:
+    :param num_samples:
+    :return:
+    """
+    w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
+    full_samples = torch.cat((X.unsqueeze(-2).repeat(1, num_samples, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
+    full_values = function(full_samples)
+    return full_samples.reshape(-1, full_samples.size(-1)), full_values.reshape(-1, 1)
+
+
+def _pick_best(var_kg: VaRKG, q: int, solutions: Tensor, dim, num_samples):
+    """
+    projects the solutions to appropriate w space, evaluates and picks the best
+    :param var_kg:
+    :param q:
+    :param solutions:
+    :param dim:
+    :return:
+    """
+    w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
+    for i in range(solutions.size(0)):
+        for j in range(q):
+            current = solutions[i, 0, dim * (j+1)-1]
+            closest = w_samples[torch.argmin(torch.abs(w_samples-current))]
+            solutions[i, 0, dim * (j + 1) - 1] = closest
+    values = var_kg(solutions)
+    best = torch.argmax(values)
+    return solutions[best], values[best]
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
@@ -49,7 +69,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
-    :param function_name: The problem function to be used. TODO: add options
+    :param function_name: The problem function to be used.
     :param dim_w: Dimension of the w component.
     :param filename: Output file name.
     :param iterations: Number of iterations for the loop to run.
@@ -70,14 +90,20 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # Initialize the test function
     function = function_picker(function_name)
     d = function.dim  # dimension of train_X
-    n = 2 * d + 2  # training samples
     dim_x = d - dim_w  # dimension of the x component
+    n = 2 * dim_x + 2  # training samples
 
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
     if random_sampling:
         filename = filename + '_random'
+    if filename[0:4] != 'comp':
+        filename = 'comp_' + filename
     if q > 1 and "q=" not in filename:
         filename = filename + "q=%d" % q
+    if dim_w != 1:
+        raise ValueError('This is only meant for dim_w = 1!')
+    if q != num_samples:
+        raise ValueError('Comparison requires q=num_samples')
     try:
         full_data = torch.load("loop_output/%s.pt" % filename)
         last_iteration = max(full_data.keys())
@@ -92,24 +118,15 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         seed_list = torch.randint(1000000, (1000,))
         last_iteration = -1
         full_data = dict()
-        train_X = torch.rand((n, d))
-        train_Y = function(train_X)
+        train_X = torch.rand((n, dim_x))
+        train_X, train_Y = _sampler(function, train_X, num_samples)
 
     # samples used to get the current VaR value
-    if dim_w == 1:
-        w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
-    else:
-        w_samples = torch.rand((num_samples, dim_w))
+    w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 
     # fixed_samples and fix_samples makes it SAA approach - the preferred method
-    if dim_w == 1:
-        fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
-    else:
-        fixed_samples = torch.rand((num_samples, dim_w))
+    fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
     fix_samples = True
-    # comment out above and uncomment below for an SGD-like approach
-    # fix_samples = False
-    # fixed_samples = None
 
     raw_multiplier = 10
     x_bounds = Tensor([[0], [1]]).repeat(1, dim_x)
@@ -168,7 +185,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         # IF using SAA approach, this should be specified to a fixed number.
         fantasy_seed = int(torch.randint(100000, (1,)))
 
-        # TODO: more baselines
         if random_sampling:
             candidate = torch.rand((1, q*d))
             value = torch.tensor([0])
@@ -191,12 +207,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                                      lower_bounds=full_bounds[0],
                                                      upper_bounds=full_bounds[1],
                                                      options=optimization_options)
-            best = torch.argmax(values.view(-1), dim=0)
-            candidate = solutions[best].detach()
-            value = values[best].detach()
+            candidate, value = _pick_best(var_kg, q, solutions, d, num_samples)
 
         if verbose:
-            print("Candidate: ", candidate, " KG value: ", value)
+            print("Candidate: ", candidate, " KG value: ", value, " current_best: ", current_best_sol)
 
         data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
                 'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
@@ -226,33 +240,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     print('data: ', full_data)
 
 
-def function_picker(function_name: str) -> SyntheticTestFunction:
-    """
-    Returns the appropriate function callable
-    If adding new BoTorch test functions, run them through StandardizedFunction.
-    StandardizedFunction and all others listed here allow for a seed to be specified.
-    If adding something else, make sure the forward (or __call__) takes a seed argument.
-    :param function_name: Function to be used
-    :return: Function callable
-    """
-    noise_std = 0.1  # observation noise level
-    if function_name == 'simplequad':
-        function = StandardizedFunction(SimpleQuadratic(noise_std=noise_std))
-    elif function_name == 'sinequad':
-        function = StandardizedFunction(SineQuadratic(noise_std=noise_std))
-    elif function_name == 'powell':
-        function = StandardizedFunction(Powell(noise_std=noise_std))
-    elif function_name == 'branin':
-        function = StandardizedFunction(Branin(noise_std=noise_std))
-    elif function_name == 'newsvendor':
-        function = ContinuousNewsvendor()
-    elif function_name == 'prod_line':
-        function = ProductionLine()
-
-    return function
-
-
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    full_loop('sinequad', 0, 1, 'tester', 50, 100, 5, 10, random_sampling=False)
+    full_loop('sinequad', 0, 1, 'tester', 5, random_sampling=False, num_samples=6, q=6, verbose=True)
 
