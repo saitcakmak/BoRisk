@@ -43,7 +43,7 @@ class StandardizedFunction:
         shape = list(X.size())
         shape[-1] = 1
         X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
-        result = self.function(X).reshape(shape)
+        result = self.function(X.reshape(-1, X.size(-1))).reshape(shape)
         torch.random.set_rng_state(old_state)
         return result
 
