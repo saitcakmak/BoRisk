@@ -23,12 +23,11 @@ from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
 from test_functions.standardized_function import StandardizedFunction
 from test_functions.cont_newsvendor import ContinuousNewsvendor
 from test_functions.prod_line import ProductionLine
-from botorch.test_functions import Powell, Branin
+from botorch.test_functions import Powell, Branin, Ackley, Hartmann
 from botorch.test_functions import SyntheticTestFunction
 import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
-import platform
 from botorch.gen import gen_candidates_scipy
 from initializer import gen_one_shot_VaRKG_initial_conditions
 
@@ -244,6 +243,12 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
         function = StandardizedFunction(Powell(noise_std=noise_std))
     elif function_name == 'branin':
         function = StandardizedFunction(Branin(noise_std=noise_std))
+    elif function_name == 'ackley':
+        function = StandardizedFunction(Ackley(noise_std=noise_std))
+    elif function_name == 'hartmann3':
+        function = StandardizedFunction(Hartmann(dim=3, noise_std=noise_std))
+    elif function_name == 'hartmann6':
+        function = StandardizedFunction(Hartmann(dim=6, noise_std=noise_std))
     elif function_name == 'newsvendor':
         function = ContinuousNewsvendor()
     elif function_name == 'prod_line':

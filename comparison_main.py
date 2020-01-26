@@ -16,7 +16,13 @@ function_name = sys.argv[1]
 if function_name == 'sinequad':
     seed_list = [56234, 13452, 64357, 12367, 34678, 86534, 13478, 46883, 67426, 90872, 56712]
 elif function_name == 'branin':
-    seed_list = [44924, 19994, 76206, 26281, 52821, 83620,  10237,  28365, 64531,  24943]
+    seed_list = [44924, 19994, 76206, 26281, 52821, 83620, 10237,  28365, 64531, 24943]
+elif function_name == 'hartmann3':
+    seed_list = [16896, 80126, 43354, 35719, 76594, 15588, 86438, 56614, 57397, 97917]
+elif function_name == 'hartmann6':
+    seed_list = [11285, 38033, 57338, 31330, 88984, 64817, 41429, 28782, 33874, 48160]
+elif function_name == 'ackley':
+    seed_list = [66814, 56415, 82869, 26580, 28665, 13889, 60774, 79838, 75229, 65655]
 else:
     raise ValueError('Specify seed_list first!')
 dim_w = 1
