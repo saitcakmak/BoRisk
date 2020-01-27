@@ -13,8 +13,6 @@ from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
 from VaR_KG import VaRKG, InnerVaR
 from time import time
-from botorch.optim import optimize_acqf
-from plotter import contour_plotter
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
@@ -24,10 +22,9 @@ from test_functions.cont_newsvendor import ContinuousNewsvendor
 from test_functions.prod_line import ProductionLine
 from botorch.test_functions import Powell, Branin, Ackley, Hartmann
 from botorch.test_functions import SyntheticTestFunction
-import matplotlib.pyplot as plt
 from botorch.models.transforms import Standardize
 import multiprocessing
-from inner_optimizer import InnerOptimizer
+from optimizer import Optimizer
 
 try:
     # set the number of cores for torch to use
@@ -41,7 +38,6 @@ finally:
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, raw_multiplier: int = 10,
-              num_inner_restarts: int = 10, inner_raw_multiplier: int = 5,
               alpha: float = 0.7, q: int = 1,
               num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
@@ -57,8 +53,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param num_fantasies: Number of fantasy models to construct in evaluating VaRKG.
     :param num_restarts: Number of random restarts for optimization of VaRKG.
     :param raw_multiplier: Raw_samples = num_restarts * raw_multiplier
-    :param num_inner_restarts: restarts for inner optimization
-    :param inner_raw_multiplier: raw multiplier for inner optimization
     :param alpha: The risk level of C/VaR.
     :param q: Number of parallel solutions to evaluate. Think qKG.
     :param num_lookahead_repetitions: Number of repetitions of lookahead fantasy evaluations.
@@ -116,7 +110,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     full_bounds = Tensor([[0], [1]]).repeat(1, d)
 
-    plotter = contour_plotter
+    if verbose and d==2:
+        from plotter import contour_plotter
+        plotter = contour_plotter
 
     # for timing
     start = time()
@@ -134,12 +130,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
-    # maximum iterations of LBFGS or ADAM
-    optimization_options = {'maxiter': maxiter}
-    inner_optimizer = InnerOptimizer(num_restarts=num_inner_restarts,
-                                     raw_multiplier=inner_raw_multiplier,
-                                     dim_x=dim_x,
-                                     maxiter=maxiter)
+    optimizer = Optimizer(num_restarts=num_restarts,
+                          raw_multiplier=raw_multiplier,
+                          num_fantasies=num_fantasies,
+                          dim=d,
+                          dim_x=dim_x,
+                          q=q,
+                          maxiter=maxiter,
+                          periods=20)
 
     for i in range(last_iteration + 1, iterations):
         iteration_start = time()
@@ -151,15 +149,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         # similar to seed below, for the lookahead fantasies if used
         lookahead_seed = int(torch.randint(100000, (1,)))
 
-        inner_optimizer.new_iteration()
+        optimizer.new_iteration()
 
         inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                              num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                              lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-        solution, value = inner_optimizer.optimize(inner_VaR)
-        current_best_sol = solution.detach()
-        current_best_value = - value.detach()
+        current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
 
         if verbose:
             print("Current best solution, value: ", current_best_sol, current_best_value)
@@ -171,25 +167,17 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         fantasy_seed = int(torch.randint(100000, (1,)))
 
         if random_sampling:
-            candidate = torch.rand((1, q*d))
+            candidate = torch.rand((1, q * d))
             value = torch.tensor([0])
         else:
             var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                            current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                           dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer, q=q,
+                           dim=d, dim_x=dim_x, q=q,
                            fix_samples=fix_samples, fixed_samples=fixed_samples,
                            num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                            lookahead_seed=lookahead_seed, CVaR=CVaR)
 
-            solution, value = optimize_acqf(acq_function=var_kg,
-                                            bounds=full_bounds,
-                                            q=q,
-                                            num_restarts=num_restarts,
-                                            raw_samples=num_restarts*raw_multiplier,
-                                            options=optimization_options)
-
-            candidate = solution.detach()
-            value = value.detach()
+            candidate, value = optimizer.optimize_VaRKG(var_kg)
 
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -203,7 +191,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
                 'seed_list': seed_list}
         full_data[i] = data
-        torch.save(full_data, 'nested_output/%s.pt' % filename)
+        torch.save(full_data, 'new_output/%s.pt' % filename)
 
         iteration_end = time()
         print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
@@ -256,8 +244,7 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 5
-    full_loop('sinequad', 0, 1, 'tester', 10, num_fantasies=k, num_restarts=k,
-              raw_multiplier=k, num_inner_restarts=k, inner_raw_multiplier=k,
+    k = 3
+    full_loop('sinequad', 0, 1, 'tester', 10,
+              num_fantasies=k, num_restarts=k, raw_multiplier=k,
               random_sampling=False, verbose=False)
-
