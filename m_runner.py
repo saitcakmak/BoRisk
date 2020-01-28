@@ -21,8 +21,9 @@ seed = 5637
 dim_w = 1
 iterations = 50
 filename = 'run1'
-lookahead_samples = torch.linspace(0, 1, 100).reshape(100, 1)
-m = int(input("enter m, number of lookahead replications: "))
+m = int(input("enter m, number of lookahead samples: "))
+lookahead_samples = torch.linspace(0, 1, m).reshape(m, 1)
+k = int(input("enter k, number of lookahead replications: "))
 # if len(args) >= 6:
 #     if int(args[5]):
 #         CVaR = True
@@ -30,8 +31,8 @@ m = int(input("enter m, number of lookahead replications: "))
 #         alpha = float(args[6])
 
 
-filename = "imp2_m=%d_" % m + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
+filename = "imp2_m=%d_" % m + 'k=%d_' % k + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
 
 full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=100, num_fantasies=100, CVaR=CVaR,
-          alpha=alpha, num_lookahead_repetitions=m, lookahead_samples=lookahead_samples)
+          alpha=alpha, num_lookahead_repetitions=k, lookahead_samples=lookahead_samples)
 print('Successfully completed!')
