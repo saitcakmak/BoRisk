@@ -71,10 +71,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     dim_x = d - dim_w  # dimension of the x component
 
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
+    if CVaR and "cvar" not in filename:
+        filename = filename + '_cvar'
+    if alpha != 0.7 and "a=" not in filename:
+        filename = filename + '_a=%s' % alpha
+    if q > 1 and "q=" not in filename:
+        filename = filename + "_q=%d" % q
     if random_sampling:
         filename = filename + '_random'
-    if q > 1 and "q=" not in filename:
-        filename = filename + "q=%d" % q
     try:
         full_data = torch.load("loop_output/%s.pt" % filename)
         last_iteration = max(full_data.keys())
@@ -108,9 +112,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # fix_samples = False
     # fixed_samples = None
 
-    full_bounds = Tensor([[0], [1]]).repeat(1, d)
-
-    if verbose and d==2:
+    if verbose and d == 2:
+        import matplotlib.pyplot as plt
         from plotter import contour_plotter
         plotter = contour_plotter
 
