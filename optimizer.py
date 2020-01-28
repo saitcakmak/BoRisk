@@ -81,6 +81,7 @@ class Optimizer:
         self.eta = eta
         self.maxiter = maxiter
         self.periods = periods
+        self.current_best = None
 
     def generate_inner_raw_samples(self) -> Tensor:
         """
@@ -139,6 +140,7 @@ class Optimizer:
         best = torch.argmax(values.view(-1), dim=0)
         solution = solutions[best].detach()
         value = values[best].detach()
+        self.current_best = -value
         return solution, value
 
     def optimize_VaRKG(self, acqf: VaRKG) -> Tuple[Tensor, Tensor]:
@@ -165,6 +167,7 @@ class Optimizer:
         num_periods = ceil(self.maxiter / self.periods)
         solutions = None
         values = None
+        options = {'maxiter': self.periods}
         for i in range(num_periods):
             if i == 0:
                 initial_conditions = self.generate_initial_conditions(acqf, raw_samples, raw_values, permuted_samples)
@@ -174,14 +177,26 @@ class Optimizer:
                 sol_no_eval = torch.cat((samples_from_sols, picked_sols), dim=0)
                 initial_conditions = self.generate_initial_conditions(acqf, solutions, torch.mean(values, dim=-1),
                                                                       sol_no_eval)
-            options = {'maxiter': self.periods}
             solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                      acquisition_function=acqf,
                                                      lower_bounds=self.full_bounds[0],
                                                      upper_bounds=self.full_bounds[1],
                                                      options=options)
             self.add_full_solutions(solutions, values)
-        self.add_inner_solutions(solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x), values.reshape(-1))
+        # add the resulting solutions to be used for next iteration. Normalizing in the end to get - VaR value
+        self.add_inner_solutions(solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
+                                 values.reshape(-1) - self.current_best)
+        # doing a last bit of optimization with only 20 best solutions
+        options = {'maxiter': self.maxiter}
+        _, idx = torch.sort(torch.mean(values, dim=-1))
+        solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:20]],
+                                                 acquisition_function=acqf,
+                                                 lower_bounds=self.full_bounds[0],
+                                                 upper_bounds=self.full_bounds[1],
+                                                 options=options)
+        # add the resulting solutions to be used for next iteration. Normalizing in the end to get - VaR value
+        self.add_inner_solutions(solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
+                                 values.reshape(-1) - self.current_best)
         values = torch.mean(values, dim=-1)
         best = torch.argmax(values)
         return solutions[best].detach(), values[best].detach()
