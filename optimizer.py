@@ -1,4 +1,4 @@
-from typing import Tuple
+from typing import Tuple, Optional
 import torch
 from botorch.gen import gen_candidates_scipy
 from botorch.utils import draw_sobol_samples, standardize
@@ -173,7 +173,7 @@ class Optimizer:
                 initial_conditions = self.generate_initial_conditions(acqf, raw_samples, raw_values, permuted_samples)
             else:
                 samples_from_sols = self.generate_samples_from_solutions(solutions, values)
-                picked_sols = self.pick_full_solutions(2 * self.num_restarts, self.num_restarts)
+                picked_sols = self.pick_full_solutions(self.num_restarts, self.num_restarts)
                 sol_no_eval = torch.cat((samples_from_sols, picked_sols), dim=0)
                 initial_conditions = self.generate_initial_conditions(acqf, solutions, torch.mean(values, dim=-1),
                                                                       sol_no_eval)
@@ -204,6 +204,8 @@ class Optimizer:
     def generate_samples_from_solutions(self, solutions: Tensor, values: Tensor):
         """
         This does what pick_full_solution does except it only uses the given
+        Modified!! Returns the double number of solutions with half of them having
+        random outer solutions.
         set of solutions.
         :param solutions: Given solutions
         :param values: Corresponding values
@@ -212,20 +214,23 @@ class Optimizer:
         outer_sols = solutions[:, :, :self.q * self.dim].reshape(-1, self.q * self.dim)
         outer_values = torch.mean(values, dim=-1)
         fantasy_sols = solutions[:, :, self.q * self.dim:].reshape(-1, self.num_fantasies, self.dim_x)
-        picked_fantasies = torch.empty((self.num_restarts, self.num_fantasies, self.dim_x))
+        picked_fantasies = torch.empty((2 * self.num_restarts, self.num_fantasies, self.dim_x))
         for i in range(self.num_fantasies):
             solutions_i = fantasy_sols[:, i, :]
             values_i = values[:, i]
             weights = torch.exp(self.eta * standardize(values_i))
-            idx = torch.multinomial(weights, self.num_restarts, replacement=True)
+            idx = torch.multinomial(weights, 2 * self.num_restarts, replacement=True)
             idx[-1] = torch.argmax(values_i)
             picked_fantasies[:, i, :] = solutions_i[idx]
-        picked_fantasies = picked_fantasies.reshape(self.num_restarts, 1, -1)
+        picked_fantasies = picked_fantasies.reshape(2 * self.num_restarts, 1, -1)
 
         weights = torch.exp(self.eta * standardize(outer_values))
         idx = torch.multinomial(weights, self.num_restarts, replacement=True)
         idx[-1] = torch.argmax(outer_values)
         solutions = outer_sols[idx].unsqueeze(-2)
+
+        random_outer = draw_sobol_samples(self.outer_bounds, self.num_restarts, q=1)
+        solutions = torch.cat((random_outer, solutions), dim=0)
 
         picked_solutions = torch.cat((solutions, picked_fantasies), dim=-1)
         return picked_solutions
@@ -284,13 +289,15 @@ class Optimizer:
             picked_solutions[:, i, :] = solutions[idx]
         return picked_solutions
 
-    def pick_outer_solutions(self, n: int) -> Tensor:
+    def pick_outer_solutions(self, n: int) -> Optional[Tensor]:
         """
         Generates a random pick of n outer solutions from saved samples
         The last value is the best found so far.
         :param n: Number of solutions to pick
         :return: Generated solutions, n x 1 x q * d
         """
+        if n == 0:
+            return None
         if self.outer_sols is None:
             raise ValueError('This should not be called before add_outer_solutions!')
         weights = torch.exp(self.eta * standardize(self.outer_values))
@@ -309,8 +316,12 @@ class Optimizer:
         """
         random_outer = draw_sobol_samples(self.outer_bounds, num_random_outer, 1)
         fantasy_sols = self.pick_fantasy_solutions(n).reshape(n, 1, -1)
-        picked_outer = self.pick_outer_solutions(n - num_random_outer).reshape(-1, 1, self.q * self.dim)
-        outer_sols = torch.cat((random_outer, picked_outer), dim=0)
+        picked_outer = self.pick_outer_solutions(n - num_random_outer)
+        if picked_outer is not None:
+            picked_outer = picked_outer.reshape(-1, 1, self.q * self.dim)
+            outer_sols = torch.cat((random_outer, picked_outer), dim=0)
+        else:
+            outer_sols = random_outer
         full_sols = torch.cat((outer_sols, fantasy_sols), dim=-1)
         return full_sols
 

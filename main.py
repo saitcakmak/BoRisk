@@ -22,7 +22,7 @@ if len(args) >= 6:
         alpha = float(args[6])
 
 
-filename = "cluster_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
+filename = "imp2_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
 
 full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=100, num_fantasies=100, CVaR=CVaR, alpha=alpha)
 print('Successfully completed!')

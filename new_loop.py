@@ -248,6 +248,6 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
     k = 3
-    full_loop('sinequad', 0, 1, 'tester', 10,
+    full_loop('powell', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=k,
               random_sampling=False, verbose=False)
