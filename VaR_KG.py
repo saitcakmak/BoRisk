@@ -207,7 +207,11 @@ class VaRKG(MCAcquisitionFunction):
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
         self.mini_batch_size = 80
-        while self.mini_batch_size * num_fantasies > 2000 and self.mini_batch_size > 1:
+        if num_lookahead_repetitions is not None:
+            factor = num_lookahead_repetitions
+        else:
+            factor = 1
+        while self.mini_batch_size * num_fantasies * factor > 2000 and self.mini_batch_size > 1:
             self.mini_batch_size = int(self.mini_batch_size / 2)
 
     def forward(self, X: Tensor) -> Tensor:
