@@ -33,6 +33,6 @@ k = int(input("enter k, number of lookahead replications: "))
 
 filename = "imp2_m=%d_" % m + 'k=%d_' % k + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
 
-full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=100, num_fantasies=100, CVaR=CVaR,
+full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=10, num_fantasies=10, CVaR=CVaR,
           alpha=alpha, num_lookahead_repetitions=k, lookahead_samples=lookahead_samples)
 print('Successfully completed!')
