@@ -242,7 +242,7 @@ class Optimizer:
         # sampling from the optimizers
         num_non_random = int(self.raw_samples * (1 - self.random_frac))
         weights = torch.exp(self.eta * standardize(self.inner_values))
-        idx = torch.multinomial(weights, num_non_random * self.num_fantasies * self.dim_x, replacement=True)
+        idx = torch.multinomial(weights, num_non_random * self.num_fantasies, replacement=True)
 
         # set the respective initial conditions to the sampled optimizers
         # we add some extra noise here to avoid all the samples being the same
