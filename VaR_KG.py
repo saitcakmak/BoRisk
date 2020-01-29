@@ -147,7 +147,7 @@ class VaRKG(MCAcquisitionFunction):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None, lookahead_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False):
+                 CVaR: bool = False, expectation: bool = False, beta: float = 0):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
@@ -173,6 +173,7 @@ class VaRKG(MCAcquisitionFunction):
                                 if not specified, every call to forward will specify a new one to be used across
                                 solutions being evaluated.
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
+        :param beta: If given, it is the VaRKG-UCB mix with result = VaRKG + beta Sigma_n(x, w)
         :param expectation: If true, this is BQO.
         """
         super().__init__(model)
@@ -193,6 +194,7 @@ class VaRKG(MCAcquisitionFunction):
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.fantasy_seed = fantasy_seed
         self.lookahead_seed = lookahead_seed
+        self.beta = beta
 
         self.fix_samples = fix_samples
         if fixed_samples is not None:
@@ -286,4 +288,11 @@ class VaRKG(MCAcquisitionFunction):
             with settings.propagate_grads(True):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
             values[left_index: right_index] = self.current_best_VaR - inner_values.permute(1, 0)
+
+        # the UCB part:
+        if self.beta > 0:
+            post = self.model.posterior(X_actual)
+            sigma = post.variance.pow(1/2)
+            reshaped = torch.sum(sigma, dim=-2).repeat(1, self.num_fantasies)
+            values = values + self.beta * reshaped
         return values
