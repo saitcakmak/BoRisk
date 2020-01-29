@@ -40,3 +40,4 @@ for i in range(len(data.keys())):
     plotter(gp, inner_VaR, iteration_data['current_best_sol'], iteration_data['current_best_value'], iteration_data['candidate'])
     # input("Next?")
     sleep(1)
+input('stop?')

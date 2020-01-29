@@ -11,6 +11,7 @@ from value_plotter import generate_values
 directory = 'new_output/'
 prefix = 'cluster_'
 # prefix = ''
+# prefix = 'imp2_'
 problem_name = 'branin'
 dim_w = 1
 iterations = 50

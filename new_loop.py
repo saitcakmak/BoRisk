@@ -41,7 +41,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               alpha: float = 0.7, q: int = 1,
               num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False, random_sampling: bool = False):
+              CVaR: bool = False, random_sampling: bool = False, expectation: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -61,6 +61,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
     :param random_sampling: If true, we will use random sampling to generate samples - no KG.
+    :param expectation: If true, we are running BQO optimization.
     :return: None - saves the output.
     """
 
@@ -73,6 +74,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
     if CVaR and "cvar" not in filename:
         filename = filename + '_cvar'
+    if expectation and "exp" not in filename:
+        filename = filename + '_exp'
     if alpha != 0.7 and "a=" not in filename:
         filename = filename + '_a=%s' % alpha
     if q > 1 and "q=" not in filename:
@@ -156,7 +159,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
         inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                              num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                             lookahead_seed=lookahead_seed, CVaR=CVaR)
+                             lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
 
         current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
 
@@ -178,7 +181,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                            dim=d, dim_x=dim_x, q=q,
                            fix_samples=fix_samples, fixed_samples=fixed_samples,
                            num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                           lookahead_seed=lookahead_seed, CVaR=CVaR)
+                           lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
 
             candidate, value = optimizer.optimize_VaRKG(var_kg)
 
@@ -247,7 +250,7 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 3
-    full_loop('powell', 0, 1, 'tester', 10,
-              num_fantasies=k, num_restarts=k, raw_multiplier=k,
-              random_sampling=False, verbose=False)
+    k = 20
+    full_loop('branin', 0, 1, 'tester', 10,
+              num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
+              random_sampling=False, expectation=True, verbose=True)
