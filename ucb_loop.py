@@ -139,7 +139,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     )
 
     for i in range(last_iteration + 1, iterations):
-        beta = beta_c * torch.log(torch.tensor([beta_d * i ** 2], dtype=torch.float))
+        beta = beta_c * torch.log(torch.tensor([beta_d * (i+1) ** 2], dtype=torch.float))
         beta = float(beta)
         iteration_start = time()
         # construct and fit the GP
@@ -195,6 +195,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         #     best = torch.argmax(values)
         #     candidate_w = w_samples[best].reshape(-1, dim_w)
 
+        # TODO: this is the alternative based on confidence region random sampling
         candidate_w = pick_w_confidence(model=gp,
                                         beta=2,
                                         x_point=candidate_x,
@@ -235,6 +236,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # printing the data in case something goes wrong with file save
     # print('data: ', full_data)
 
+    return 0 # TODO: add some appropriate return that we can use to evaluate the output
+
 
 def function_picker(function_name: str) -> SyntheticTestFunction:
     """
@@ -274,4 +277,4 @@ if __name__ == "__main__":
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=10,
               expectation=False, verbose=True,
-              beta_c=0.01, beta_d=10, beta_max=0, continuous=False)
+              beta_c=1, beta_d=10, beta_max=0, continuous=False)

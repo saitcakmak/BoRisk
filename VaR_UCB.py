@@ -266,12 +266,17 @@ def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Ten
     post = model.posterior(full_points)
     mean = post.mean.reshape(-1)
     sigma = post.variance.pow(1/2).reshape(-1)
-    _, sort_idx = torch.sort(mean, dim=0)
-    var_idx = sort_idx[int(w_samples.size(0) * alpha)]
-    lb_confidence = mean[var_idx] - sigma[var_idx]
-
-
-
-
-
-
+    sorted_mean, _ = torch.sort(mean, dim=0)
+    var_mean = sorted_mean[int(w_samples.size(0) * alpha)]
+    ucb = mean + beta * sigma
+    if CVaR:
+        idx = ucb > var_mean
+        count = int(torch.sum(idx))
+        rand_idx = torch.randint(count, (1,))
+        return w_samples[idx][rand_idx]
+    else:
+        lcb = mean - beta * sigma
+        idx = (ucb > var_mean) * (lcb < var_mean)
+        count = int(torch.sum(idx))
+        rand_idx = torch.randint(count, (1,))
+        return w_samples[idx][rand_idx]
