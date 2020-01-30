@@ -159,8 +159,7 @@ class w_KG(MCAcquisitionFunction):
     """
     def __init__(self, model: Model, x_point: Tensor, w_samples: Tensor,
                  num_fantasies: int,
-                 alpha: float, dim_x: int, beta: float,
-                 beta_max: float = 0,
+                 alpha: float, dim_x: int,
                  fantasy_seed: Optional[int] = None,
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
@@ -198,8 +197,6 @@ class w_KG(MCAcquisitionFunction):
         self.num_lookahead_repetitions = num_lookahead_repetitions
         self.lookahead_samples = lookahead_samples
         self.dim_x = dim_x
-        self.beta = beta
-        self.beta_max = beta_max
         self.dim_w = w_samples.size(-1)
         self.batch_shape = model._input_batch_shape
         self.CVaR = CVaR
@@ -229,7 +226,7 @@ class w_KG(MCAcquisitionFunction):
         else:
             lookahead_seed = self.lookahead_seed
 
-        z = torch.cat((X, self.x_point.expand_as(X)), dim=-1)
+        z = torch.cat((self.x_point.expand_as(X), X), dim=-1)
 
         # construct the fantasy model
         sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
@@ -240,8 +237,8 @@ class w_KG(MCAcquisitionFunction):
                              num_lookahead_repetitions=self.num_lookahead_repetitions,
                              lookahead_samples=self.lookahead_samples,
                              lookahead_seed=lookahead_seed,
-                             CVaR=self.CVaR, beta=self.beta,
-                             beta_max=self.beta_max,
+                             CVaR=self.CVaR, beta=0,
+                             beta_max=0,
                              expectation=self.expectation)
         # sample and return
         x_point = self.x_point.repeat(self.num_fantasies, X.size(0), 1, 1)
@@ -250,6 +247,31 @@ class w_KG(MCAcquisitionFunction):
             inner_values = - inner_VaR(x_point)
         values = - inner_values.mean(0)
         return values.squeeze()
+
+
+def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Tensor, alpha, CVaR):
+    """
+    Picks w randomly from a confidence region around the current VaR value.
+    If CVaR, the confidence region is only bounded on the lower side.
+    :param model: gp model
+    :param beta: beta factor of the confidence region
+    :param x_point: 1 x dim_x
+    :param w_samples: num_w x dim_w
+    :param alpha: risk level alpha
+    :param CVaR: True if CVaR
+    :return:
+    """
+    x_point = x_point.reshape(1, 1, -1).repeat(1, w_samples.size(0), 1)
+    full_points = torch.cat((x_point, w_samples.unsqueeze(0)), dim=-1)
+    post = model.posterior(full_points)
+    mean = post.mean.reshape(-1)
+    sigma = post.variance.pow(1/2).reshape(-1)
+    _, sort_idx = torch.sort(mean, dim=0)
+    var_idx = sort_idx[int(w_samples.size(0) * alpha)]
+    lb_confidence = mean[var_idx] - sigma[var_idx]
+
+
+
 
 
 

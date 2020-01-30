@@ -12,7 +12,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_UCB import InnerVaR, w_KG
+from VaR_UCB import InnerVaR, w_KG, pick_w_confidence
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -43,7 +43,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, expectation: bool = False,
-              beta: float = 0, beta_max: float = 0, continuous: bool = False):
+              beta_c: float = 0, beta_d: float = 0, beta_max: float = 0, continuous: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -63,7 +63,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
     :param expectation: If true, we are running BQO optimization.
-    :param beta: TODO: explain - these might have to go inside and become iteration dependent
+    :param beta_c: TODO: explain - these might have to go inside and become iteration dependent
+    :param beta_d:
     :param beta_max:
     :param continuous: If true, then w is optimized in a continuous manner, otherwise
                         picked from w_samples.
@@ -77,18 +78,18 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     dim_x = d - dim_w  # dimension of the x component
 
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
-    if beta > 0 and "beta" not in filename:
-        filename = filename + '_beta=%s' % beta
-    if beta_max > 0 and "b_max" not in filename:
-        filename = filename + '_b_max=%s' % beta_max
-    if CVaR and "cvar" not in filename:
-        filename = filename + '_cvar'
-    if expectation and "exp" not in filename:
-        filename = filename + '_exp'
-    if alpha != 0.7 and "a=" not in filename:
-        filename = filename + '_a=%s' % alpha
-    if q > 1 and "q=" not in filename:
-        filename = filename + "_q=%d" % q
+    # if beta > 0 and "beta" not in filename:
+    #     filename = filename + '_beta=%s' % beta
+    # if beta_max > 0 and "b_max" not in filename:
+    #     filename = filename + '_b_max=%s' % beta_max
+    # if CVaR and "cvar" not in filename:
+    #     filename = filename + '_cvar'
+    # if expectation and "exp" not in filename:
+    #     filename = filename + '_exp'
+    # if alpha != 0.7 and "a=" not in filename:
+    #     filename = filename + '_a=%s' % alpha
+    # if q > 1 and "q=" not in filename:
+    #     filename = filename + "_q=%d" % q
 
     try:
         full_data = torch.load("ucb_output/%s.pt" % filename)
@@ -138,6 +139,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     )
 
     for i in range(last_iteration + 1, iterations):
+        beta = beta_c * torch.log(torch.tensor([beta_d * i ** 2], dtype=torch.float))
+        beta = float(beta)
         iteration_start = time()
         # construct and fit the GP
         gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
@@ -171,25 +174,33 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         # TODO: implement w selection
         w_kg = w_KG(model=gp, x_point=candidate_x, w_samples=w_samples,
                     num_fantasies=num_fantasies,
-                    alpha=alpha, dim_x=dim_x, beta=beta,
-                    beta_max=beta_max,
+                    alpha=alpha, dim_x=dim_x,
                     fantasy_seed=fantasy_seed,
                     num_lookahead_repetitions=num_lookahead_repetitions,
                     lookahead_samples=lookahead_samples,
                     lookahead_seed=lookahead_seed,
                     CVaR=CVaR, expectation=expectation)
 
-        # TODO: if discrete, just do enumeration and pick max
-        if continuous:
-            candidate_w, w_kg_value = optimize_acqf(acq_function=w_kg,
-                                                    bounds=w_bounds,
-                                                    q=q,  # TODO: q>1 not valid
-                                                    num_restarts=num_restarts,
-                                                    raw_samples=num_restarts * raw_multiplier)
-        else:
-            values = w_kg(w_samples.view((-1, 1, dim_w)))
-            best = torch.argmax(values)
-            candidate_w = w_samples[best].reshape(-1, dim_w)
+        # TODO: need a new way of picking w! How about we take a beta confidence region around current VaR,
+        #       and select randomly from those that lie in that region?
+        # if continuous:
+        #     candidate_w, w_kg_value = optimize_acqf(acq_function=w_kg,
+        #                                             bounds=w_bounds,
+        #                                             q=q,  # TODO: q>1 not valid
+        #                                             num_restarts=num_restarts,
+        #                                             raw_samples=num_restarts * raw_multiplier,
+        #                                             options={'maxiter': maxiter})
+        # else:
+        #     values = w_kg(w_samples.view((-1, 1, dim_w)))
+        #     best = torch.argmax(values)
+        #     candidate_w = w_samples[best].reshape(-1, dim_w)
+
+        candidate_w = pick_w_confidence(model=gp,
+                                        beta=2,
+                                        x_point=candidate_x,
+                                        w_samples=w_samples,
+                                        alpha=alpha,
+                                        CVaR=CVaR)
 
         candidate = torch.cat((candidate_x, candidate_w), dim=-1)
 
@@ -213,7 +224,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         candidate_point = candidate.reshape(q, d)
         if verbose and d == 2:
             plt.close('all')
-            plotter(gp, inner_VaR, candidate_x, candidate_value, candidate_point)
+            plotter(gp, inner_VaR, candidate_x, candidate_value, candidate_point,
+                    w_samples, CVaR, alpha)
         observation = function(candidate_point, seed=seed_list[i])
         # update the model input data for refitting
         train_X = torch.cat((train_X, candidate_point), dim=0)
@@ -258,7 +270,8 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
+    k = 50
     full_loop('branin', 0, 1, 'tester', 10,
-              num_fantasies=100, num_restarts=100, raw_multiplier=10,
+              num_fantasies=k, num_restarts=k, raw_multiplier=10,
               expectation=False, verbose=True,
-              beta=0.01, beta_max=0.5)
+              beta_c=0.01, beta_d=10, beta_max=0, continuous=False)
