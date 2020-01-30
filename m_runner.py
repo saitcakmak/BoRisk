@@ -5,7 +5,7 @@ Example run:
 python main.py [function_name] [seed] [dim_w] [filename] [iterations] and optional [CVaR] [alpha]
 python main.py sinequad 0 1 test 10 0 0.7
 """
-from new_loop import full_loop
+from ucb_loop import full_loop
 import sys
 import torch
 

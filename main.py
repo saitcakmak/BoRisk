@@ -5,7 +5,7 @@ Example run:
 python main.py [function_name] [seed] [dim_w] [filename] [iterations] and optional [CVaR] [alpha]
 python main.py sinequad 0 1 test 10 0 0.7
 """
-from new_loop import full_loop
+from ucb_loop import full_loop
 import sys
 
 args = sys.argv[1:]
@@ -22,7 +22,7 @@ if len(args) >= 6:
         alpha = float(args[6])
 
 
-filename = "imp2_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
+filename = "ucb_" + function_name + '_' + str(seed) + '_' + str(dim_w) + '_' + str(iterations) + '_' + filename
 
 full_loop(function_name, seed, dim_w, filename, iterations, num_restarts=100, num_fantasies=100, CVaR=CVaR, alpha=alpha)
 print('Successfully completed!')

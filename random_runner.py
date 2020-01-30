@@ -1,7 +1,7 @@
 """
 This is to run the random sampling and save the output with a proper name
 """
-from new_loop import full_loop
+from ucb_loop import full_loop
 
 function_name = 'branin'
 dim_w = 1

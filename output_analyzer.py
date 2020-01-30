@@ -3,15 +3,15 @@ This is a template file for analyzing the outputs of full runs.
 It is essentially a collection of code that I didn't want to lose in console logs.
 """
 import torch
-from new_loop import function_picker
+from ucb_loop import function_picker
 import matplotlib.pyplot as plt
 from value_plotter import generate_values
 
 
-directory = 'new_output/'
-prefix = 'cluster_'
-# prefix = ''
+directory = 'ucb_output/'
 # prefix = 'imp2_'
+# prefix = ''
+prefix = 'ucb_'
 problem_name = 'branin'
 dim_w = 1
 iterations = 50
@@ -30,13 +30,14 @@ CVaR = False
 # seed = [23856, 83742, 75624, 34755, 38523, 57633, 73485, 12654, 93832, 43566]
 # seed = [3452, 44331]
 # seed = [123, 127]
-seed = [5637, 3256]
+seed = [5637]
 
 file_name = []
 for i in range(len(seed)):
     file_name.append('run' + str(i+1))
 # suffix = '_cvar_a=0.9_random'
 # suffix = '_random'
+# suffix = '_beta=0.01'
 suffix = ''
 
 file_list = []

@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 from botorch.models import SingleTaskGP
-from VaR_KG import VaRKG, InnerVaR
+from VaR_UCB import VaRUCB, InnerVaR
 from time import time, sleep
 from plotter import plotter_3D, contour_plotter
 from botorch.models.transforms import Standardize
@@ -10,7 +10,7 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 import matplotlib.pyplot as plt
 
-file_name = "imp2_branin_3256_1_50_run2.pt"
+file_name = "ucb_branin_3256_1_50_run2.pt"
 dim = 2
 dim_x = 1
 num_compare = 100  # number of random solutions to compare with
@@ -53,10 +53,10 @@ while i != -1:
     candidate_value = iteration_data['kg_value']
     plotter(gp, inner_VaR, iteration_data['current_best_sol'], current_best_value, candidate)
     fantasy_seed = iteration_data['fantasy_seed']
-    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                   current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                   dim=dim, dim_x=dim_x, q=q,
-                   fix_samples=fix_samples, fixed_samples=fixed_samples, CVaR=CVaR)
+    var_kg = VaRUCB(model=gp, num_samples=num_samples, alpha=alpha,
+                    current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
+                    dim=dim, dim_x=dim_x, q=q,
+                    fix_samples=fix_samples, fixed_samples=fixed_samples, CVaR=CVaR)
     fantasy_sols = candidate[:, dim:].reshape(1, 1, -1).repeat(num_compare, 1, 1)
     outer_alternatives = torch.rand((num_compare, 1, dim))
     alternative_solutions = torch.cat((outer_alternatives, fantasy_sols), dim=-1)

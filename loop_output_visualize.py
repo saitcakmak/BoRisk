@@ -1,7 +1,7 @@
 import torch
 from torch import Tensor
 from botorch.models import SingleTaskGP
-from VaR_KG import VaRKG, InnerVaR
+from VaR_UCB import VaRUCB, InnerVaR
 from time import time, sleep
 from plotter import plotter_3D, contour_plotter
 from botorch.models.transforms import Standardize
@@ -12,7 +12,7 @@ from gpytorch.priors.torch_priors import GammaPrior
 file_name = input("file name (w/o extension): ")
 if file_name[-3:] == '.pt':
     file_name = file_name[:-3]
-file_path = "new_output/%s.pt" % file_name
+file_path = "ucb_output/%s.pt" % file_name
 plotter = contour_plotter
 data = torch.load(file_path)
 noise_prior = GammaPrior(1.1, 0.5)
