@@ -7,7 +7,7 @@ import torch
 
 beta_list = [1, 0.5, 0.25, 0.1, 0.05, 0.025, 0.01]
 beta_d = 10
-output_file = "test_out"
+output_file = "test_with_beta_d=10"
 seed_list = torch.randint(10000, (10,))
 function_name = 'sinequad'
 dim_w = 1
@@ -17,8 +17,9 @@ num_restarts = 100
 CVaR = False
 alpha = 0.7
 
-output_dict = {}
+output_dict = dict()
 for beta_c in beta_list:
+    output_dict[beta_c] = dict()
     for seed in seed_list:
         output = full_loop(function_name, int(seed), dim_w, filename, iterations,
                            num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,

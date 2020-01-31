@@ -106,7 +106,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         last_iteration = -1
         full_data = dict()
         train_X = torch.rand((n, d))
-        train_Y = function(train_X)
+        train_Y = function(train_X, seed=seed_list[-1])
 
     # samples used to get the VaR value
     if dim_w == 1:
@@ -136,7 +136,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             transform=None,
             initial_value=noise_prior_mode,
         ),
-    ).cuda()
+    )
 
     best_x_list = []
     best_x_value_list = []
@@ -145,8 +145,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         beta = beta_c * torch.log(torch.tensor([beta_d * (i+1) ** 2], dtype=torch.float))
         beta = float(beta)
         iteration_start = time()
+        # TODO: need to handle chelosky being singular
         # construct and fit the GP
-        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood, outcome_transform=Standardize(m=1)).cuda()
+        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
         fit_gpytorch_model(mll).cuda()
 
