@@ -138,18 +138,29 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
-    best_x_list = []
+    current_best_list = []
+    current_best_value_list = []
     best_x_value_list = []
     candidate_list = []
     for i in range(last_iteration + 1, iterations):
-        beta = beta_c * torch.log(torch.tensor([beta_d * (i+1) ** 2], dtype=torch.float))
+        beta = beta_c * torch.log(torch.tensor([beta_d * (i + 1) ** 2], dtype=torch.float))
         beta = float(beta)
         iteration_start = time()
         # TODO: need to handle chelosky being singular
         # construct and fit the GP
-        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
-        mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
-        fit_gpytorch_model(mll).cuda()
+        try:
+            gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
+            mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+            fit_gpytorch_model(mll).cuda()
+        except RuntimeError as err:
+            print("Runtime error %s" % err)
+            print('Attempting to redraw the sample to get around it. Seed changed for sampling.')
+            observation = function(candidate_point, seed=seed_list[i+1000])
+            train_Y[-q:] = observation
+            gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
+            mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+            fit_gpytorch_model(mll).cuda()
+            print('Successfully handled the error!')
 
         # similar to seed below, for the lookahead fantasies if used
         lookahead_seed = int(torch.randint(100000, (1,)))
@@ -160,13 +171,25 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                              beta=beta, beta_max=beta_max)
 
         candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
-                                                     bounds=inner_bounds,
-                                                     q=q,  # TODO: q>1 not implemented
-                                                     num_restarts=num_restarts,
-                                                     raw_samples=num_restarts * raw_multiplier)
-        candidate_x_value = -candidate_x_value
-        best_x_list.append(candidate_x.detach())
-        best_x_value_list.append(candidate_x_value.detach())
+                                                       bounds=inner_bounds,
+                                                       q=q,  # TODO: q>1 not implemented
+                                                       num_restarts=num_restarts,
+                                                       raw_samples=num_restarts * raw_multiplier)
+        candidate_x_value = -candidate_x_value.detach().cpu()
+        best_x_value_list.append(candidate_x_value)
+
+        inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                             num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                             lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
+                             beta=0, beta_max=0)
+
+        current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
+                                                         bounds=inner_bounds,
+                                                         q=q,  # TODO: q>1 not implemented
+                                                         num_restarts=num_restarts,
+                                                         raw_samples=num_restarts * raw_multiplier)
+        current_best_list.append(current_best.detach())
+        current_best_value_list.append(-current_best_value.detach().cpu())
 
         if verbose:
             print('candidate_x, value: %s, %s' % (candidate_x, candidate_x_value))
@@ -240,7 +263,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # printing the data in case something goes wrong with file save
     # print('data: ', full_data)
 
-    output = {'best_x': best_x_list,
+    output = {'current_best': current_best_list,
+              'current_best_value': current_best_value_list,
               'best_x_value': best_x_value_list,
               'candidate': candidate_list}
     return output

@@ -111,6 +111,7 @@ class InnerVaR(MCAcquisitionFunction):
             return -torch.mean(values, dim=0).squeeze()
         else:
             # get the posterior mean
+            # TODO: this also happens to get chelosky issues sometimes
             post = self.model.posterior(z)
             samples = post.mean
 

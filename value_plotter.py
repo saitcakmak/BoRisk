@@ -63,7 +63,7 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1
 
 
 def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0, 0], ub: List[float] = [1, 1],
-                    plug_in_w: Tensor = None, function=function, dim_x=dim_x, dim_w=dim_w):
+                    plug_in_w: Tensor = None, function=function, dim_x=dim_x, dim_w=dim_w, alpha=alpha):
     """
     Generates the C/VaR values on a grid.
     :param num_x: Number of x values to generate on a given dimension, if dim_x == 2 generates dim_x^2 points
@@ -75,6 +75,7 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
     :param function: for calling this from outside
     :param dim_x: same
     :param dim_w: same
+    :param alpha: risk level
     :return: resulting x, y values
     """
     # generate x
