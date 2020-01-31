@@ -79,7 +79,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
     torch.manual_seed(seed=seed)
-    seed_list = torch.randint(1000000, (1000,))
+    seed_list = torch.randint(1000000, (2000,))
     last_iteration = -1
     full_data = dict()
     train_X = torch.rand((n, d))
