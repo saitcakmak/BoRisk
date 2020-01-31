@@ -41,7 +41,7 @@ class InnerVaR(MCAcquisitionFunction):
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
         """
-        super().__init__(model)
+        super().__init__(model.cuda())
         self.num_samples = w_samples.size(0)
         self.alpha = float(alpha)
         self.w_samples = w_samples
@@ -82,7 +82,7 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
-        z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
+        z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1).cuda()
 
         # if num_lookahead_ > 0, then update the model to get the refined sample-path
         if self.num_lookahead_repetitions > 0 and self.lookahead_samples is not None:
@@ -262,7 +262,7 @@ def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Ten
     :return:
     """
     x_point = x_point.reshape(1, 1, -1).repeat(1, w_samples.size(0), 1)
-    full_points = torch.cat((x_point, w_samples.unsqueeze(0)), dim=-1)
+    full_points = torch.cat((x_point, w_samples.unsqueeze(0)), dim=-1).cuda()
     post = model.posterior(full_points)
     mean = post.mean.reshape(-1)
     sigma = post.variance.pow(1/2).reshape(-1)

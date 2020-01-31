@@ -136,7 +136,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             transform=None,
             initial_value=noise_prior_mode,
         ),
-    )
+    ).cuda()
 
     best_x_list = []
     best_x_value_list = []
@@ -146,9 +146,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         beta = float(beta)
         iteration_start = time()
         # construct and fit the GP
-        gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
-        mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
-        fit_gpytorch_model(mll)
+        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood, outcome_transform=Standardize(m=1)).cuda()
+        mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+        fit_gpytorch_model(mll).cuda()
 
         # similar to seed below, for the lookahead fantasies if used
         lookahead_seed = int(torch.randint(100000, (1,)))
@@ -282,5 +282,5 @@ if __name__ == "__main__":
     k = 100
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=10,
-              expectation=False, verbose=True,
+              expectation=False, verbose=False,
               beta_c=1, beta_d=10, beta_max=0, continuous=False)

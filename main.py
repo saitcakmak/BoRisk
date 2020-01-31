@@ -7,6 +7,7 @@ import torch
 
 beta_list = [1, 0.5, 0.25, 0.1, 0.05, 0.025, 0.01]
 beta_d = 10
+output_file = "test_out"
 seed_list = torch.randint(10000, (10,))
 function_name = 'sinequad'
 dim_w = 1
@@ -23,4 +24,5 @@ for beta_c in beta_list:
                            num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
                            beta_c=beta_c, beta_d=beta_d)
         output_dict[beta_c][seed] = output
+torch.save(output_dict, "ucb_output/%s" % output_file)
 print("Successfully completed!")
