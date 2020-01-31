@@ -97,7 +97,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         last_iteration = -1
         full_data = dict()
         train_X = torch.rand((n, d))
-        train_Y = function(train_X)
+        train_Y = function(train_X, seed_list[-1])
 
     # samples used to get the current VaR value
     if dim_w == 1:
@@ -143,14 +143,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                           dim_x=dim_x,
                           q=q,
                           maxiter=maxiter,
-                          periods=20)
+                          periods=1000)  # essentially meaning don't use periods
 
     for i in range(last_iteration + 1, iterations):
         iteration_start = time()
         # construct and fit the GP
-        gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
-        mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
-        fit_gpytorch_model(mll)
+        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
+        mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+        fit_gpytorch_model(mll).cuda()
 
         # similar to seed below, for the lookahead fantasies if used
         lookahead_seed = int(torch.randint(100000, (1,)))
@@ -184,6 +184,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                            lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
 
             candidate, value = optimizer.optimize_VaRKG(var_kg)
+        candidate = candidate.cpu().detach()
+        value = value.cpu().detach()
 
         if verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -250,7 +252,7 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 20
+    k = 100
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
-              random_sampling=False, expectation=True, verbose=True)
+              random_sampling=False, expectation=True, verbose=False)

@@ -136,6 +136,8 @@ class Optimizer:
                                                  lower_bounds=self.inner_bounds[0],
                                                  upper_bounds=self.inner_bounds[1],
                                                  options={'maxiter': self.maxiter})
+        solutions = solutions.cpu().detach()
+        values = values.cpu().detach()
         self.add_inner_solutions(solutions.detach(), values.detach())
         best = torch.argmax(values.view(-1), dim=0)
         solution = solutions[best].detach()
@@ -197,7 +199,8 @@ class Optimizer:
         # add the resulting solutions to be used for next iteration. Normalizing in the end to get - VaR value
         self.add_inner_solutions(solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
                                  values.reshape(-1) - self.current_best)
-        values = torch.mean(values, dim=-1)
+        solutions = solutions.cpu().detach()
+        values = torch.mean(values, dim=-1).cpu().detach()
         best = torch.argmax(values)
         return solutions[best].detach(), values[best].detach()
 
@@ -265,7 +268,7 @@ class Optimizer:
             raise ValueError('Samples must be num_solutions x 1 x full_dim')
         with torch.no_grad():
             # Y is num_solutions x num_fantasies
-            Y = acqf(samples)
+            Y = acqf(samples.cuda())
         outer_values = torch.mean(Y, dim=-1)
         self.add_full_solutions(samples, Y)
         return outer_values
@@ -375,7 +378,7 @@ class Optimizer:
         :return: None
         """
         solutions = solutions.reshape(-1, self.dim_x)
-        values = values.reshape(-1)
+        values = values.reshape(-1).cpu()
         if self.inner_solutions is None:
             self.inner_solutions = solutions
             self.inner_values = values

@@ -70,18 +70,19 @@ class InnerVaR(MCAcquisitionFunction):
             X = X.reshape(*self.batch_shape, 1, self.dim_x)
         else:
             raise ValueError("InnerVaR supports only up to 2 dimensional batch models")
+        X = X.cuda()
         batch_shape = X.shape[0: -2]
 
         # Repeat w to get the appropriate batch shape, then concatenate with x to get the full solutions, uses CRN
         if self.w_samples.size() != (self.num_samples, self.dim_w):
             raise ValueError("w_samples must be of size num_samples x dim_w")
-        w = self.w_samples.repeat(*batch_shape, 1, 1)
+        w = self.w_samples.repeat(*batch_shape, 1, 1).cuda()
         # z is the full dimensional variable (x, w)
-        z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
+        z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1).cuda()
 
         # if num_lookahead_ > 0, then update the model to get the refined sample-path
         if self.num_lookahead_repetitions > 0 and self.lookahead_samples is not None:
-            lookahead_model = self._get_lookahead_model(X, batch_shape)
+            lookahead_model = self._get_lookahead_model(X, batch_shape).cuda()
             z = z.repeat(self.num_lookahead_repetitions, 1, 1, 1, 1)
             samples = lookahead_model.posterior(z).mean
             # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (5 dim)
@@ -216,7 +217,7 @@ class VaRKG(MCAcquisitionFunction):
             factor = num_lookahead_repetitions
         else:
             factor = 1
-        while self.mini_batch_size * num_fantasies * factor > 2000 and self.mini_batch_size > 1:
+        while self.mini_batch_size * num_fantasies * factor > 1000 and self.mini_batch_size > 1:
             self.mini_batch_size = int(self.mini_batch_size / 2)
 
     def forward(self, X: Tensor) -> Tensor:
@@ -229,7 +230,7 @@ class VaRKG(MCAcquisitionFunction):
         :return: value of VaR-KG at X (to be maximized) - size: batch size
         """
         # make sure X has proper shape
-        X = X.reshape(-1, 1, X.size(-1))
+        X = X.reshape(-1, 1, X.size(-1)).cuda()
         batch_size = X.size(0)
         # split the evaluation and fantasy solutions
         split_sizes = [self.q * self.dim, self.num_fantasies * self.dim_x]
@@ -274,7 +275,7 @@ class VaRKG(MCAcquisitionFunction):
                 right_index = (i + 1) * self.mini_batch_size
             # construct the fantasy model
             sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
-            fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler)
+            fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler).cuda()
 
             inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
