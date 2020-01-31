@@ -1,9 +1,6 @@
 """
 This is the main file to be run on the cluster.
-It will read the command line arguments and initiate the corresponding full loop.
-Example run:
-python main.py [function_name] [seed] [dim_w] [filename] [iterations] and optional [CVaR] [alpha]
-python main.py sinequad 0 1 test 10 0 0.7
+Current version will run a bunch of different settings of ucb for comparison later.
 """
 from ucb_loop import full_loop
 import torch
@@ -14,7 +11,7 @@ seed_list = torch.randint(10000, (10,))
 function_name = 'sinequad'
 dim_w = 1
 filename = ''
-iterations = 50
+iterations = 100
 num_restarts = 100
 CVaR = False
 alpha = 0.7

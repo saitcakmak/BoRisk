@@ -138,6 +138,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
+    best_x_list = []
+    best_x_value_list = []
+    candidate_list = []
     for i in range(last_iteration + 1, iterations):
         beta = beta_c * torch.log(torch.tensor([beta_d * (i+1) ** 2], dtype=torch.float))
         beta = float(beta)
@@ -155,15 +158,17 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                              lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
                              beta=beta, beta_max=beta_max)
 
-        candidate_x, candidate_value = optimize_acqf(acq_function=inner_VaR,
+        candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
                                                      bounds=inner_bounds,
                                                      q=q,  # TODO: q>1 not implemented
                                                      num_restarts=num_restarts,
                                                      raw_samples=num_restarts * raw_multiplier)
-        candidate_value = -candidate_value
+        candidate_x_value = -candidate_x_value
+        best_x_list.append(candidate_x.detach())
+        best_x_value_list.append(candidate_x_value.detach())
 
         if verbose:
-            print('candidate_x, value: %s, %s' % (candidate_x, candidate_value))
+            print('candidate_x, value: %s, %s' % (candidate_x, candidate_x_value))
 
         # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
         # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
@@ -171,18 +176,15 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         # IF using SAA approach, this should be specified to a fixed number.
         fantasy_seed = int(torch.randint(100000, (1,)))
 
-        # TODO: implement w selection
-        w_kg = w_KG(model=gp, x_point=candidate_x, w_samples=w_samples,
-                    num_fantasies=num_fantasies,
-                    alpha=alpha, dim_x=dim_x,
-                    fantasy_seed=fantasy_seed,
-                    num_lookahead_repetitions=num_lookahead_repetitions,
-                    lookahead_samples=lookahead_samples,
-                    lookahead_seed=lookahead_seed,
-                    CVaR=CVaR, expectation=expectation)
-
-        # TODO: need a new way of picking w! How about we take a beta confidence region around current VaR,
-        #       and select randomly from those that lie in that region?
+        # This has some un-explicable behavior. It keeps sampling the same point
+        # w_kg = w_KG(model=gp, x_point=candidate_x, w_samples=w_samples,
+        #             num_fantasies=num_fantasies,
+        #             alpha=alpha, dim_x=dim_x,
+        #             fantasy_seed=fantasy_seed,
+        #             num_lookahead_repetitions=num_lookahead_repetitions,
+        #             lookahead_samples=lookahead_samples,
+        #             lookahead_seed=lookahead_seed,
+        #             CVaR=CVaR, expectation=expectation)
         # if continuous:
         #     candidate_w, w_kg_value = optimize_acqf(acq_function=w_kg,
         #                                             bounds=w_bounds,
@@ -195,7 +197,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         #     best = torch.argmax(values)
         #     candidate_w = w_samples[best].reshape(-1, dim_w)
 
-        # TODO: this is the alternative based on confidence region random sampling
+        # This is the alternative based on confidence region random sampling
         candidate_w = pick_w_confidence(model=gp,
                                         beta=2,
                                         x_point=candidate_x,
@@ -204,6 +206,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                         CVaR=CVaR)
 
         candidate = torch.cat((candidate_x, candidate_w), dim=-1)
+        candidate_list.append(candidate.detach())
 
         if verbose:
             print("Candidate: ", candidate)
@@ -225,7 +228,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         candidate_point = candidate.reshape(q, d)
         if verbose and d == 2:
             plt.close('all')
-            plotter(gp, inner_VaR, candidate_x, candidate_value, candidate_point,
+            plotter(gp, inner_VaR, candidate_x, candidate_x_value, candidate_point,
                     w_samples, CVaR, alpha)
         observation = function(candidate_point, seed=seed_list[i])
         # update the model input data for refitting
@@ -236,7 +239,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # printing the data in case something goes wrong with file save
     # print('data: ', full_data)
 
-    return 0 # TODO: add some appropriate return that we can use to evaluate the output
+    output = {'best_x': best_x_list,
+              'best_x_value': best_x_value_list,
+              'candidate': candidate_list}
+    return output
 
 
 def function_picker(function_name: str) -> SyntheticTestFunction:
@@ -273,7 +279,7 @@ def function_picker(function_name: str) -> SyntheticTestFunction:
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 50
+    k = 100
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=10,
               expectation=False, verbose=True,
