@@ -77,36 +77,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     n = 2 * d + 2  # training samples
     dim_x = d - dim_w  # dimension of the x component
 
-    # If file already exists, we will do warm-starts, i.e. continue from where it was left.
-    # if beta > 0 and "beta" not in filename:
-    #     filename = filename + '_beta=%s' % beta
-    # if beta_max > 0 and "b_max" not in filename:
-    #     filename = filename + '_b_max=%s' % beta_max
-    # if CVaR and "cvar" not in filename:
-    #     filename = filename + '_cvar'
-    # if expectation and "exp" not in filename:
-    #     filename = filename + '_exp'
-    # if alpha != 0.7 and "a=" not in filename:
-    #     filename = filename + '_a=%s' % alpha
-    # if q > 1 and "q=" not in filename:
-    #     filename = filename + "_q=%d" % q
-
-    try:
-        full_data = torch.load("ucb_output/%s.pt" % filename)
-        last_iteration = max(full_data.keys())
-        last_data = full_data[last_iteration]
-        seed_list = last_data['seed_list']
-        train_X = last_data['train_X']
-        train_Y = last_data['train_Y']
-
-    except FileNotFoundError:
-        # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
-        torch.manual_seed(seed=seed)
-        seed_list = torch.randint(1000000, (1000,))
-        last_iteration = -1
-        full_data = dict()
-        train_X = torch.rand((n, d))
-        train_Y = function(train_X, seed=seed_list[-1])
+    # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
+    torch.manual_seed(seed=seed)
+    seed_list = torch.randint(1000000, (1000,))
+    last_iteration = -1
+    full_data = dict()
+    train_X = torch.rand((n, d))
+    train_Y = function(train_X, seed=seed_list[-1])
 
     # samples used to get the VaR value
     if dim_w == 1:
@@ -138,126 +115,137 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
-    current_best_list = []
-    current_best_value_list = []
-    best_x_value_list = []
-    candidate_list = []
-    for i in range(last_iteration + 1, iterations):
-        beta = beta_c * torch.log(torch.tensor([beta_d * (i + 1) ** 2], dtype=torch.float))
-        beta = float(beta)
-        iteration_start = time()
-        # TODO: need to handle chelosky being singular
-        # construct and fit the GP
+    current_best_list = torch.empty((iterations, q, dim_x))
+    current_best_value_list = torch.empty((iterations, q, 1))
+    best_x_value_list = torch.empty((iterations, q, 1))
+    candidate_list = torch.empty((iterations, q, d))
+
+    # construct and fit the GP
+    gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
+    mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+    fit_gpytorch_model(mll).cuda()
+
+    passed = False  # it is a flag for handling exceptions
+    i = last_iteration + 1
+
+    while i < iterations:
         try:
+            beta = beta_c * torch.log(torch.tensor([beta_d * (i + 1) ** 2], dtype=torch.float))
+            beta = float(beta)
+            iteration_start = time()
+
+            # similar to seed below, for the lookahead fantasies if used
+            lookahead_seed = int(torch.randint(100000, (1,)))
+
+            inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                                 num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                                 lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
+                                 beta=beta, beta_max=beta_max)
+
+            candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
+                                                           bounds=inner_bounds,
+                                                           q=q,  # TODO: q>1 not implemented
+                                                           num_restarts=num_restarts,
+                                                           raw_samples=num_restarts * raw_multiplier)
+            candidate_x_value = -candidate_x_value.detach().cpu()
+            best_x_value_list[i] = candidate_x_value
+
+            inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                                 num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                                 lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
+                                 beta=0, beta_max=0)
+
+            current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
+                                                             bounds=inner_bounds,
+                                                             q=q,  # TODO: q>1 not implemented
+                                                             num_restarts=num_restarts,
+                                                             raw_samples=num_restarts * raw_multiplier)
+            current_best_list[i] = current_best.detach()
+            current_best_value_list[i] = -current_best_value.detach().cpu()
+
+            if verbose:
+                print('candidate_x, value: %s, %s' % (candidate_x, candidate_x_value))
+
+            # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
+            # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
+            # it will be random across for loop iteration but uniform within the optimize_acqf iterations.
+            # IF using SAA approach, this should be specified to a fixed number.
+            fantasy_seed = int(torch.randint(100000, (1,)))
+
+            # This has some un-explicable behavior. It keeps sampling the same point
+            # w_kg = w_KG(model=gp, x_point=candidate_x, w_samples=w_samples,
+            #             num_fantasies=num_fantasies,
+            #             alpha=alpha, dim_x=dim_x,
+            #             fantasy_seed=fantasy_seed,
+            #             num_lookahead_repetitions=num_lookahead_repetitions,
+            #             lookahead_samples=lookahead_samples,
+            #             lookahead_seed=lookahead_seed,
+            #             CVaR=CVaR, expectation=expectation)
+            # if continuous:
+            #     candidate_w, w_kg_value = optimize_acqf(acq_function=w_kg,
+            #                                             bounds=w_bounds,
+            #                                             q=q,  # TODO: q>1 not valid
+            #                                             num_restarts=num_restarts,
+            #                                             raw_samples=num_restarts * raw_multiplier,
+            #                                             options={'maxiter': maxiter})
+            # else:
+            #     values = w_kg(w_samples.view((-1, 1, dim_w)))
+            #     best = torch.argmax(values)
+            #     candidate_w = w_samples[best].reshape(-1, dim_w)
+
+            # This is the alternative based on confidence region random sampling
+            candidate_w = pick_w_confidence(model=gp,
+                                            beta=2,
+                                            x_point=candidate_x,
+                                            w_samples=w_samples,
+                                            alpha=alpha,
+                                            CVaR=CVaR)
+
+            candidate = torch.cat((candidate_x, candidate_w), dim=-1).detach().cpu()
+            candidate_list[i] = candidate
+
+            if verbose:
+                print("Candidate: ", candidate)
+            #
+            # data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
+            #         'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
+            #         'candidate': candidate, 'kg_value': value.detach(),
+            #         'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
+            #         'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
+            #         'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
+            #         'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
+            #         'seed_list': seed_list}
+            # full_data[i] = data
+            # torch.save(full_data, 'new_output/%s.pt' % filename)
+            #
+            iteration_end = time()
+            print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
+
+            candidate_point = candidate.reshape(q, d)
+            if verbose and d == 2:
+                plt.close('all')
+                plotter(gp, inner_VaR, candidate_x, candidate_x_value, candidate_point,
+                        w_samples, CVaR, alpha)
+            observation = function(candidate_point, seed=seed_list[i])
+            # update the model input data for refitting
+            train_X = torch.cat((train_X, candidate_point), dim=0)
+            train_Y = torch.cat((train_Y, observation), dim=0)
+            passed = True
+
+            # construct and fit the GP
             gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
             mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
             fit_gpytorch_model(mll).cuda()
         except RuntimeError as err:
             print("Runtime error %s" % err)
-            print('Attempting to redraw the sample to get around it. Seed changed for sampling.')
-            observation = function(candidate_point, seed=seed_list[i+1000])
-            train_Y[-q:] = observation
-            gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
-            mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
-            fit_gpytorch_model(mll).cuda()
-            print('Successfully handled the error!')
-
-        # similar to seed below, for the lookahead fantasies if used
-        lookahead_seed = int(torch.randint(100000, (1,)))
-
-        inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                             num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                             lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
-                             beta=beta, beta_max=beta_max)
-
-        candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
-                                                       bounds=inner_bounds,
-                                                       q=q,  # TODO: q>1 not implemented
-                                                       num_restarts=num_restarts,
-                                                       raw_samples=num_restarts * raw_multiplier)
-        candidate_x_value = -candidate_x_value.detach().cpu()
-        best_x_value_list.append(candidate_x_value)
-
-        inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                             num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                             lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
-                             beta=0, beta_max=0)
-
-        current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
-                                                         bounds=inner_bounds,
-                                                         q=q,  # TODO: q>1 not implemented
-                                                         num_restarts=num_restarts,
-                                                         raw_samples=num_restarts * raw_multiplier)
-        current_best_list.append(current_best.detach())
-        current_best_value_list.append(-current_best_value.detach().cpu())
-
-        if verbose:
-            print('candidate_x, value: %s, %s' % (candidate_x, candidate_x_value))
-
-        # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
-        # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
-        # it will be random across for loop iteration but uniform within the optimize_acqf iterations.
-        # IF using SAA approach, this should be specified to a fixed number.
-        fantasy_seed = int(torch.randint(100000, (1,)))
-
-        # This has some un-explicable behavior. It keeps sampling the same point
-        # w_kg = w_KG(model=gp, x_point=candidate_x, w_samples=w_samples,
-        #             num_fantasies=num_fantasies,
-        #             alpha=alpha, dim_x=dim_x,
-        #             fantasy_seed=fantasy_seed,
-        #             num_lookahead_repetitions=num_lookahead_repetitions,
-        #             lookahead_samples=lookahead_samples,
-        #             lookahead_seed=lookahead_seed,
-        #             CVaR=CVaR, expectation=expectation)
-        # if continuous:
-        #     candidate_w, w_kg_value = optimize_acqf(acq_function=w_kg,
-        #                                             bounds=w_bounds,
-        #                                             q=q,  # TODO: q>1 not valid
-        #                                             num_restarts=num_restarts,
-        #                                             raw_samples=num_restarts * raw_multiplier,
-        #                                             options={'maxiter': maxiter})
-        # else:
-        #     values = w_kg(w_samples.view((-1, 1, dim_w)))
-        #     best = torch.argmax(values)
-        #     candidate_w = w_samples[best].reshape(-1, dim_w)
-
-        # This is the alternative based on confidence region random sampling
-        candidate_w = pick_w_confidence(model=gp,
-                                        beta=2,
-                                        x_point=candidate_x,
-                                        w_samples=w_samples,
-                                        alpha=alpha,
-                                        CVaR=CVaR)
-
-        candidate = torch.cat((candidate_x, candidate_w), dim=-1)
-        candidate_list.append(candidate.detach())
-
-        if verbose:
-            print("Candidate: ", candidate)
-        #
-        # data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
-        #         'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
-        #         'candidate': candidate, 'kg_value': value.detach(),
-        #         'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
-        #         'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
-        #         'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
-        #         'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
-        #         'seed_list': seed_list}
-        # full_data[i] = data
-        # torch.save(full_data, 'new_output/%s.pt' % filename)
-        #
-        iteration_end = time()
-        print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
-
-        candidate_point = candidate.reshape(q, d)
-        if verbose and d == 2:
-            plt.close('all')
-            plotter(gp, inner_VaR, candidate_x, candidate_x_value, candidate_point,
-                    w_samples, CVaR, alpha)
-        observation = function(candidate_point, seed=seed_list[i])
-        # update the model input data for refitting
-        train_X = torch.cat((train_X, candidate_point), dim=0)
-        train_Y = torch.cat((train_Y, observation), dim=0)
+            print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
+            seed_list[i] = seed_list[i+1000]
+            if passed:
+                train_X = train_X[:-q]
+                train_Y = train_Y[:-q]
+        else:
+            i = i+1
+        passed = False
 
     print("total time: ", time() - start)
     # printing the data in case something goes wrong with file save
