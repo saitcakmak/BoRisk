@@ -167,7 +167,7 @@ class Optimizer:
         num_periods = ceil(self.maxiter / self.periods)
         solutions = None
         values = None
-        options = {'maxiter': self.periods}
+        options = {'maxiter': min(self.periods, self.maxiter)}
         for i in range(num_periods):
             if i == 0:
                 initial_conditions = self.generate_initial_conditions(acqf, raw_samples, raw_values, permuted_samples)
