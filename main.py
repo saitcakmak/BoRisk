@@ -5,7 +5,7 @@ Current version will run a bunch of different settings of ucb for comparison lat
 from ucb_loop import full_loop
 import torch
 
-beta_list = [1, 0.5, 0.25, 0.1, 0.05, 0.025, 0.01, 0.005, 0.0025, 0.001, 0.0005, 0.00025, 0.0001]
+beta_list = [10, 8, 5, 3, 2, 1, 0.75, 0.5, 0.25, 0.1]
 beta_d = 10
 output_file = "branin_with_beta_d=%d" % beta_d
 torch.manual_seed(0)  # to ensure the produced seed are same!
