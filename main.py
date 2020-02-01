@@ -9,7 +9,7 @@ beta_list = [10, 8, 5, 3, 2, 1, 0.75, 0.5, 0.25, 0.1]
 beta_d = 10
 output_file = "branin_with_beta_d=%d" % beta_d
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (10,))
+seed_list = torch.randint(10000, (5,))
 function_name = 'branin'
 dim_w = 1
 filename = ''
@@ -29,11 +29,12 @@ for beta_c in beta_list:
     if beta_c not in output_dict.keys():
         output_dict[beta_c] = dict()
     for seed in seed_list:
-        if seed in output_dict[beta_c].keys():
+        if seed in list(output_dict[beta_c].keys()):
             continue
         output = full_loop(function_name, int(seed), dim_w, filename, iterations,
                            num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
                            beta_c=beta_c, beta_d=beta_d)
         output_dict[beta_c][seed] = output
-    torch.save(output_dict, output_path)
+        print("beta_c %s, seed %s completed" % (beta_c, seed))
+        torch.save(output_dict, output_path)
 print("Successfully completed!")
