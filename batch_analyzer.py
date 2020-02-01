@@ -17,7 +17,7 @@ alpha = 0.7
 function = function_picker(function_name)
 dim = function.dim
 dim_x = dim - dim_w
-num_x = 1000
+num_x = 10000
 num_w = 100
 
 if dim_w == 1:
@@ -55,12 +55,27 @@ for j in range(len(keys)):
     output[j] = torch.mean(rep_out[actual_indices], dim=0)
 
 gap = output - best_value
+log_gap = torch.log10(gap)
 
+if function_name == 'sinequad':
+    ub = 2
+else:
+    ub = 10
 
 for i in range(len(keys)):
+    plt.title(function_name + 'gap')
     plt.figure(int(i/4))
     key = keys[i]
     plt.plot(gap[i], label=key)
-    plt.ylim(0, 10)
+    plt.ylim(0, ub)
     plt.legend()
+
+for i in range(len(keys)):
+    plt.title(function_name + 'log_gap')
+    plt.figure(100+int(i/4))
+    key = keys[i]
+    plt.plot(log_gap[i], label=key)
+    plt.ylim(-3, 3)
+    plt.legend()
+
 plt.show()
