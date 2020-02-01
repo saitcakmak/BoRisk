@@ -7,9 +7,9 @@ from value_plotter import generate_values
 from ucb_loop import function_picker
 
 
-filename = 'branin_with_beta_d=10'
+filename = 'test_with_beta_d=10'
 directory = "ucb_output/"
-function_name = 'branin'
+function_name = 'sinequad'
 dim_w = 1
 iterations = 100
 CVaR = False
@@ -17,7 +17,7 @@ alpha = 0.7
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
-num_x = 10000
+num_x = 100000
 num_w = 100
 
 if dim_w == 1:
@@ -75,7 +75,7 @@ for i in range(len(keys)):
     plt.figure(100+int(i/4))
     key = keys[i]
     plt.plot(log_gap[i], label=key)
-    plt.ylim(-3, 3)
+    plt.ylim(-5, 3)
     plt.legend()
 
 plt.show()
