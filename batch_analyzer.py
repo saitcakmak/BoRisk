@@ -14,7 +14,7 @@ dim_w = 1
 iterations = 100
 CVaR = False
 alpha = 0.7
-function = function_picker(function_name)
+function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
 num_x = 10000
