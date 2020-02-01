@@ -67,7 +67,7 @@ for j in range(len(seed)):
     dim = data[0]['train_X'].size(-1)
     dim_x = dim - dim_w
 
-    function = function_picker(problem_name)
+    function = function_picker(problem_name, 0)
     best_solutions = torch.empty((iterations, dim_x))
 
     for i in range(iterations):

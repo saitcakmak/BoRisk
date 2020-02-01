@@ -216,16 +216,16 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     # print('data: ', full_data)
 
 
-def function_picker(function_name: str) -> SyntheticTestFunction:
+def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTestFunction:
     """
     Returns the appropriate function callable
     If adding new BoTorch test functions, run them through StandardizedFunction.
     StandardizedFunction and all others listed here allow for a seed to be specified.
     If adding something else, make sure the forward (or __call__) takes a seed argument.
     :param function_name: Function to be used
+    :param noise_std: observation noise level
     :return: Function callable
     """
-    noise_std = 0.1  # observation noise level
     if function_name == 'simplequad':
         function = StandardizedFunction(SimpleQuadratic(noise_std=noise_std))
     elif function_name == 'sinequad':
