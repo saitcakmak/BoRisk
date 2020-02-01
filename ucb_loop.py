@@ -79,7 +79,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
     torch.manual_seed(seed=seed)
-    seed_list = torch.randint(1000000, (2000,))
+    seed_list = torch.randint(1000000, (1000,))
     last_iteration = -1
     full_data = dict()
     train_X = torch.rand((n, d))
@@ -126,6 +126,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     fit_gpytorch_model(mll).cuda()
 
     passed = False  # it is a flag for handling exceptions
+    handling_count = 0  # same
     i = last_iteration + 1
 
     while i < iterations:
@@ -239,12 +240,36 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         except RuntimeError as err:
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
-            seed_list[i] = seed_list[i+1000]
+            handling_count += 1
             if passed:
+                seed_list[i] = torch.randint(100000, (1,))
                 train_X = train_X[:-q]
                 train_Y = train_Y[:-q]
+                if handling_count > 3:
+                    try:
+                        rand_X = torch.randn((q, d)) * 0.01
+                        candidate_point = candidate_point + rand_X
+                        observation = function(candidate_point, seed=seed_list[i])
+                        train_X = torch.cat((train_X, candidate_point), dim=0)
+                        train_Y = torch.cat((train_Y, observation), dim=0)
+                        # construct and fit the GP
+                        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(),
+                                          outcome_transform=Standardize(m=1)).cuda()
+                        mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+                        fit_gpytorch_model(mll).cuda()
+                    except RuntimeError:
+                        print("Got another error while handling!")
+                        if handling_count > 5:
+                            print("Too many tries, returning None!")
+                            return None
+                    else:
+                        i = i + 1
+                        passed = False
+            elif handling_count > 5:
+                print("Too many tries, returning None!")
+                return None
         else:
-            i = i+1
+            i = i + 1
         passed = False
 
     print("total time: ", time() - start)
