@@ -23,7 +23,7 @@ class InnerVaR(MCAcquisitionFunction):
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
                  lookahead_seed: Optional[int] = None,
-                 CVaR: bool = False):
+                 CVaR: bool = False, expectation: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -36,6 +36,7 @@ class InnerVaR(MCAcquisitionFunction):
         :param lookahead_seed: The seed to generate lookahead fantasies with, see VaRKG for more explanation.
                                     if specified, the calls to forward of the object will share the same seed
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
+        :param expectation: If true, this is BQO.
         """
         super().__init__(model)
         self.num_samples = w_samples.size(0)
@@ -47,6 +48,9 @@ class InnerVaR(MCAcquisitionFunction):
         self.dim_w = w_samples.size(-1)
         self.batch_shape = model._input_batch_shape
         self.CVaR = CVaR
+        self.expectation = expectation
+        if CVaR and expectation:
+            raise ValueError("CVaR and expectation can't be true at the same time!")
         self.lookahead_seed = lookahead_seed
 
     def forward(self, X: Tensor) -> Tensor:
@@ -86,6 +90,8 @@ class InnerVaR(MCAcquisitionFunction):
             samples, _ = torch.sort(samples, dim=-2)
             if self.CVaR:
                 values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2, keepdim=True)
+            elif self.expectation:
+                values = torch.mean(samples, dim=-2, keepdim=True)
             else:
                 values = samples[..., int(self.num_samples * self.alpha), :]
 
@@ -100,6 +106,8 @@ class InnerVaR(MCAcquisitionFunction):
             samples, _ = torch.sort(samples, dim=-2)
             if self.CVaR:
                 values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2, keepdim=True)
+            elif self.expectation:
+                values = torch.mean(samples, dim=-2, keepdim=True)
             else:
                 values = samples[..., int(self.num_samples * self.alpha), :]
             # return negative so that the optimization minimizes the function
@@ -139,7 +147,7 @@ class VaRKG(MCAcquisitionFunction):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None, lookahead_seed: Optional[int] = None,
-                 CVaR: bool = False):
+                 CVaR: bool = False, expectation: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
@@ -165,6 +173,7 @@ class VaRKG(MCAcquisitionFunction):
                                 if not specified, every call to forward will specify a new one to be used across
                                 solutions being evaluated.
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
+        :param expectation: If true, this is BQO.
         """
         super().__init__(model)
         self.num_samples = num_samples
@@ -179,6 +188,9 @@ class VaRKG(MCAcquisitionFunction):
         self.dim_w = dim - dim_x
         self.q = q
         self.CVaR = CVaR
+        self.expectation = expectation
+        if CVaR and expectation:
+            raise ValueError("CVaR and expectation can't be true at the same time!")
         self.fantasy_seed = fantasy_seed
         self.lookahead_seed = lookahead_seed
 
@@ -269,7 +281,7 @@ class VaRKG(MCAcquisitionFunction):
                                  num_lookahead_repetitions=self.num_lookahead_repetitions,
                                  lookahead_samples=self.lookahead_samples,
                                  lookahead_seed=lookahead_seed,
-                                 CVaR=self.CVaR)
+                                 CVaR=self.CVaR, expectation=self.expectation)
             # sample and return
             with settings.propagate_grads(True):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
