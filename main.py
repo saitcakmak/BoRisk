@@ -5,9 +5,9 @@ Current version will run a bunch of different settings of ucb for comparison lat
 from ucb_loop import full_loop
 import torch
 
-beta_list = [10, 8, 5, 3, 2, 1, 0.75, 0.5, 0.25, 0.1]
+beta_list = [0.1, 0.25, 0.5, 0.75, 1.0, 1.5, 2.0]
 beta_d = 10
-output_file = "branin_with_beta_d=%d" % beta_d
+output_file = "sinequad_with_beta_d=%d" % beta_d
 torch.manual_seed(0)  # to ensure the produced seed are same!
 seed_list = torch.randint(10000, (5,))
 function_name = 'branin'
