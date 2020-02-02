@@ -41,7 +41,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               alpha: float = 0.7, q: int = 1,
               num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False, random_sampling: bool = False, expectation: bool = False):
+              CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
+              cuda: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -62,6 +63,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
     :param random_sampling: If true, we will use random sampling to generate samples - no KG.
     :param expectation: If true, we are running BQO optimization.
+    :param cuda: True if using GPUs
     :return: None - saves the output.
     """
 
@@ -143,75 +145,155 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                           dim_x=dim_x,
                           q=q,
                           maxiter=maxiter,
-                          periods=1000)  # essentially meaning don't use periods
+                          periods=1000  # essentially meaning don't use periods
+                          )
 
-    for i in range(last_iteration + 1, iterations):
-        iteration_start = time()
-        # construct and fit the GP
+    # construct and fit the GP
+    if cuda:
         gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
         fit_gpytorch_model(mll).cuda()
+    else:
+        gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
+        mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+        fit_gpytorch_model(mll)
 
-        # similar to seed below, for the lookahead fantasies if used
-        lookahead_seed = int(torch.randint(100000, (1,)))
+    passed = False  # it is a flag for handling exceptions
+    handling_count = 0  # same
+    i = last_iteration + 1
 
-        optimizer.new_iteration()
+    while i < iterations:
+        try:
+            iteration_start = time()
 
-        inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                             num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                             lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
+            # similar to seed below, for the lookahead fantasies if used
+            lookahead_seed = int(torch.randint(100000, (1,)))
 
-        current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
+            optimizer.new_iteration()
 
-        if verbose:
-            print("Current best solution, value: ", current_best_sol, current_best_value)
+            # TODO: cuda
+            inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                                 num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                                 lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
 
-        # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
-        # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
-        # it will be random across for loop iteration but uniform within the optimize_acqf iterations.
-        # IF using SAA approach, this should be specified to a fixed number.
-        fantasy_seed = int(torch.randint(100000, (1,)))
+            current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
 
-        if random_sampling:
-            candidate = torch.rand((1, q * d))
-            value = torch.tensor([0])
+            if verbose:
+                print("Current best solution, value: ", current_best_sol, current_best_value)
+
+            # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
+            # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
+            # it will be random across for loop iteration but uniform within the optimize_acqf iterations.
+            # IF using SAA approach, this should be specified to a fixed number.
+            fantasy_seed = int(torch.randint(100000, (1,)))
+
+            if random_sampling:
+                candidate = torch.rand((1, q * d))
+                value = torch.tensor([0])
+            else:
+                # TODO: cuda
+                var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                               current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
+                               dim=d, dim_x=dim_x, q=q,
+                               fix_samples=fix_samples, fixed_samples=fixed_samples,
+                               num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                               lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
+
+                # TODO: handle optimizer returns
+                candidate, value = optimizer.optimize_VaRKG(var_kg)
+            candidate = candidate.cpu().detach()
+            value = value.cpu().detach()
+
+            if verbose:
+                print("Candidate: ", candidate, " KG value: ", value)
+
+            data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
+                    'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
+                    'candidate': candidate, 'kg_value': value.detach(),
+                    'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
+                    'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
+                    'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
+                    'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
+                    'seed_list': seed_list}
+            full_data[i] = data
+            torch.save(full_data, 'new_output/%s.pt' % filename)
+
+            iteration_end = time()
+            print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
+
+            candidate_point = candidate[:, 0:q * d].reshape(q, d)
+            if verbose and d == 2:
+                plt.close('all')
+                plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
+            observation = function(candidate_point, seed=seed_list[i])
+            # update the model input data for refitting
+            train_X = torch.cat((train_X, candidate_point), dim=0)
+            train_Y = torch.cat((train_Y, observation), dim=0)
+            passed = True
+
+            # construct and fit the GP
+            if cuda:
+                gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(),
+                                  outcome_transform=Standardize(m=1)).cuda()
+                mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+                fit_gpytorch_model(mll).cuda()
+            else:
+                gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
+                mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+                fit_gpytorch_model(mll)
+
+            # dummy computation to be safe with gp fit
+            if cuda:
+                dummy = torch.rand((1, q, d)).cuda()
+            else:
+                dummy = torch.rand((1, q, d))
+            _ = gp.posterior(dummy).mean
+
+        except RuntimeError as err:
+            print("Runtime error %s" % err)
+            print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
+            handling_count += 1
+            if passed:
+                seed_list[i] = torch.randint(100000, (1,))
+                train_X = train_X[:-q]
+                train_Y = train_Y[:-q]
+                if handling_count > 3:
+                    try:
+                        rand_X = torch.randn((q, d)) * 0.05
+                        candidate_point = candidate_point + rand_X
+                        observation = function(candidate_point, seed=seed_list[i])
+                        train_X = torch.cat((train_X, candidate_point), dim=0)
+                        train_Y = torch.cat((train_Y, observation), dim=0)
+                        # construct and fit the GP
+                        if cuda:
+                            gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(),
+                                              outcome_transform=Standardize(m=1)).cuda()
+                            mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+                            fit_gpytorch_model(mll).cuda()
+                        else:
+                            gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
+                            mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+                            fit_gpytorch_model(mll)
+                        # dummy computation to be safe with gp fit
+                        if cuda:
+                            dummy = torch.rand((1, q, d)).cuda()
+                        else:
+                            dummy = torch.rand((1, q, d))
+                        _ = gp.posterior(dummy).mean
+                    except RuntimeError:
+                        print("Got another error while handling!")
+                        if handling_count > 5:
+                            print("Too many tries, returning None!")
+                            return None
+                    else:
+                        i = i + 1
+                        passed = False
+            elif handling_count > 5:
+                print("Too many tries, returning None!")
+                return None
         else:
-            var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                           current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                           dim=d, dim_x=dim_x, q=q,
-                           fix_samples=fix_samples, fixed_samples=fixed_samples,
-                           num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                           lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
-
-            candidate, value = optimizer.optimize_VaRKG(var_kg)
-        candidate = candidate.cpu().detach()
-        value = value.cpu().detach()
-
-        if verbose:
-            print("Candidate: ", candidate, " KG value: ", value)
-
-        data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
-                'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
-                'candidate': candidate, 'kg_value': value.detach(),
-                'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
-                'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
-                'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
-                'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
-                'seed_list': seed_list}
-        full_data[i] = data
-        torch.save(full_data, 'new_output/%s.pt' % filename)
-
-        iteration_end = time()
-        print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
-
-        candidate_point = candidate[:, 0:q * d].reshape(q, d)
-        if verbose and d == 2:
-            plt.close('all')
-            plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
-        observation = function(candidate_point, seed=seed_list[i])
-        # update the model input data for refitting
-        train_X = torch.cat((train_X, candidate_point), dim=0)
-        train_Y = torch.cat((train_Y, observation), dim=0)
+            i = i + 1
+        passed = False
 
     print("total time: ", time() - start)
     # printing the data in case something goes wrong with file save
@@ -255,4 +337,4 @@ if __name__ == "__main__":
     k = 100
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
-              random_sampling=False, expectation=True, verbose=False)
+              random_sampling=False, expectation=False, verbose=False, cuda=False)

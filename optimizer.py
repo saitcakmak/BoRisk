@@ -268,7 +268,7 @@ class Optimizer:
             raise ValueError('Samples must be num_solutions x 1 x full_dim')
         with torch.no_grad():
             # Y is num_solutions x num_fantasies
-            Y = acqf(samples.cuda())
+            Y = acqf(samples)
         outer_values = torch.mean(Y, dim=-1)
         self.add_full_solutions(samples, Y)
         return outer_values
