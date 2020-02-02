@@ -43,7 +43,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, expectation: bool = False,
-              beta_c: float = 0, beta_d: float = 0, beta_max: float = 0, continuous: bool = False):
+              beta_c: float = 0, beta_d: float = 0, beta_max: float = 0, continuous: bool = False,
+              cuda: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -68,7 +69,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param beta_max:
     :param continuous: If true, then w is optimized in a continuous manner, otherwise
                         picked from w_samples.
-    :return: None - saves the output.
+    :param cuda: True if using GPUs
+    :return:
     """
 
     # Initialize the test function
@@ -121,9 +123,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     candidate_list = torch.empty((iterations, q, d))
 
     # construct and fit the GP
-    gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
-    mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
-    fit_gpytorch_model(mll).cuda()
+    if cuda:
+        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
+        mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+        fit_gpytorch_model(mll).cuda()
+    else:
+        gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
+        mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+        fit_gpytorch_model(mll)
 
     passed = False  # it is a flag for handling exceptions
     handling_count = 0  # same
@@ -141,7 +148,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                                  num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                                  lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
-                                 beta=beta, beta_max=beta_max)
+                                 beta=beta, beta_max=beta_max, cuda=cuda)
 
             candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
                                                            bounds=inner_bounds,
@@ -154,7 +161,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                                  num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
                                  lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation,
-                                 beta=0, beta_max=0)
+                                 beta=0, beta_max=0, cuda=cuda)
 
             current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
                                                              bounds=inner_bounds,
@@ -200,7 +207,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                             x_point=candidate_x,
                                             w_samples=w_samples,
                                             alpha=alpha,
-                                            CVaR=CVaR)
+                                            CVaR=CVaR,
+                                            cuda=cuda)
 
             candidate = torch.cat((candidate_x, candidate_w), dim=-1).detach().cpu()
             candidate_list[i] = candidate
@@ -234,9 +242,15 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             passed = True
 
             # construct and fit the GP
-            gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
-            mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
-            fit_gpytorch_model(mll).cuda()
+            if cuda:
+                gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(),
+                                  outcome_transform=Standardize(m=1)).cuda()
+                mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+                fit_gpytorch_model(mll).cuda()
+            else:
+                gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
+                mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+                fit_gpytorch_model(mll)
         except RuntimeError as err:
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
@@ -253,10 +267,15 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                         train_X = torch.cat((train_X, candidate_point), dim=0)
                         train_Y = torch.cat((train_Y, observation), dim=0)
                         # construct and fit the GP
-                        gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(),
-                                          outcome_transform=Standardize(m=1)).cuda()
-                        mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
-                        fit_gpytorch_model(mll).cuda()
+                        if cuda:
+                            gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(),
+                                              outcome_transform=Standardize(m=1)).cuda()
+                            mll = ExactMarginalLogLikelihood(gp.likelihood, gp).cuda()
+                            fit_gpytorch_model(mll).cuda()
+                        else:
+                            gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=1))
+                            mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
+                            fit_gpytorch_model(mll)
                     except RuntimeError:
                         print("Got another error while handling!")
                         if handling_count > 5:
@@ -321,4 +340,5 @@ if __name__ == "__main__":
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=10,
               expectation=False, verbose=False,
-              beta_c=1, beta_d=10, beta_max=0, continuous=False)
+              beta_c=1, beta_d=10, beta_max=0, continuous=False,
+              cuda=False)

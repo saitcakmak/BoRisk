@@ -24,7 +24,8 @@ class InnerVaR(MCAcquisitionFunction):
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
                  lookahead_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False):
+                 CVaR: bool = False, expectation: bool = False,
+                 cuda: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -40,8 +41,9 @@ class InnerVaR(MCAcquisitionFunction):
                                     if specified, the calls to forward of the object will share the same seed
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
+        :param cuda: True if using GPUs
         """
-        super().__init__(model.cuda())
+        super().__init__(model)
         self.num_samples = w_samples.size(0)
         self.alpha = float(alpha)
         self.w_samples = w_samples
@@ -57,6 +59,7 @@ class InnerVaR(MCAcquisitionFunction):
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.lookahead_seed = lookahead_seed
+        self.cuda = cuda
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -82,7 +85,10 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
-        z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1).cuda()
+        if self.cuda:
+            z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1).cuda()
+        else:
+            z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
 
         # if num_lookahead_ > 0, then update the model to get the refined sample-path
         if self.num_lookahead_repetitions > 0 and self.lookahead_samples is not None:
@@ -111,7 +117,6 @@ class InnerVaR(MCAcquisitionFunction):
             return -torch.mean(values, dim=0).squeeze()
         else:
             # get the posterior mean
-            # TODO: this also happens to get chelosky issues sometimes
             post = self.model.posterior(z)
             samples = post.mean
 
@@ -165,7 +170,8 @@ class w_KG(MCAcquisitionFunction):
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
                  lookahead_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False):
+                 CVaR: bool = False, expectation: bool = False,
+                 cuda: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -184,6 +190,7 @@ class w_KG(MCAcquisitionFunction):
                                     if specified, the calls to forward of the object will share the same seed
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
+        :param cuda: True if using GPUs
         """
 
         super().__init__(model)
@@ -205,6 +212,7 @@ class w_KG(MCAcquisitionFunction):
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.lookahead_seed = lookahead_seed
+        self.cuda = cuda
 
     def forward(self, X: Tensor) -> Tensor:
         """
@@ -227,11 +235,18 @@ class w_KG(MCAcquisitionFunction):
         else:
             lookahead_seed = self.lookahead_seed
 
-        z = torch.cat((self.x_point.expand_as(X), X), dim=-1)
+        if self.cuda:
+            z = torch.cat((self.x_point.expand_as(X), X), dim=-1).cuda()
+        else:
+            z = torch.cat((self.x_point.expand_as(X), X), dim=-1)
 
         # construct the fantasy model
-        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
-        fantasy_model = self.model.fantasize(z, sampler)
+        if self.cuda:
+            sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed).cuda()
+            fantasy_model = self.model.fantasize(z, sampler).cuda()
+        else:
+            sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
+            fantasy_model = self.model.fantasize(z, sampler)
 
         inner_VaR = InnerVaR(model=fantasy_model, w_samples=self.w_samples,
                              alpha=self.alpha, dim_x=self.dim_x,
@@ -250,7 +265,8 @@ class w_KG(MCAcquisitionFunction):
         return values.squeeze()
 
 
-def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Tensor, alpha, CVaR):
+def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Tensor,
+                      alpha: float, CVaR: bool, cuda: bool):
     """
     Picks w randomly from a confidence region around the current VaR value.
     If CVaR, the confidence region is only bounded on the lower side.
@@ -260,10 +276,14 @@ def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Ten
     :param w_samples: num_w x dim_w
     :param alpha: risk level alpha
     :param CVaR: True if CVaR
+    :param cuda: True if using GPUs
     :return:
     """
     x_point = x_point.reshape(1, 1, -1).repeat(1, w_samples.size(0), 1)
-    full_points = torch.cat((x_point, w_samples.unsqueeze(0)), dim=-1).cuda()
+    if cuda:
+        full_points = torch.cat((x_point, w_samples.unsqueeze(0)), dim=-1).cuda()
+    else:
+        full_points = torch.cat((x_point, w_samples.unsqueeze(0)), dim=-1)
     post = model.posterior(full_points)
     mean = post.mean.reshape(-1)
     sigma = post.variance.pow(1/2).reshape(-1)
