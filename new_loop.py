@@ -42,7 +42,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
-              cuda: bool = False):
+              cuda: bool = False, reporting_la_samples: Tensor = None, reporting_la_rep: int = 0):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -64,6 +64,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param random_sampling: If true, we will use random sampling to generate samples - no KG.
     :param expectation: If true, we are running BQO optimization.
     :param cuda: True if using GPUs
+    :param reporting_la_samples: lookahead samples for reporting of the best
+    :param reporting_la_rep: lookahead replications for reporting of the best
     :return: None - saves the output.
     """
 
@@ -171,9 +173,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
             optimizer.new_iteration()
 
+            # seed for lookahead fantasies used for reporting.
+            reporting_la_seed = int(torch.randint(100000, (1,)))
+
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                                 num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                                 lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                 num_lookahead_repetitions=reporting_la_rep,
+                                 lookahead_samples=reporting_la_samples,
+                                 lookahead_seed=reporting_la_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
             current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
 
@@ -199,6 +205,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
                 candidate, value = optimizer.optimize_VaRKG(var_kg)
             candidate = candidate.cpu().detach()
+            # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
             value = value.cpu().detach()
 
             if verbose:
