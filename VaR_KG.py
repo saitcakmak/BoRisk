@@ -23,7 +23,8 @@ class InnerVaR(MCAcquisitionFunction):
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
                  lookahead_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False):
+                 CVaR: bool = False, expectation: bool = False,
+                 cuda: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -37,6 +38,7 @@ class InnerVaR(MCAcquisitionFunction):
                                     if specified, the calls to forward of the object will share the same seed
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
+        :param cuda: True if using GPUs
         """
         super().__init__(model)
         self.num_samples = w_samples.size(0)
@@ -52,6 +54,7 @@ class InnerVaR(MCAcquisitionFunction):
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.lookahead_seed = lookahead_seed
+        self.cuda = cuda
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -77,7 +80,10 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
-        z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
+        if self.cuda:
+            z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1).cuda()
+        else:
+            z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
 
         # if num_lookahead_ > 0, then update the model to get the refined sample-path
         if self.num_lookahead_repetitions > 0 and self.lookahead_samples is not None:
@@ -126,7 +132,10 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("lookahead_samples must be of size num_lookahead_samples x dim_w")
         w = self.lookahead_samples.repeat(*batch_shape, 1, 1)
         # merge with X to generate full dimensional points
-        lookahead_points = torch.cat((X.repeat(1, 1, self.lookahead_samples.size(0), 1), w), -1)
+        if self.cuda:
+            lookahead_points = torch.cat((X.repeat(1, 1, self.lookahead_samples.size(0), 1), w), -1).cuda()
+        else:
+            lookahead_points = torch.cat((X.repeat(1, 1, self.lookahead_samples.size(0), 1), w), -1)
 
         sampler = SobolQMCNormalSampler(self.num_lookahead_repetitions, seed=lookahead_seed)
         lookahead_model = self.model.fantasize(lookahead_points, sampler)
@@ -147,7 +156,7 @@ class VaRKG(MCAcquisitionFunction):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None, lookahead_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False):
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
@@ -174,6 +183,7 @@ class VaRKG(MCAcquisitionFunction):
                                 solutions being evaluated.
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
+        :param cuda: True if using GPUs
         """
         super().__init__(model)
         self.num_samples = num_samples
@@ -193,6 +203,7 @@ class VaRKG(MCAcquisitionFunction):
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.fantasy_seed = fantasy_seed
         self.lookahead_seed = lookahead_seed
+        self.cuda = cuda
 
         self.fix_samples = fix_samples
         if fixed_samples is not None:
@@ -216,7 +227,7 @@ class VaRKG(MCAcquisitionFunction):
             factor = num_lookahead_repetitions
         else:
             factor = 1
-        while self.mini_batch_size * num_fantasies * factor > 2000 and self.mini_batch_size > 1:
+        while self.mini_batch_size * num_fantasies * factor > 1000 and self.mini_batch_size > 1:
             self.mini_batch_size = int(self.mini_batch_size / 2)
 
     def forward(self, X: Tensor) -> Tensor:
@@ -274,14 +285,17 @@ class VaRKG(MCAcquisitionFunction):
                 right_index = (i + 1) * self.mini_batch_size
             # construct the fantasy model
             sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
-            fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler)
+            if self.cuda:
+                fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :].cuda(), sampler).cuda()
+            else:
+                fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler)
 
             inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
                                  num_lookahead_repetitions=self.num_lookahead_repetitions,
                                  lookahead_samples=self.lookahead_samples,
                                  lookahead_seed=lookahead_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation)
+                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda)
             # sample and return
             with settings.propagate_grads(True):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
