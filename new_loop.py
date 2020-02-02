@@ -171,10 +171,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
             optimizer.new_iteration()
 
-            # TODO: cuda
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                                  num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                                 lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
+                                 lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
             current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
 
@@ -191,15 +190,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 candidate = torch.rand((1, q * d))
                 value = torch.tensor([0])
             else:
-                # TODO: cuda
                 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                                current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
                                dim=d, dim_x=dim_x, q=q,
                                fix_samples=fix_samples, fixed_samples=fixed_samples,
                                num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                               lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation)
+                               lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
-                # TODO: handle optimizer returns
                 candidate, value = optimizer.optimize_VaRKG(var_kg)
             candidate = candidate.cpu().detach()
             value = value.cpu().detach()
@@ -334,7 +331,7 @@ def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTest
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 100
+    k = 5
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
               random_sampling=False, expectation=False, verbose=False, cuda=False)
