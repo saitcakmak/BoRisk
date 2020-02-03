@@ -341,4 +341,6 @@ if __name__ == "__main__":
     k = 5
     full_loop('branin', 0, 1, 'tester', 10,
               num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
-              random_sampling=False, expectation=False, verbose=False, cuda=False)
+              random_sampling=False, expectation=False, verbose=False, cuda=False,
+              lookahead_samples=torch.linspace(0, 1, 10).reshape(-1, 1),
+              num_lookahead_repetitions=0, q=1)

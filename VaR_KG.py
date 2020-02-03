@@ -24,7 +24,7 @@ class InnerVaR(MCAcquisitionFunction):
                  lookahead_samples: Tensor = None,
                  lookahead_seed: Optional[int] = None,
                  CVaR: bool = False, expectation: bool = False,
-                 cuda: bool = False):
+                 cuda: bool = False, w_actual: Tensor = None):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -39,6 +39,8 @@ class InnerVaR(MCAcquisitionFunction):
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
         :param cuda: True if using GPUs
+        :param w_actual: If VaRKG is being evaluated with lookaheads, then w component of the point being
+                            evaluated is added to the lookahead points
         """
         super().__init__(model)
         self.num_samples = w_samples.size(0)
@@ -55,6 +57,7 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.lookahead_seed = lookahead_seed
         self.cuda = cuda
+        self.w_actual = w_actual
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -131,11 +134,16 @@ class InnerVaR(MCAcquisitionFunction):
         if self.lookahead_samples.dim() != 2 or self.lookahead_samples.size(-1) != self.dim_w:
             raise ValueError("lookahead_samples must be of size num_lookahead_samples x dim_w")
         w = self.lookahead_samples.repeat(*batch_shape, 1, 1)
+
+        # If evaluating VaRKG with lookaheads, add the point evaluated to lookahead points
+        if self.w_actual is not None:
+            w = torch.cat((w, self.w_actual.expand((*batch_shape, *self.w_actual.size()[-2:]))), dim=-2)
+
         # merge with X to generate full dimensional points
         if self.cuda:
-            lookahead_points = torch.cat((X.repeat(1, 1, self.lookahead_samples.size(0), 1), w), -1).cuda()
+            lookahead_points = torch.cat((X.repeat(1, 1, w.size(-2), 1), w), -1).cuda()
         else:
-            lookahead_points = torch.cat((X.repeat(1, 1, self.lookahead_samples.size(0), 1), w), -1)
+            lookahead_points = torch.cat((X.repeat(1, 1, w.size(-2), 1), w), -1)
 
         sampler = SobolQMCNormalSampler(self.num_lookahead_repetitions, seed=lookahead_seed)
         lookahead_model = self.model.fantasize(lookahead_points, sampler)
@@ -277,6 +285,8 @@ class VaRKG(MCAcquisitionFunction):
         else:
             lookahead_seed = self.lookahead_seed
 
+        w_actual = X_actual[..., -self.dim_w:]
+
         for i in range(num_batches):
             left_index = i * self.mini_batch_size
             if i == num_batches - 1:
@@ -295,7 +305,8 @@ class VaRKG(MCAcquisitionFunction):
                                  num_lookahead_repetitions=self.num_lookahead_repetitions,
                                  lookahead_samples=self.lookahead_samples,
                                  lookahead_seed=lookahead_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda)
+                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                 w_actual=w_actual)
             # sample and return
             with settings.propagate_grads(True):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
