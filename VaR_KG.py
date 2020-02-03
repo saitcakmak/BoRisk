@@ -296,9 +296,9 @@ class VaRKG(MCAcquisitionFunction):
             # construct the fantasy model
             sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
             if self.cuda:
-                fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :].cuda(), sampler).cuda()
+                fantasy_model = self.model.fantasize(X_actual[left_index:right_index].cuda(), sampler).cuda()
             else:
-                fantasy_model = self.model.fantasize(X_actual[left_index:right_index, :, :], sampler)
+                fantasy_model = self.model.fantasize(X_actual[left_index:right_index], sampler)
 
             inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
@@ -306,7 +306,7 @@ class VaRKG(MCAcquisitionFunction):
                                  lookahead_samples=self.lookahead_samples,
                                  lookahead_seed=lookahead_seed,
                                  CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                 w_actual=w_actual)
+                                 w_actual=w_actual[left_index:right_index])
             # sample and return
             with settings.propagate_grads(True):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
