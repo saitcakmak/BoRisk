@@ -164,7 +164,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     handling_count = 0  # same
     i = last_iteration + 1
 
-    while i < iterations:
+    while True:
         try:
             iteration_start = time()
 
@@ -185,6 +185,12 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
             if verbose:
                 print("Current best solution, value: ", current_best_sol, current_best_value)
+
+            if i >= iterations:
+                full_data['final_solution'] = current_best_sol
+                full_data['final_value'] = current_best_value
+                torch.save(full_data, 'new_output/%s.pt' % filename)
+                break
 
             # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
             # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
@@ -300,8 +306,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         passed = False
 
     print("total time: ", time() - start)
-    # printing the data in case something goes wrong with file save
-    # print('data: ', full_data)
 
 
 def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTestFunction:
