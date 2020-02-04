@@ -26,7 +26,6 @@ from botorch.test_functions import SyntheticTestFunction
 from botorch.models.transforms import Standardize
 import multiprocessing
 from optimizer import Optimizer
-from botorch.optim import optimize_acqf
 
 try:
     # set the number of cores for torch to use
@@ -142,13 +141,18 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
-    current_best_list = torch.empty((iterations, q, dim_x))
-    current_best_value_list = torch.empty((iterations, q, 1))
-    best_x_value_list = torch.empty((iterations, q, 1))
-    candidate_list = torch.empty((iterations, q, d))
-
     test_m_list = [10, 25, 50, 100]
     test_rep_list = [10, 25, 50]
+
+    optimizer = Optimizer(num_restarts=num_restarts,
+                          raw_multiplier=1,
+                          num_fantasies=num_fantasies,
+                          dim=d,
+                          dim_x=dim_x,
+                          q=q,
+                          maxiter=5,
+                          periods=1000  # essentially meaning don't use periods
+                          )
 
     # construct and fit the GP
     if cuda:
@@ -168,6 +172,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         try:
             iteration_start = time()
 
+            optimizer.new_iteration()
+
+            inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
+                                 CVaR=CVaR, expectation=expectation, cuda=cuda)
+
+            current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
+
             # similar to seed below, for the lookahead fantasies if used
             lookahead_seed = int(torch.randint(100000, (1,)))
 
@@ -182,13 +193,12 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             dict_key = 'baseline'
             var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                            num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                           dim=d, dim_x=dim_x, q=q,
+                           dim=d, dim_x=dim_x, q=q, current_best_VaR=current_best_value,
                            fix_samples=fix_samples, fixed_samples=fixed_samples,
                            lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
-            candidate, value = optimize_acqf(acq_function=var_kg, bounds=torch.tensor([[0.], [1.]]).repeat(1, d),
-                                             q=1, num_restarts=num_restarts, raw_samples=num_restarts*raw_multiplier,
-                                             options={'maxiter': 100})
+            candidate, value = optimizer.optimize_VaRKG(var_kg)
+
             print(dict_key, time()-start, time()-prev)
             prev = time()
 
@@ -198,30 +208,20 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                     dict_key = 'm=%d_rep=%d' % (test_m, test_rep)
                     var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                                    num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                                   dim=d, dim_x=dim_x, q=q,
+                                   dim=d, dim_x=dim_x, q=q, current_best_VaR=current_best_value,
                                    lookahead_samples=test_m_samples, num_lookahead_repetitions=test_rep,
                                    fix_samples=fix_samples, fixed_samples=fixed_samples,
                                    lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
-                    candidate, value = optimize_acqf(acq_function=var_kg,
-                                                     bounds=torch.tensor([[0.], [1.]]).repeat(1, d),
-                                                     q=1, num_restarts=num_restarts,
-                                                     raw_samples=num_restarts * raw_multiplier,
-                                                     options={'maxiter': 100})
+                    candidate, value = optimizer.optimize_VaRKG(var_kg)
+
                     print(dict_key, time() - start, time() - prev)
                     prev = time()
-
-            candidate = candidate.cpu().detach()
-            # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
-            value = value.cpu().detach()
-
-            if verbose:
-                print("Candidate: ", candidate, " KG value: ", value)
 
             iteration_end = time()
             print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
-            candidate_point = candidate[:, 0:q * d].reshape(q, d)
+            candidate_point = torch.rand((q, d))
             if verbose and d == 2:
                 plt.close('all')
                 plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
@@ -249,7 +249,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 dummy = torch.rand((1, q, d))
             _ = gp.posterior(dummy).mean
 
-        except RuntimeError as err:
+        except ValueError as err:
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
             handling_count += 1
@@ -335,7 +335,7 @@ def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTest
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
     k = 25
-    full_loop('sinequad', 0, 1, 'ucb', 50,
+    full_loop('sinequad', 0, 1, 'test', 50,
               num_fantasies=k, num_restarts=k, raw_multiplier=10,
               expectation=False, verbose=False,
               random_sampling=False)

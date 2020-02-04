@@ -98,14 +98,17 @@ class InnerVaR(MCAcquisitionFunction):
             # calculate C/VaR value
             samples, _ = torch.sort(samples, dim=-2)
             if self.CVaR:
-                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2, keepdim=True)
+                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
             elif self.expectation:
-                values = torch.mean(samples, dim=-2, keepdim=True)
+                values = torch.mean(samples, dim=-2)
             else:
                 values = samples[..., int(self.num_samples * self.alpha), :]
 
             # return negative since optimizers maximize
-            return -torch.mean(values, dim=0).squeeze()
+            if len(self.batch_shape) < 2:
+                return -torch.mean(values, dim=0).squeeze()
+            else:
+                return -torch.mean(values, dim=0).squeeze(-1)
         else:
             # get the posterior mean
             post = self.model.posterior(z)
@@ -114,13 +117,16 @@ class InnerVaR(MCAcquisitionFunction):
             # calculate C/VaR value
             samples, _ = torch.sort(samples, dim=-2)
             if self.CVaR:
-                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2, keepdim=True)
+                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
             elif self.expectation:
-                values = torch.mean(samples, dim=-2, keepdim=True)
+                values = torch.mean(samples, dim=-2)
             else:
                 values = samples[..., int(self.num_samples * self.alpha), :]
             # return negative so that the optimization minimizes the function
-            return -values.squeeze()
+            if len(self.batch_shape) < 2:
+                return -values.squeeze()
+            else:
+                return -values.squeeze(-1)
 
     def _get_lookahead_model(self, X: Tensor, batch_shape: tuple):
         """
