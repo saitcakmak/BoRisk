@@ -141,8 +141,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
-    test_m_list = [10, 25, 50, 100]
-    test_rep_list = [10, 25, 50]
+    test_m_list = [1, 10, 25, 50, 100]
+    test_rep_list = [1, 10, 25, 50]
 
     optimizer = Optimizer(num_restarts=num_restarts,
                           raw_multiplier=1,
@@ -334,8 +334,8 @@ def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTest
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 25
-    full_loop('sinequad', 0, 1, 'test', 50,
-              num_fantasies=k, num_restarts=k, raw_multiplier=10,
+    k = int(input('num_fantasies: '))
+    full_loop('sinequad', 0, 1, 'test', 5,
+              num_fantasies=k, num_restarts=5, raw_multiplier=10,
               expectation=False, verbose=False,
               random_sampling=False)
