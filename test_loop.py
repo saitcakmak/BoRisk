@@ -24,7 +24,6 @@ from test_functions.prod_line import ProductionLine
 from botorch.test_functions import Powell, Branin, Ackley, Hartmann
 from botorch.test_functions import SyntheticTestFunction
 from botorch.models.transforms import Standardize
-import multiprocessing
 from optimizer import Optimizer
 
 
