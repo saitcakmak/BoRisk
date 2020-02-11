@@ -26,14 +26,6 @@ from botorch.models.transforms import Standardize
 import multiprocessing
 from optimizer import Optimizer
 
-try:
-    # set the number of cores for torch to use
-    cpu_count = max(multiprocessing.cpu_count(), 8)
-    torch.set_num_threads(cpu_count)
-    torch.set_num_interop_threads(cpu_count)
-finally:
-    pass
-
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
               num_samples: int = 100, num_fantasies: int = 100,
