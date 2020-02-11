@@ -26,13 +26,13 @@ from botorch.models.transforms import Standardize
 import multiprocessing
 from test_optimizer import Optimizer
 
-try:
-    # set the number of cores for torch to use
-    cpu_count = max(multiprocessing.cpu_count(), 8)
-    torch.set_num_threads(cpu_count)
-    torch.set_num_interop_threads(cpu_count)
-finally:
-    pass
+#try:
+#    # set the number of cores for torch to use
+#    cpu_count = max(multiprocessing.cpu_count(), 8)
+#    torch.set_num_threads(cpu_count)
+#    torch.set_num_interop_threads(cpu_count)
+#finally:
+#    pass
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
@@ -345,7 +345,7 @@ def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTest
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
     k = 100
-    full_loop('sinequad', 0, 1, 'tester', 50, num_samples=3, maxiter=1000,
+    full_loop('sinequad', 555, 1, 'tester', 50, num_samples=5, maxiter=1000,
               num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
               random_sampling=False, expectation=False, verbose=True, cuda=False,
               lookahead_samples=torch.linspace(0, 1, 100).reshape(-1, 1),
