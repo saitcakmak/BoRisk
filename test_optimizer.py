@@ -65,6 +65,8 @@ class Optimizer:
         self.num_fantasies = num_fantasies
         self.dim = dim
         self.dim_x = dim_x
+        if q > 1:
+            raise ValueError('Not configured for q > 1!')
         self.q = q
         self.full_dim = q * dim + num_fantasies * dim_x
         self.inner_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim_x)

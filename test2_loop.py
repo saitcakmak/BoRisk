@@ -59,7 +59,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param reporting_la_samples: lookahead samples for reporting of the best
     :param reporting_la_rep: lookahead replications for reporting of the best
     :param periods: length of an optimization period in iterations
-    :return: None - saves the output.
+    :return: a summary output.
     """
 
     # Initialize the test function
@@ -67,6 +67,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     d = function.dim  # dimension of train_X
     n = 2 * d + 2  # training samples
     dim_x = d - dim_w  # dimension of the x component
+    if dim_w > 1:
+        raise ValueError("This is not configured for dim_w > 1 yet!")
 
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
     if CVaR and "cvar" not in filename:
@@ -93,7 +95,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         seed_list = torch.randint(1000000, (1000,))
         last_iteration = -1
         full_data = dict()
-        train_X = torch.rand((n, d))
+        train_x = torch.rand((n, dim_x))
+        train_w = torch.randint(num_samples, (n, dim_w), dtype=torch.float) / (num_samples-1)
+        train_X = torch.cat((train_x, train_w), dim=-1)
         train_Y = function(train_X, seed_list[-1])
 
     # samples used to get the current VaR value
@@ -143,6 +147,11 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                           periods=periods
                           )
 
+    current_best_list = torch.empty((iterations + 1, q, dim_x))
+    current_best_value_list = torch.empty((iterations + 1, q, 1))
+    kg_value_list = torch.empty((iterations, q, 1))
+    candidate_list = torch.empty((iterations, q, d))
+
     # construct and fit the GP
     if cuda:
         gp = SingleTaskGP(train_X.cuda(), train_Y.cuda(), likelihood.cuda(), outcome_transform=Standardize(m=1)).cuda()
@@ -175,6 +184,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                  lookahead_seed=reporting_la_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
             current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
+            current_best_list[i] = current_best_sol
+            current_best_value_list[i] = current_best_value
 
             if verbose:
                 print("Current best solution, value: ", current_best_sol, current_best_value)
@@ -201,7 +212,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 value = torch.tensor([0])
             else:
                 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                               current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
+                               current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                               fantasy_seed=fantasy_seed,
                                dim=d, dim_x=dim_x, q=q,
                                fix_samples=fix_samples, fixed_samples=fixed_samples,
                                num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
@@ -211,6 +223,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             candidate = candidate.cpu().detach()
             # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
             value = value.cpu().detach()
+            kg_value_list[i] = value
 
             if verbose:
                 print("Candidate: ", candidate, " KG value: ", value)
@@ -230,6 +243,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
             candidate_point = candidate[:, 0:q * d].reshape(q, d)
+            candidate_list[i] = candidate_point
+
             if verbose and d == 2:
                 plt.close('all')
                 plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
@@ -305,6 +320,12 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     print("total time: ", time() - start)
 
+    output = {'current_best': current_best_list,
+              'current_best_value': current_best_value_list,
+              'kg_value': kg_value_list,
+              'candidate': candidate_list}
+    return output
+
 
 def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTestFunction:
     """
@@ -340,9 +361,10 @@ def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTest
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 100
-    full_loop('sinequad', 555, 1, 'tester', 50, num_samples=5, maxiter=1000,
-              num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
-              random_sampling=True, expectation=False, verbose=True, cuda=False,
-              lookahead_samples=torch.linspace(0, 1, 100).reshape(-1, 1),
-              num_lookahead_repetitions=0, q=10)
+    k = 5
+    out = full_loop('sinequad', 555, 1, 'tester', 5, num_samples=5, maxiter=1000,
+                    num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
+                    random_sampling=False, expectation=False, verbose=True, cuda=False,
+                    lookahead_samples=torch.linspace(0, 1, 100).reshape(-1, 1),
+                    num_lookahead_repetitions=0, q=1)
+    print(out)
