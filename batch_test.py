@@ -10,7 +10,7 @@ num_samples = 5
 key_list = ['VaRKG', 'random']
 output_file = "%s_%s" % (function_name, input("output suffix: "))
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (5,))
+seed_list = torch.randint(10000, (3,))
 dim_w = 1
 iterations = 50
 num_restarts = 100
