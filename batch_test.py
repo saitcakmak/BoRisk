@@ -12,7 +12,7 @@ output_file = "%s_%s" % (function_name, input("output suffix: "))
 torch.manual_seed(0)  # to ensure the produced seed are same!
 seed_list = torch.randint(10000, (5,))
 dim_w = 1
-iterations = 100
+iterations = 50
 num_restarts = 100
 maxiter = 1000
 periods = 1000
@@ -38,7 +38,7 @@ for key in key_list:
         output = full_loop(function_name, int(seed), dim_w, filename, iterations,
                            num_samples=num_samples,
                            num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                           cuda=True, random_sampling=random,
+                           cuda=False, random_sampling=random,
                            maxiter=maxiter, periods=periods)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
