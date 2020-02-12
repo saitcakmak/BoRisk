@@ -18,9 +18,9 @@ maxiter = 1000
 periods = 1000
 CVaR = False
 alpha = 0.7
-num_threads = int(input("num_threads: "))
-torch.set_num_threads(num_threads)
-torch.set_num_interop_threads(num_threads)
+# num_threads = int(input("num_threads: "))
+# torch.set_num_threads(num_threads)g
+# torch.set_num_interop_threads(num_threads)
 
 output_path = "batch_output/%s" % output_file
 
