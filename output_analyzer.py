@@ -12,7 +12,7 @@ directory = 'new_output/'
 prefix = 'cluster_'
 # prefix = ''
 # prefix = 'imp2_'
-problem_name = 'branin'
+problem_name = 'sinequad'
 dim_w = 1
 iterations = 50
 num_x = 100  # squared if dim_x == 2
@@ -30,25 +30,26 @@ CVaR = False
 # seed = [23856, 83742, 75624, 34755, 38523, 57633, 73485, 12654, 93832, 43566]
 # seed = [3452, 44331]
 # seed = [123, 127]
-seed = [5637, 3256]
+# seed = [5637, 3256]
+seed = [22]
 
-file_name = []
-for i in range(len(seed)):
-    file_name.append('run' + str(i+1))
+# file_name = []
+# for i in range(len(seed)):
+#     file_name.append('run' + str(i+1))
 # suffix = '_cvar_a=0.9_random'
 # suffix = '_random'
 suffix = ''
 
 file_list = []
 # if you just want to play around with a single output, use this. - still need prob name, dim_w and iterations
-# full_file = input("file name: ")
-# full_path = '%s%s' % (directory, full_file)
-# file_list.append(full_file)
+full_file = input("file name: ")
+full_path = '%s%s' % (directory, full_file)
+file_list.append(full_path)
 
 # this one is for auto-reading the inputs provided above
-for i in range(len(seed)):
-    full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed[i], dim_w, iterations, file_name[i], suffix)
-    file_list.append(full_path)
+# for i in range(len(seed)):
+#     full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed[i], dim_w, iterations, file_name[i], suffix)
+#     file_list.append(full_path)
 
 if problem_name == 'sinequad':
     true_optimal = -1 + alpha ** 2
@@ -112,7 +113,7 @@ for j in range(len(seed)):
         _, true_optimal = generate_values(num_x, num_w, plug_in_w=w, CVaR=CVaR, function=function, dim_x=dim_x, dim_w=dim_w)
         true_optimal = torch.min(true_optimal)
 
-    value_diff_list[j] = true_values - true_optimal
+    value_diff_list[j] = true_values.reshape(-1, 1) - true_optimal
 
 value_diff = torch.mean(value_diff_list, dim=0)
 plt.figure(1)

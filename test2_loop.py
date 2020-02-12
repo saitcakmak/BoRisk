@@ -192,7 +192,12 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             fantasy_seed = int(torch.randint(100000, (1,)))
 
             if random_sampling:
-                candidate = torch.rand((1, q * d))
+                candidate = torch.empty((q, d))
+                for j in range(q):
+                    candidate[j][:dim_x] = torch.rand(dim_x)
+                    ind_w = torch.randint(num_samples, (1,))
+                    candidate[j][dim_x:] = w_samples[ind_w].reshape(-1)
+                candidate = candidate.reshape(1, -1)
                 value = torch.tensor([0])
             else:
                 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
@@ -338,6 +343,6 @@ if __name__ == "__main__":
     k = 100
     full_loop('sinequad', 555, 1, 'tester', 50, num_samples=5, maxiter=1000,
               num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
-              random_sampling=False, expectation=False, verbose=True, cuda=False,
+              random_sampling=True, expectation=False, verbose=True, cuda=False,
               lookahead_samples=torch.linspace(0, 1, 100).reshape(-1, 1),
-              num_lookahead_repetitions=0, q=1)
+              num_lookahead_repetitions=0, q=10)
