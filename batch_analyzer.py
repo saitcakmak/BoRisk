@@ -4,16 +4,16 @@ this is for analyzing batches of job runs
 import torch
 import matplotlib.pyplot as plt
 from value_plotter import generate_values
-from ucb_loop import function_picker
+from new_loop import function_picker
 import numpy as np
 
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
-function_name = 'branin'
-suffix = '_CVaR_07'
+function_name = 'sinequad'
+suffix = '_5'
 filename = '%s%s' % (function_name, suffix)
 dim_w = 1
-iterations = 100
+iterations = 50
 CVaR = False
 alpha = 0.7
 function = function_picker(function_name, noise_std=0)
@@ -22,7 +22,7 @@ dim_x = dim - dim_w
 num_x = 10000
 if dim_x == 2:
     num_x = int(np.sqrt(num_x))
-num_w = 1000  # use larger if dim_w > 1
+num_w = 5  # use larger if dim_w > 1
 num_plot = 8  # max number of plot lines in a figure
 
 if dim_w == 1:
