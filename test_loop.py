@@ -17,12 +17,7 @@ from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
-from test_functions.standardized_function import StandardizedFunction
-from test_functions.cont_newsvendor import ContinuousNewsvendor
-from test_functions.prod_line import ProductionLine
-from botorch.test_functions import Powell, Branin, Ackley, Hartmann
-from botorch.test_functions import SyntheticTestFunction
+from function_picker import function_picker
 from botorch.models.transforms import Standardize
 from optimizer import Optimizer
 
@@ -126,7 +121,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         noise_prior=noise_prior,
         batch_shape=[],
         noise_constraint=GreaterThan(
-            0.05,  # minimum observation noise assumed in the GP model
+            0.000005,  # minimum observation noise assumed in the GP model
             transform=None,
             initial_value=noise_prior_mode,
         ),
@@ -289,38 +284,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     print("total time: ", time() - start)
     # printing the data in case something goes wrong with file save
     # print('data: ', full_data)
-
-
-def function_picker(function_name: str, noise_std: float = 0.1) -> SyntheticTestFunction:
-    """
-    Returns the appropriate function callable
-    If adding new BoTorch test functions, run them through StandardizedFunction.
-    StandardizedFunction and all others listed here allow for a seed to be specified.
-    If adding something else, make sure the forward (or __call__) takes a seed argument.
-    :param function_name: Function to be used
-    :param noise_std: observation noise level
-    :return: Function callable
-    """
-    if function_name == 'simplequad':
-        function = StandardizedFunction(SimpleQuadratic(noise_std=noise_std))
-    elif function_name == 'sinequad':
-        function = StandardizedFunction(SineQuadratic(noise_std=noise_std))
-    elif function_name == 'powell':
-        function = StandardizedFunction(Powell(noise_std=noise_std))
-    elif function_name == 'branin':
-        function = StandardizedFunction(Branin(noise_std=noise_std))
-    elif function_name == 'ackley':
-        function = StandardizedFunction(Ackley(noise_std=noise_std))
-    elif function_name == 'hartmann3':
-        function = StandardizedFunction(Hartmann(dim=3, noise_std=noise_std))
-    elif function_name == 'hartmann6':
-        function = StandardizedFunction(Hartmann(dim=6, noise_std=noise_std))
-    elif function_name == 'newsvendor':
-        function = ContinuousNewsvendor()
-    elif function_name == 'prod_line':
-        function = ProductionLine()
-
-    return function
 
 
 if __name__ == "__main__":
