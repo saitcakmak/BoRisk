@@ -12,11 +12,11 @@ num_fantasies = 25
 key_list = ['s00', 's10', 's40', 's00_random', 's10_random', 's40_random']
 output_file = "%s_%s" % (function_name, "st")
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (3,))
+seed_list = torch.randint(10000, (1,))
 dim_w = 1
 iterations = 50
 num_restarts = 25
-maxiter = 200
+maxiter = 100
 periods = 1000
 CVaR = False
 alpha = 0.7
