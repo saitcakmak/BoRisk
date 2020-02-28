@@ -75,7 +75,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     if random_sampling:
         filename = filename + '_random'
     try:
-        full_data = torch.load("loop_output/%s.pt" % filename)
+        full_data = torch.load("new_output/%s.pt" % filename)
         last_iteration = max(full_data.keys())
         last_data = full_data[last_iteration]
         seed_list = last_data['seed_list']
@@ -148,6 +148,11 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         fit_gpytorch_model(mll)
 
+    current_best_list = torch.empty((iterations + 1, q, dim_x))
+    current_best_value_list = torch.empty((iterations + 1, q, 1))
+    kg_value_list = torch.empty((iterations, q, 1))
+    candidate_list = torch.empty((iterations, q, d))
+
     passed = False  # it is a flag for handling exceptions
     handling_count = 0  # same
     i = last_iteration + 1
@@ -170,6 +175,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                  lookahead_seed=reporting_la_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
             current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
+            current_best_list[i] = current_best_sol
+            current_best_value_list[i] = current_best_value
 
             if verbose:
                 print("Current best solution, value: ", current_best_sol, current_best_value)
@@ -201,6 +208,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             candidate = candidate.cpu().detach()
             # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
             value = value.cpu().detach()
+            kg_value_list[i] = value
 
             if verbose:
                 print("Candidate: ", candidate, " KG value: ", value)
@@ -220,6 +228,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
             candidate_point = candidate[:, 0:q * d].reshape(q, d)
+            candidate_list[i] = candidate_point
+
             if verbose and d == 2:
                 plt.close('all')
                 plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
@@ -294,6 +304,12 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         passed = False
 
     print("total time: ", time() - start)
+
+    output = {'current_best': current_best_list,
+              'current_best_value': current_best_value_list,
+              'kg_value': kg_value_list,
+              'candidate': candidate_list}
+    return output
 
 
 if __name__ == "__main__":

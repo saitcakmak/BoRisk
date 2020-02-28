@@ -1,5 +1,6 @@
 """
-This text is not updated!!!
+This version computes VaR using rsample instead of post mean.
+
 This version is to be callable from some other python code.
 A full optimization loop of VaRKG with some pre-specified parameters.
 Specify the problem to use as the 'function', adjust the parameters and run.
@@ -8,11 +9,10 @@ The w components will be drawn as i.i.d. uniform(0, 1) and the problem is expect
 random variables.
 """
 import torch
-from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import VaRKG, InnerVaR
+from sampler_VaR_KG import VaRKG, InnerVaR
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -26,10 +26,11 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, raw_multiplier: int = 10,
               alpha: float = 0.7, q: int = 1,
-              num_lookahead_repetitions: int = 0,
-              lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
+              verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
-              cuda: bool = False, reporting_la_samples: Tensor = None, reporting_la_rep: int = 0):
+              cuda: bool = False,
+              periods: int = 1000,
+              num_repetitions: int = 10):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -43,16 +44,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param raw_multiplier: Raw_samples = num_restarts * raw_multiplier
     :param alpha: The risk level of C/VaR.
     :param q: Number of parallel solutions to evaluate. Think qKG.
-    :param num_lookahead_repetitions: Number of repetitions of lookahead fantasy evaluations.
-    :param lookahead_samples: The samples to use to generate the lookahead fantasies
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
     :param random_sampling: If true, we will use random sampling to generate samples - no KG.
     :param expectation: If true, we are running BQO optimization.
     :param cuda: True if using GPUs
-    :param reporting_la_samples: lookahead samples for reporting of the best
-    :param reporting_la_rep: lookahead replications for reporting of the best
+    :param periods: length of an optimization period in iterations
+    :param num_repetitions: number of repetitions to estimate VaR
     :return: None - saves the output.
     """
 
@@ -74,7 +73,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     if random_sampling:
         filename = filename + '_random'
     try:
-        full_data = torch.load("loop_output/%s.pt" % filename)
+        full_data = torch.load("new_output/%s.pt" % filename)
         last_iteration = max(full_data.keys())
         last_data = full_data[last_iteration]
         seed_list = last_data['seed_list']
@@ -127,17 +126,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
-    test_m_list = [1, 10, 25, 50, 100]
-    test_rep_list = [1, 10, 25, 50]
-
     optimizer = Optimizer(num_restarts=num_restarts,
-                          raw_multiplier=1,
+                          raw_multiplier=raw_multiplier,
                           num_fantasies=num_fantasies,
                           dim=d,
                           dim_x=dim_x,
                           q=q,
-                          maxiter=5,
-                          periods=1000  # essentially meaning don't use periods
+                          maxiter=maxiter,
+                          periods=periods
                           )
 
     # construct and fit the GP
@@ -150,23 +146,41 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         fit_gpytorch_model(mll)
 
+    current_best_list = torch.empty((iterations + 1, q, dim_x))
+    current_best_value_list = torch.empty((iterations + 1, q, 1))
+    kg_value_list = torch.empty((iterations, q, 1))
+    candidate_list = torch.empty((iterations, q, d))
+
     passed = False  # it is a flag for handling exceptions
     handling_count = 0  # same
     i = last_iteration + 1
 
-    while i < iterations:
+    while True:
         try:
             iteration_start = time()
 
+            # similar to seed below, for the lookahead fantasies if used
+            sample_seed = int(torch.randint(100000, (1,)))
+
             optimizer.new_iteration()
 
+            # seed for lookahead fantasies used for reporting.
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                                 CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                 CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                 sample_seed=sample_seed, num_repetitions=num_repetitions)
 
             current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
+            current_best_list[i] = current_best_sol
+            current_best_value_list[i] = current_best_value
 
-            # similar to seed below, for the lookahead fantasies if used
-            lookahead_seed = int(torch.randint(100000, (1,)))
+            if verbose:
+                print("Current best solution, value: ", current_best_sol, current_best_value)
+
+            if i >= iterations:
+                full_data['final_solution'] = current_best_sol
+                full_data['final_value'] = current_best_value
+                torch.save(full_data, 'new_output/%s.pt' % filename)
+                break
 
             # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
             # fantasy models. If None, then each forward pass will generate independent fantasies. As specified here,
@@ -174,40 +188,44 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             # IF using SAA approach, this should be specified to a fixed number.
             fantasy_seed = int(torch.randint(100000, (1,)))
 
-            start = time()
-            prev = time()
-            dict_key = 'baseline'
-            var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                           num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                           dim=d, dim_x=dim_x, q=q, current_best_VaR=current_best_value,
-                           fix_samples=fix_samples, fixed_samples=fixed_samples,
-                           lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+            if random_sampling:
+                candidate = torch.rand((1, q * d))
+                value = torch.tensor([0])
+            else:
+                var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                               current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                               fantasy_seed=fantasy_seed,
+                               dim=d, dim_x=dim_x, q=q,
+                               fix_samples=fix_samples, fixed_samples=fixed_samples,
+                               CVaR=CVaR, expectation=expectation, cuda=cuda,
+                               sample_seed=sample_seed, num_repetitions=num_repetitions)
 
-            candidate, value = optimizer.optimize_VaRKG(var_kg)
+                candidate, value = optimizer.optimize_VaRKG(var_kg)
+            candidate = candidate.cpu().detach()
+            # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
+            value = value.cpu().detach()
+            kg_value_list[i] = value
 
-            print(dict_key, time()-start, time()-prev)
-            prev = time()
+            if verbose:
+                print("Candidate: ", candidate, " KG value: ", value)
 
-            for test_m in test_m_list:
-                test_m_samples = torch.linspace(0, 1, test_m).reshape(-1, 1)
-                for test_rep in test_rep_list:
-                    dict_key = 'm=%d_rep=%d' % (test_m, test_rep)
-                    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                                   num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
-                                   dim=d, dim_x=dim_x, q=q, current_best_VaR=current_best_value,
-                                   lookahead_samples=test_m_samples, num_lookahead_repetitions=test_rep,
-                                   fix_samples=fix_samples, fixed_samples=fixed_samples,
-                                   lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
-
-                    candidate, value = optimizer.optimize_VaRKG(var_kg)
-
-                    print(dict_key, time() - start, time() - prev)
-                    prev = time()
+            data = {'state_dict': gp.state_dict(), 'train_Y': train_Y, 'train_X': train_X,
+                    'current_best_sol': current_best_sol, 'current_best_value': current_best_value.detach(),
+                    'candidate': candidate, 'kg_value': value.detach(),
+                    'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
+                    'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
+                    'num_repetitions': num_repetitions,
+                    'seed': seed, 'fantasy_seed': fantasy_seed, 'sample_seed': sample_seed,
+                    'seed_list': seed_list}
+            full_data[i] = data
+            torch.save(full_data, 'new_output/%s.pt' % filename)
 
             iteration_end = time()
             print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
 
-            candidate_point = torch.rand((q, d))
+            candidate_point = candidate[:, 0:q * d].reshape(q, d)
+            candidate_list[i] = candidate_point
+
             if verbose and d == 2:
                 plt.close('all')
                 plotter(gp, inner_VaR, current_best_sol, current_best_value, candidate_point)
@@ -235,7 +253,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 dummy = torch.rand((1, q, d))
             _ = gp.posterior(dummy).mean
 
-        except ValueError as err:
+        except RuntimeError as err:
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
             handling_count += 1
@@ -282,14 +300,24 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         passed = False
 
     print("total time: ", time() - start)
-    # printing the data in case something goes wrong with file save
-    # print('data: ', full_data)
+
+    output = {'current_best': current_best_list,
+              'current_best_value': current_best_value_list,
+              'kg_value': kg_value_list,
+              'candidate': candidate_list}
+    return output
 
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = int(input('num_fantasies: '))
-    full_loop('sinequad', 0, 1, 'test', 5,
-              num_fantasies=k, num_restarts=5, raw_multiplier=10,
-              expectation=False, verbose=False,
-              random_sampling=False)
+    num_fant = 25
+    num_rest = 10
+    num_rep = 0
+    maxiter = 5
+    verb = True
+    num_iter = 10
+    num_samp = 40
+    full_loop('branin', 0, 1, 'tester', iterations=num_iter, num_samples=num_samp, maxiter=maxiter,
+              num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=min(num_rest, 10),
+              random_sampling=False, expectation=False, verbose=verb, cuda=False,
+              q=1, num_repetitions=num_rep)

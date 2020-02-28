@@ -1,4 +1,6 @@
 """
+This does optimization over a discrete set w.
+
 This version is to be callable from some other python code.
 A full optimization loop of VaRKG with some pre-specified parameters.
 Specify the problem to use as the 'function', adjust the parameters and run.
@@ -18,7 +20,7 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from function_picker import function_picker
 from botorch.models.transforms import Standardize
-from test_optimizer import Optimizer
+from disc_optimizer import Optimizer
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
@@ -327,7 +329,5 @@ if __name__ == "__main__":
     k = 5
     out = full_loop('sinequad', 555, 1, 'tester', 5, num_samples=5, maxiter=1000,
                     num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
-                    random_sampling=False, expectation=False, verbose=True, cuda=False,
-                    lookahead_samples=torch.linspace(0, 1, 100).reshape(-1, 1),
-                    num_lookahead_repetitions=0, q=1)
+                    random_sampling=False, expectation=False, verbose=True, cuda=False, q=1)
     print(out)

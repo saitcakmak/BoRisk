@@ -1,3 +1,8 @@
+"""
+This version does optimization over a discrete set of alternatives for w.
+Playing around with this to achieve a good level of optimization while
+reducing the computational burden.
+"""
 from typing import Tuple, Optional
 import torch
 from botorch.gen import gen_candidates_scipy
