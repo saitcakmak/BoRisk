@@ -10,6 +10,7 @@ from botorch import settings
 from botorch.acquisition import MCAcquisitionFunction
 from botorch.models.model import Model
 from botorch.sampling.samplers import SobolQMCNormalSampler
+from botorch.utils import draw_sobol_normal_samples
 from torch import Tensor
 
 
@@ -20,9 +21,9 @@ class InnerVaR(MCAcquisitionFunction):
 
     def __init__(self, model: Model, w_samples: Tensor,
                  alpha: Union[Tensor, float], dim_x: int,
-                 num_lookahead_repetitions: int = 0,
+                 num_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
-                 lookahead_seed: Optional[int] = None,
+                 inner_seed: Optional[int] = None,
                  CVaR: bool = False, expectation: bool = False,
                  cuda: bool = False, w_actual: Tensor = None):
         r"""
@@ -31,10 +32,10 @@ class InnerVaR(MCAcquisitionFunction):
         :param w_samples: Samples of w used to calculate VaR, num_samples x dim_w
         :param alpha: VaR risk level alpha
         :param dim_x: dimension of the x component
-        :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
+        :param num_repetitions: number of repetitions for the lookahead or sampling
         :param lookahead_samples: if given, use this instead of generating the lookahead points. Just the w component
                                     num_lookahead_samples ('m' in the description) x dim_w
-        :param lookahead_seed: The seed to generate lookahead fantasies with, see VaRKG for more explanation.
+        :param inner_seed: The seed to generate lookahead fantasies or samples with, see VaRKG for more explanation.
                                     if specified, the calls to forward of the object will share the same seed
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
@@ -46,18 +47,28 @@ class InnerVaR(MCAcquisitionFunction):
         self.num_samples = w_samples.size(0)
         self.alpha = float(alpha)
         self.w_samples = w_samples
-        self.num_lookahead_repetitions = num_lookahead_repetitions
+        self.num_repetitions = num_repetitions
         self.lookahead_samples = lookahead_samples
         self.dim_x = dim_x
         self.dim_w = w_samples.size(-1)
         self.batch_shape = model._input_batch_shape
+        if len(self.batch_shape) == 2:
+            self.num_fantasies = self.batch_shape[0]
+        else:
+            self.num_fantasies = 1
         self.CVaR = CVaR
         self.expectation = expectation
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
-        self.lookahead_seed = lookahead_seed
+        self.lookahead_seed = inner_seed
         self.cuda = cuda
         self.w_actual = w_actual
+        if self.num_repetitions > 0 and lookahead_samples is None:
+            raw_sobol = draw_sobol_normal_samples(d=self.num_samples,
+                                                  n=self.num_repetitions * self.num_fantasies,
+                                                  seed=inner_seed)
+            self.sobol_samples = raw_sobol.reshape(self.num_repetitions, self.num_fantasies, 1,
+                                                   self.num_samples, 1)
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -88,45 +99,40 @@ class InnerVaR(MCAcquisitionFunction):
         else:
             z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
 
-        # if num_lookahead_ > 0, then update the model to get the refined sample-path
-        if self.num_lookahead_repetitions > 0 and self.lookahead_samples is not None:
+        # get the samples using lookahead / sampling or mean
+        if self.num_repetitions > 0 and self.lookahead_samples is not None:
             lookahead_model = self._get_lookahead_model(X, batch_shape)
-            z = z.repeat(self.num_lookahead_repetitions, 1, 1, 1, 1)
+            z = z.repeat(self.num_repetitions, 1, 1, 1, 1)
             samples = lookahead_model.posterior(z).mean
             # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (5 dim)
-
-            # calculate C/VaR value
-            samples, _ = torch.sort(samples, dim=-2)
-            if self.CVaR:
-                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
-            elif self.expectation:
-                values = torch.mean(samples, dim=-2)
-            else:
-                values = samples[..., int(self.num_samples * self.alpha), :]
-
-            # return negative since optimizers maximize
-            if len(self.batch_shape) < 2:
-                return -torch.mean(values, dim=0).squeeze()
-            else:
-                return -torch.mean(values, dim=0).squeeze(-1)
+        elif self.num_repetitions > 0:
+            base_samples = self.sobol_samples.repeat(1, 1, batch_shape[1], 1, 1)
+            # TODO: this next line is the cause of runtime warning, specifically the rsample part
+            #       changing base samples doesn't do anything
+            samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]), base_samples)
         else:
             # get the posterior mean
             post = self.model.posterior(z)
             samples = post.mean
 
-            # calculate C/VaR value
-            samples, _ = torch.sort(samples, dim=-2)
-            if self.CVaR:
-                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
-            elif self.expectation:
-                values = torch.mean(samples, dim=-2)
-            else:
-                values = samples[..., int(self.num_samples * self.alpha), :]
-            # return negative so that the optimization minimizes the function
-            if len(self.batch_shape) < 2:
-                return -values.squeeze()
-            else:
-                return -values.squeeze(-1)
+        # calculate C/VaR value
+        samples, _ = torch.sort(samples, dim=-2)
+        if self.CVaR:
+            values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
+        elif self.expectation:
+            values = torch.mean(samples, dim=-2)
+        else:
+            values = samples[..., int(self.num_samples * self.alpha), :]
+
+        # Average over repetitions
+        if self.num_repetitions > 0:
+            values = torch.mean(values, dim=0)
+
+        # return negative so that the optimization minimizes the function
+        if len(self.batch_shape) < 2:
+            return -values.squeeze()
+        else:
+            return -values.squeeze(-1)
 
     def _get_lookahead_model(self, X: Tensor, batch_shape: tuple):
         """
@@ -151,7 +157,7 @@ class InnerVaR(MCAcquisitionFunction):
         else:
             lookahead_points = torch.cat((X.repeat(1, 1, w.size(-2), 1), w), -1)
 
-        sampler = SobolQMCNormalSampler(self.num_lookahead_repetitions, seed=lookahead_seed)
+        sampler = SobolQMCNormalSampler(self.num_repetitions, seed=lookahead_seed)
         lookahead_model = self.model.fantasize(lookahead_points, sampler)
         # this is a batch fantasy model which works with batch evaluations.
         # Size is num_lookahead_rep x *batch_shape x num_lookahead_samples x 1 (5 dim with 3 dim batch).
@@ -168,8 +174,8 @@ class VaRKG(MCAcquisitionFunction):
                  current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
                  dim: int, dim_x: int,
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
-                 num_lookahead_repetitions: int = 0,
-                 lookahead_samples: Tensor = None, lookahead_seed: Optional[int] = None,
+                 num_repetitions: int = 0,
+                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
                  CVaR: bool = False, expectation: bool = False, cuda: bool = False):
         r"""
         Initialize the problem for sampling
@@ -189,10 +195,11 @@ class VaRKG(MCAcquisitionFunction):
                             samples are generated as i.i.d. uniform(0, 1), i.i.d across dimensions as well
         :param fixed_samples: if specified, the samples of w are fixed to these. Shape: num_samples x dim_w
                                 overwrites fix_samples parameter. If using SAA, this should be specified.
-        :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
+        :param num_repetitions: number of repetitions for lookaheads or sampling
         :param lookahead_samples: the lookahead samples to use. shape: num_lookahead_samples ("m") x dim_w
                                     has no effect unless num_lookahead_repetitions > 0 and vice-versa
-        :param lookahead_seed: similar to fantasy_seed, used for lookahead fantasy generation
+                                    if None and num_repetitions > 0, then sampling is used.
+        :param inner_seed: similar to fantasy_seed, used for lookahead fantasy generation or sampling.
                                 if not specified, every call to forward will specify a new one to be used across
                                 solutions being evaluated.
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
@@ -216,7 +223,7 @@ class VaRKG(MCAcquisitionFunction):
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.fantasy_seed = fantasy_seed
-        self.lookahead_seed = lookahead_seed
+        self.inner_seed = inner_seed
         self.cuda = cuda
 
         self.fix_samples = fix_samples
@@ -229,7 +236,7 @@ class VaRKG(MCAcquisitionFunction):
         else:
             self.fixed_samples = None
 
-        self.num_lookahead_repetitions = num_lookahead_repetitions
+        self.num_repetitions = num_repetitions
         if lookahead_samples is not None and (lookahead_samples.dim() != 2 or lookahead_samples.size(-1) != self.dim_w):
             raise ValueError("lookahead_samples must be of size num_lookahead_samples x dim_w")
         self.lookahead_samples = lookahead_samples
@@ -237,21 +244,22 @@ class VaRKG(MCAcquisitionFunction):
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
         self.mini_batch_size = 80
-        if num_lookahead_repetitions is not None:
-            factor = num_lookahead_repetitions
-        else:
-            factor = 1
-        while self.mini_batch_size * num_fantasies * factor > 1000 and self.mini_batch_size > 1:
-            self.mini_batch_size = int(self.mini_batch_size / 2)
+        # TODO: this needs fixing
+        # if num_lookahead_repetitions is not None:
+        #     factor = num_lookahead_repetitions
+        # else:
+        #     factor = 1
+        # while self.mini_batch_size * num_fantasies * factor > 1000 and self.mini_batch_size > 1:
+        #     self.mini_batch_size = int(self.mini_batch_size / 2)
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
-        Calculate the value of VaRKG acquisition function by averaging over fantasies
+        Calculate the value of VaRKG acquisition function by averaging over fantasies - currently not averaged
         NOTE: Does not return the value of VaRKG unless optimized - Use evaluate_kg for that. It calls evaluate_kg if
         the input is of size(-1) is q x dim
         :param X: batch size x 1 x (q x dim + num_fantasies x dim_x) of which the first (q x dim) is for q points
                     being evaluated, the remaining (num_fantasies x dim_x) are the solutions to the inner problem.
-        :return: value of VaR-KG at X (to be maximized) - size: batch size
+        :return: value of VaR-KG at X (to be maximized) - size: batch size x num_fantasies
         """
         # make sure X has proper shape
         X = X.reshape(-1, 1, X.size(-1))
@@ -286,10 +294,10 @@ class VaRKG(MCAcquisitionFunction):
         else:
             fantasy_seed = self.fantasy_seed
 
-        if self.lookahead_seed is None:
+        if self.inner_seed is None:
             lookahead_seed = int(torch.randint(100000, (1,)))
         else:
-            lookahead_seed = self.lookahead_seed
+            lookahead_seed = self.inner_seed
 
         w_actual = X_actual[..., -self.dim_w:]
 
@@ -308,9 +316,9 @@ class VaRKG(MCAcquisitionFunction):
 
             inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
-                                 num_lookahead_repetitions=self.num_lookahead_repetitions,
+                                 num_repetitions=self.num_repetitions,
                                  lookahead_samples=self.lookahead_samples,
-                                 lookahead_seed=lookahead_seed,
+                                 inner_seed=lookahead_seed,
                                  CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
                                  w_actual=w_actual[left_index:right_index])
             # sample and return

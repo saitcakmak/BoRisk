@@ -2,8 +2,7 @@
 This is the main file to be run on the cluster.
 Modify this to fit the experiment you intend to run.
 """
-from sampler_loop import full_loop as sampler_loop
-from new_loop import full_loop as new_loop
+from main_loop import full_loop
 import torch
 
 function_name = input("function name: ")
@@ -39,12 +38,12 @@ for key in key_list:
         filename = output_file + "_" + key + "_" + str(seed)
         rep = int(key[1:3])
         random = len(key) > 3
-        output = sampler_loop(function_name, int(seed), dim_w, filename, iterations,
-                              num_samples=num_samples, num_fantasies=num_fantasies,
-                              num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                              cuda=cuda,
-                              maxiter=maxiter, periods=periods,
-                              num_repetitions=rep)
+        output = full_loop(function_name, int(seed), dim_w, filename, iterations,
+                           num_samples=num_samples, num_fantasies=num_fantasies,
+                           num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
+                           cuda=cuda,
+                           maxiter=maxiter, periods=periods,
+                           num_repetitions=rep)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)

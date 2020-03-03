@@ -6,7 +6,7 @@ import torch
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from sampler_VaR_KG import VaRKG, InnerVaR
+from VaR_KG import VaRKG, InnerVaR
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan

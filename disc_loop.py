@@ -176,9 +176,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             reporting_la_seed = int(torch.randint(100000, (1,)))
 
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                                 num_lookahead_repetitions=reporting_la_rep,
+                                 num_repetitions=reporting_la_rep,
                                  lookahead_samples=reporting_la_samples,
-                                 lookahead_seed=reporting_la_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                 inner_seed=reporting_la_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
             current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
             current_best_list[i] = current_best_sol
@@ -213,8 +213,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                fantasy_seed=fantasy_seed,
                                dim=d, dim_x=dim_x, q=q,
                                fix_samples=fix_samples, fixed_samples=fixed_samples,
-                               num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                               lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                               num_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
+                               inner_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
                 candidate, value = optimizer.optimize_VaRKG(var_kg, w_samples=w_samples)
             candidate = candidate.cpu().detach()

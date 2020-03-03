@@ -25,10 +25,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, raw_multiplier: int = 10,
               alpha: float = 0.7, q: int = 1,
-              num_lookahead_repetitions: int = 0,
+              num_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
-              cuda: bool = False, reporting_la_samples: Tensor = None, reporting_la_rep: int = 0,
+              cuda: bool = False, reporting_la_samples: Tensor = None, reporting_rep: int = 0,
               periods: int = 1000):
     """
     The full_loop in callable form
@@ -43,8 +43,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param raw_multiplier: Raw_samples = num_restarts * raw_multiplier
     :param alpha: The risk level of C/VaR.
     :param q: Number of parallel solutions to evaluate. Think qKG.
-    :param num_lookahead_repetitions: Number of repetitions of lookahead fantasy evaluations.
+    :param num_repetitions: Number of repetitions of lookahead fantasy evaluations or sampling
     :param lookahead_samples: The samples to use to generate the lookahead fantasies
+                                if None and num_rep > 0, then we use sampling.
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
@@ -52,7 +53,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param expectation: If true, we are running BQO optimization.
     :param cuda: True if using GPUs
     :param reporting_la_samples: lookahead samples for reporting of the best
-    :param reporting_la_rep: lookahead replications for reporting of the best
+                                    if None and reporting rep > 0, then we use sampling
+    :param reporting_rep: lookahead or sampling replications for reporting of the best
     :param periods: length of an optimization period in iterations
     :return: None - saves the output.
     """
@@ -76,12 +78,11 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         filename = filename + '_random'
     try:
         full_data = torch.load("new_output/%s.pt" % filename)
-        last_iteration = max(full_data.keys())
+        last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
         last_data = full_data[last_iteration]
         seed_list = last_data['seed_list']
         train_X = last_data['train_X']
         train_Y = last_data['train_Y']
-
     except FileNotFoundError:
         # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
         torch.manual_seed(seed=seed)
@@ -161,18 +162,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         try:
             iteration_start = time()
 
-            # similar to seed below, for the lookahead fantasies if used
-            lookahead_seed = int(torch.randint(100000, (1,)))
+            inner_seed = int(torch.randint(100000, (1,)))
 
             optimizer.new_iteration()
 
-            # seed for lookahead fantasies used for reporting.
-            reporting_la_seed = int(torch.randint(100000, (1,)))
-
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                                 num_lookahead_repetitions=reporting_la_rep,
+                                 num_repetitions=reporting_rep,
                                  lookahead_samples=reporting_la_samples,
-                                 lookahead_seed=reporting_la_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                 inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
             current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
             current_best_list[i] = current_best_sol
@@ -198,11 +195,12 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 value = torch.tensor([0])
             else:
                 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                               current_best_VaR=current_best_value, num_fantasies=num_fantasies, fantasy_seed=fantasy_seed,
+                               current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                               fantasy_seed=fantasy_seed,
                                dim=d, dim_x=dim_x, q=q,
                                fix_samples=fix_samples, fixed_samples=fixed_samples,
-                               num_lookahead_repetitions=num_lookahead_repetitions, lookahead_samples=lookahead_samples,
-                               lookahead_seed=lookahead_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                               num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
+                               inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
                 candidate, value = optimizer.optimize_VaRKG(var_kg)
             candidate = candidate.cpu().detach()
@@ -218,8 +216,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                     'candidate': candidate, 'kg_value': value.detach(),
                     'num_samples': num_samples, 'num_fantasies': num_fantasies, 'num_restarts': num_restarts,
                     'alpha': alpha, 'maxiter': maxiter, 'CVaR': CVaR, 'q': q,
-                    'num_lookahead_repetitions': num_lookahead_repetitions, 'lookahead_samples': lookahead_samples,
-                    'seed': seed, 'fantasy_seed': fantasy_seed, 'lookaheaad_seed': lookahead_seed,
+                    'num_repetitions': num_repetitions, 'lookahead_samples': lookahead_samples,
+                    'seed': seed, 'fantasy_seed': fantasy_seed, 'inner_seed': inner_seed,
+                    'reporting_rep': reporting_rep, 'reporting_la_samples': reporting_la_samples,
                     'seed_list': seed_list}
             full_data[i] = data
             torch.save(full_data, 'new_output/%s.pt' % filename)
@@ -301,6 +300,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 return None
         else:
             i = i + 1
+            handling_count = 0
         passed = False
 
     print("total time: ", time() - start)
@@ -314,9 +314,17 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    k = 100
-    full_loop('sinequad', 0, 1, 'tester', 10, num_samples=5, maxiter=1000,
-              num_fantasies=k, num_restarts=k, raw_multiplier=max(k, 10),
-              random_sampling=False, expectation=False, verbose=True, cuda=False,
-              lookahead_samples=torch.linspace(0, 1, 100).reshape(-1, 1),
-              num_lookahead_repetitions=0, q=1)
+    la_samples = torch.linspace(0, 1, 100).reshape(-1, 1)
+    la_samples = None
+    num_rep = 5
+    num_fant = 25
+    num_rest = 10
+    maxiter = 5
+    verb = True
+    num_iter = 10
+    num_samp = 40
+    full_loop('sinequad', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
+              num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
+              random_sampling=False, expectation=False, verbose=verb, cuda=False,
+              lookahead_samples=la_samples,
+              num_repetitions=0, q=1)
