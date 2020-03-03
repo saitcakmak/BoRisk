@@ -4,13 +4,13 @@ this is for analyzing batches of job runs
 import torch
 import matplotlib.pyplot as plt
 from value_plotter import generate_values
-from new_loop import function_picker
+from main_loop import function_picker
 import numpy as np
 
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
-function_name = 'sinequad'
-suffix = '_5'
+function_name = 'branin'
+suffix = '_st'
 filename = '%s%s' % (function_name, suffix)
 dim_w = 1
 iterations = 50
@@ -69,20 +69,20 @@ if function_name == 'sinequad':
 else:
     ub = 10
 
-for i in range(len(keys)):
-    plt.figure(int(i/num_plot))
-    plt.title(function_name + ' gap')
-    key = keys[i]
-    plt.plot(range(iterations), gap[i], label=key)
-    plt.ylim(0, ub)
-    plt.legend()
+# for i in range(len(keys)):
+#     plt.figure(int(i/num_plot))
+#     plt.title(function_name + ' gap')
+#     key = keys[i]
+#     plt.plot(range(iterations), gap[i], label=key)
+#     plt.ylim(0, ub)
+#     plt.legend()
 
 for i in range(len(keys)):
     plt.figure(100+int(i/num_plot))
     plt.title(function_name + ' log_gap')
     key = keys[i]
     plt.plot(range(iterations), log_gap[i], label=key)
-    plt.ylim(-5, 5)
+    # plt.ylim(-5, 5)
     plt.legend()
 
 plt.show()

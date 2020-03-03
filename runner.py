@@ -1,26 +1,25 @@
 """
 This is the main file to be run on the cluster.
-Current version will run a bunch of different settings of ucb for comparison later.
+Modify this to fit the experiment you intend to run.
 """
-from test2_loop import full_loop
+from main_loop import full_loop
 import torch
 
 function_name = input("function name: ")
-num_samples = 5
-key_list = ['VaRKG', 'random']
-output_file = "%s_%s" % (function_name, input("output suffix: "))
+num_samples = 40
+num_fantasies = 25
+key_list = ['s00', 's10', 's40', 's00_random', 's10_random', 's40_random']
+output_file = "%s_%s" % (function_name, "st")
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (3,))
+seed_list = torch.randint(10000, (1,))
 dim_w = 1
 iterations = 50
-num_restarts = 100
-maxiter = 1000
+num_restarts = 25
+maxiter = 100
 periods = 1000
 CVaR = False
 alpha = 0.7
-# num_threads = int(input("num_threads: "))
-# torch.set_num_threads(num_threads)g
-# torch.set_num_interop_threads(num_threads)
+cuda = False
 
 output_path = "batch_output/%s" % output_file
 
@@ -36,13 +35,15 @@ for key in key_list:
         seed = int(seed)
         if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
             continue
-        random = key == 'random'
-        filename = output_file + str(seed)
+        filename = output_file + "_" + key + "_" + str(seed)
+        rep = int(key[1:3])
+        random = len(key) > 3
         output = full_loop(function_name, int(seed), dim_w, filename, iterations,
-                           num_samples=num_samples,
+                           num_samples=num_samples, num_fantasies=num_fantasies,
                            num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                           cuda=False, random_sampling=random,
-                           maxiter=maxiter, periods=periods)
+                           cuda=cuda,
+                           maxiter=maxiter, periods=periods,
+                           num_repetitions=rep)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)

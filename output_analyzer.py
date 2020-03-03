@@ -3,7 +3,7 @@ This is a template file for analyzing the outputs of full runs.
 It is essentially a collection of code that I didn't want to lose in console logs.
 """
 import torch
-from new_loop import function_picker
+from main_loop import function_picker
 import matplotlib.pyplot as plt
 from value_plotter import generate_values
 
