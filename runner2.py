@@ -8,7 +8,7 @@ import torch
 function_name = input("function name: ")
 num_samples = 40
 num_fantasies = 25
-key_list = ['varkg', 'kgcp', 'kgcp_random', 'varkg_random']
+key_list = ['varkg_s10', 'kgcp_s10', 'kgcp_random_s10', 'varkg_random_s10']
 output_file = "%s_%s" % (function_name, "kgcp_v_varkg")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 seed_list = torch.randint(10000, (1,))
@@ -36,8 +36,8 @@ for key in key_list:
         if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
             continue
         filename = output_file + "_" + key + "_" + str(seed)
-        rep = 0
-        random = key[-6:] == 'random'
+        rep = int(key[-2:])
+        random = 'random' in key
         la_samples = None
         kgcp = key[0:4] == 'kgcp'
         output = full_loop(function_name, int(seed), dim_w, filename, iterations,
