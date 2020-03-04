@@ -11,7 +11,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import VaRKG, InnerVaR
+from VaR_KG import VaRKG, InnerVaR, KGCP
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -29,7 +29,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
               cuda: bool = False, reporting_la_samples: Tensor = None, reporting_rep: int = 0,
-              periods: int = 1000):
+              periods: int = 1000, kgcp: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -56,6 +56,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                     if None and reporting rep > 0, then we use sampling
     :param reporting_rep: lookahead or sampling replications for reporting of the best
     :param periods: length of an optimization period in iterations
+    :param kgcp: If True, the KGCP adaptation is used.
     :return: None - saves the output.
     """
 
@@ -157,6 +158,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     passed = False  # it is a flag for handling exceptions
     handling_count = 0  # same
     i = last_iteration + 1
+    opt_time = 0.0
 
     while True:
         try:
@@ -171,7 +173,15 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                  lookahead_samples=reporting_la_samples,
                                  inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
 
-            current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
+            if kgcp:
+                past_x = train_X[:, :dim_x]
+                with torch.no_grad():
+                    values = inner_VaR(past_x)
+                best = torch.argmax(values)
+                current_best_sol = past_x[best]
+                current_best_value = - values[best]
+            else:
+                current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
             current_best_list[i] = current_best_sol
             current_best_value_list[i] = current_best_value
 
@@ -193,6 +203,17 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             if random_sampling:
                 candidate = torch.rand((1, q * d))
                 value = torch.tensor([0])
+            elif kgcp:
+                kgcp = KGCP(model=gp, num_samples=num_samples, alpha=alpha,
+                            current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                            fantasy_seed=fantasy_seed,
+                            dim=d, dim_x=dim_x, past_x=past_x, q=q,
+                            fix_samples=fix_samples, fixed_samples=fixed_samples,
+                            num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
+                            inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                opt_start = time()
+                candidate, value = optimizer.optimize_KGCP(kgcp)
+                opt_time += time() - opt_start
             else:
                 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                                current_best_VaR=current_best_value, num_fantasies=num_fantasies,
@@ -201,8 +222,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                fix_samples=fix_samples, fixed_samples=fixed_samples,
                                num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
                                inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
-
-                candidate, value = optimizer.optimize_VaRKG(var_kg)
+                opt_start = time()
+                candidate, value = optimizer.simple_optimize_VaRKG(var_kg)  # TODO: might want to go back later
+                opt_time += time() - opt_start
             candidate = candidate.cpu().detach()
             # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
             value = value.cpu().detach()
@@ -256,7 +278,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 dummy = torch.rand((1, q, d))
             _ = gp.posterior(dummy).mean
 
-        except RuntimeError as err:
+        except ValueError as err:
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
             handling_count += 1
@@ -304,6 +326,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         passed = False
 
     print("total time: ", time() - start)
+    print("opt time: ", opt_time)
 
     output = {'current_best': current_best_list,
               'current_best_value': current_best_value_list,
@@ -316,15 +339,17 @@ if __name__ == "__main__":
     # this is for momentary testing of changes to the code
     la_samples = torch.linspace(0, 1, 100).reshape(-1, 1)
     la_samples = None
-    num_rep = 5
+    num_rep = 0
     num_fant = 25
     num_rest = 10
-    maxiter = 5
-    verb = True
+    maxiter = 1
+    rand = False
+    verb = False
     num_iter = 10
     num_samp = 40
+    kgcp = True
     full_loop('sinequad', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
               num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
-              random_sampling=False, expectation=False, verbose=verb, cuda=False,
+              random_sampling=rand, expectation=False, verbose=verb, cuda=False,
               lookahead_samples=la_samples,
-              num_repetitions=0, q=1)
+              num_repetitions=0, q=1, kgcp=kgcp)

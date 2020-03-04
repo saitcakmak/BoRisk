@@ -295,12 +295,13 @@ class VaRKG(MCAcquisitionFunction):
             fantasy_seed = self.fantasy_seed
 
         if self.inner_seed is None:
-            lookahead_seed = int(torch.randint(100000, (1,)))
+            inner_seed = int(torch.randint(100000, (1,)))
         else:
-            lookahead_seed = self.inner_seed
+            inner_seed = self.inner_seed
 
         w_actual = X_actual[..., -self.dim_w:]
 
+        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
         for i in range(num_batches):
             left_index = i * self.mini_batch_size
             if i == num_batches - 1:
@@ -308,7 +309,6 @@ class VaRKG(MCAcquisitionFunction):
             else:
                 right_index = (i + 1) * self.mini_batch_size
             # construct the fantasy model
-            sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
             if self.cuda:
                 fantasy_model = self.model.fantasize(X_actual[left_index:right_index].cuda(), sampler).cuda()
             else:
@@ -318,7 +318,7 @@ class VaRKG(MCAcquisitionFunction):
                                  alpha=self.alpha, dim_x=self.dim_x,
                                  num_repetitions=self.num_repetitions,
                                  lookahead_samples=self.lookahead_samples,
-                                 inner_seed=lookahead_seed,
+                                 inner_seed=inner_seed,
                                  CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
                                  w_actual=w_actual[left_index:right_index])
             # sample and return
@@ -326,3 +326,100 @@ class VaRKG(MCAcquisitionFunction):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
             values[left_index: right_index] = self.current_best_VaR - inner_values.permute(1, 0)
         return values
+
+
+class KGCP(VaRKG):
+    """
+    The KGCP implementation for C/VaR
+    """
+
+    def __init__(self, model: Model,
+                 num_samples: int, alpha: Union[Tensor, float],
+                 current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
+                 dim: int, dim_x: int, past_x: Tensor,
+                 q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
+                 num_repetitions: int = 0,
+                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
+        """
+        Everthing is as explained in VaRKG
+        :param model:
+        :param num_samples:
+        :param alpha:
+        :param current_best_VaR:
+        :param num_fantasies:
+        :param fantasy_seed:
+        :param dim:
+        :param dim_x:
+        :param past_x: x component of the past evaluations
+        :param q:
+        :param fix_samples:
+        :param fixed_samples:
+        :param num_repetitions:
+        :param lookahead_samples:
+        :param inner_seed:
+        :param CVaR:
+        :param expectation:
+        :param cuda:
+        """
+        super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
+                         num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
+                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
+                         lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
+                         expectation=expectation, cuda=cuda)
+        self.past_x = past_x.reshape(-1, self.dim_x)
+
+    def forward(self, X: Tensor) -> Tensor:
+        """
+        This is a mock-up implementation of KGCP algorithm for C/VaR.
+        :param X: The tensor of candidate points, batch_size x q x dim
+        :return: the KGCP value of batch_size
+        """
+        X = X.reshape(-1, self.q, self.dim)
+        values = torch.empty(self.past_x.size(0) + self.q, self.num_fantasies, X.size(0))
+
+        # generate w_samples
+        if self.fix_samples:
+            if self.fixed_samples is None:
+                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
+            w_samples = self.fixed_samples
+        else:
+            w_samples = torch.rand((self.num_samples, self.dim_w))
+
+        if self.fantasy_seed is None:
+            fantasy_seed = int(torch.randint(100000, (1,)))
+        else:
+            fantasy_seed = self.fantasy_seed
+
+        if self.inner_seed is None:
+            inner_seed = int(torch.randint(100000, (1,)))
+        else:
+            inner_seed = self.inner_seed
+
+        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
+        if self.cuda:
+            fantasy_model = self.model.fantasize(X.cuda(), sampler).cuda()
+        else:
+            fantasy_model = self.model.fantasize(X, sampler)
+
+        w_actual = X[..., -self.dim_w:]
+
+        inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
+                             alpha=self.alpha, dim_x=self.dim_x,
+                             num_repetitions=self.num_repetitions,
+                             lookahead_samples=self.lookahead_samples,
+                             inner_seed=inner_seed,
+                             CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                             w_actual=w_actual)
+
+        x_comp = X[..., :self.dim_x]
+        x_inner = torch.cat((x_comp, self.past_x.repeat(X.size(0), 1, 1)), dim=-2).repeat(self.num_fantasies, 1, 1, 1)
+
+        # TODO: can we get rid of this for loop?
+        for i in range(values.size(0)):
+            with settings.propagate_grads(True):
+                values[i] = - inner_VaR(x_inner[..., i, :].unsqueeze(-2))
+        values, _ = torch.min(values, dim=0)
+        values = self.current_best_VaR - torch.mean(values, dim=0)
+        return values
+
