@@ -223,7 +223,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
                                inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
                 opt_start = time()
-                candidate, value = optimizer.simple_optimize_VaRKG(var_kg)  # TODO: might want to go back later
+                candidate, value = optimizer.optimize_VaRKG(var_kg)  # TODO: might want to go back later
                 opt_time += time() - opt_start
             candidate = candidate.cpu().detach()
             # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
@@ -342,12 +342,12 @@ if __name__ == "__main__":
     num_rep = 0
     num_fant = 25
     num_rest = 10
-    maxiter = 1
+    maxiter = 1000
     rand = False
     verb = False
     num_iter = 10
     num_samp = 40
-    kgcp = True
+    kgcp = False
     full_loop('sinequad', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
               num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
               random_sampling=rand, expectation=False, verbose=verb, cuda=False,
