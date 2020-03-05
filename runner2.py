@@ -13,7 +13,7 @@ key_list = ['varkg_s00', 'kgcp_s00', 'kgcp_random_s00', 'varkg_random_s00',
         'varkg_s10', 'kgcp_s10', 'kgcp_random_s10', 'varkg_random_s10']
 output_file = "%s_%s" % (function_name, "kgcp_v_varkg")
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (1,))
+seed_list = torch.randint(10000, (3,))
 dim_w = 1
 iterations = 50
 num_restarts = 10
