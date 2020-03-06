@@ -18,6 +18,7 @@ seed_list = torch.randint(10000, (1,))
 dim_w = 1
 iterations = 50
 num_restarts = 40
+raw_multiplier = 50
 maxiter = 1000
 periods = 1000
 CVaR = False
@@ -47,7 +48,7 @@ for key in key_list:
         output = full_loop(function_name, int(seed), dim_w, filename, iterations,
                            num_samples=num_samples, num_fantasies=num_fantasies,
                            num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                           cuda=cuda,
+                           cuda=cuda, raw_multiplier=raw_multiplier,
                            maxiter=maxiter, periods=periods,
                            num_repetitions=rep, lookahead_samples=la_samples,
                            reporting_rep=rep, reporting_la_samples=la_samples,
