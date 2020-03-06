@@ -5,11 +5,11 @@ import torch
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import VaRKG, InnerVaR
+from VaR_KG import InnerVaR
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from function_picker import function_picker
+from test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
 import matplotlib.pyplot as plt
 import numpy as np

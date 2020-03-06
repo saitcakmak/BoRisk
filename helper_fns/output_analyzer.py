@@ -5,10 +5,10 @@ It is essentially a collection of code that I didn't want to lose in console log
 import torch
 from main_loop import function_picker
 import matplotlib.pyplot as plt
-from value_plotter import generate_values
+from helper_fns.value_plotter import generate_values
 
 
-directory = 'new_output/'
+directory = 'detailed_output/'
 prefix = 'cluster_'
 # prefix = ''
 # prefix = 'imp2_'

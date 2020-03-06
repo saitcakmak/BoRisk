@@ -253,6 +253,52 @@ class Optimizer:
         best = torch.argmax(torch.mean(values, dim=-1))
         return solutions[best].detach(), torch.mean(values, dim=-1)[best].detach()
 
+    def disc_optimize_VaRKG(self, acqf: VaRKG, w_samples: Tensor) -> Tuple[Tensor, Tensor]:
+        """
+        Optimizer that restricts w component to w_samples.
+        :param acqf: VaRKG object to be optimized
+        :param w_samples: w_samples to optimize over
+        :return: Optimal solution and value
+        """
+        # TODO: test
+        # make sure the cache of solutions is cleared
+        if self.fant_sols is not None:
+            self.new_iteration()
+        # generate the initial conditions for first run
+        raw_samples = self.generate_full_raw_samples(w_samples)
+        raw_values = self.evaluate_samples(acqf, raw_samples)
+        permuted_samples = self.pick_full_solutions(self.raw_samples, 0)
+
+        options = {'maxiter': self.maxiter}
+        fixed_features = dict()
+        for i in range(self.dim_x, self.dim):
+            fixed_features[i] = None
+
+        initial_conditions = self.generate_initial_conditions(acqf, raw_samples, raw_values, permuted_samples)
+
+        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
+                                                 acquisition_function=acqf,
+                                                 lower_bounds=self.full_bounds[0],
+                                                 upper_bounds=self.full_bounds[1],
+                                                 options=options,
+                                                 fixed_features=fixed_features)
+        self.add_full_solutions(solutions, values)
+
+        _, idx = torch.sort(torch.mean(values, dim=-1))
+        solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
+                                                 acquisition_function=acqf,
+                                                 lower_bounds=self.full_bounds[0],
+                                                 upper_bounds=self.full_bounds[1],
+                                                 options=options,
+                                                 fixed_features=fixed_features)
+        # add the resulting solutions to be used for next iteration. Normalizing in the end to get - VaR value
+        self.add_inner_solutions(solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
+                                 values.reshape(-1) - self.current_best)
+        solutions = solutions.cpu().detach()
+        values = torch.mean(values, dim=-1).cpu().detach()
+        best = torch.argmax(values)
+        return solutions[best], values[best]
+
     def generate_kgcp_restart_points(self, acqf: KGCP) -> Tensor:
         """
         Generates the restarts points for KGCP
@@ -297,7 +343,61 @@ class Optimizer:
                                                  upper_bounds=self.kgcp_bounds[1],
                                                  options=options)
         best = torch.argmax(values)
-        return solutions[best].detach(), values[best].detach()
+        return solutions[best].cpu().detach(), values[best].cpu().detach()
+
+    def disc_generate_kgcp_restart_points(self, acqf: KGCP, w_samples: Tensor) -> Tensor:
+        """
+        Generates the restarts points for KGCP
+        :param acqf: The acquisition function being optimized
+        :return: restart points
+        """
+        X = draw_sobol_samples(bounds=self.kgcp_bounds, n=self.raw_samples, q=self.q)
+        w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
+        X[..., self.dim_x:] = w_samples[w_ind, :]
+        with torch.no_grad():
+            Y = acqf(X)
+        Y_std = Y.std()
+        max_val, max_idx = torch.max(Y, dim=0)
+        Z = (Y - Y.mean()) / Y_std
+        etaZ = self.eta * Z
+        weights = torch.exp(etaZ)
+        while torch.isinf(weights).any():
+            etaZ *= 0.5
+            weights = torch.exp(etaZ)
+        idcs = torch.multinomial(weights, self.num_restarts)
+        # make sure we get the maximum
+        if max_idx not in idcs:
+            idcs[-1] = max_idx
+        return X[idcs]
+
+    def disc_optimize_KGCP(self, acqf: KGCP, w_samples: Tensor) -> Tuple[Tensor, Tensor]:
+        """
+        KGCP optimizer with w component restricted to w_samples
+        :param acqf: KGCP object
+        :param w_samples: the set W to consider
+        :return: Optimal solution and value
+        """
+        initial_conditions = self.disc_generate_kgcp_restart_points(acqf, w_samples)
+        options = {'maxiter': self.maxiter}
+        fixed_features = dict()
+        for i in range(self.dim_x, self.dim):
+            fixed_features[i] = None
+
+        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
+                                                 acquisition_function=acqf,
+                                                 lower_bounds=self.kgcp_bounds[0],
+                                                 upper_bounds=self.kgcp_bounds[1],
+                                                 options=options,
+                                                 fixed_features=fixed_features)
+        _, idx = torch.sort(values)
+        solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
+                                                 acquisition_function=acqf,
+                                                 lower_bounds=self.kgcp_bounds[0],
+                                                 upper_bounds=self.kgcp_bounds[1],
+                                                 options=options,
+                                                 fixed_features=fixed_features)
+        best = torch.argmax(values)
+        return solutions[best].cpu().detach(), values[best].cpu().detach()
 
     def generate_samples_from_solutions(self, solutions: Tensor, values: Tensor):
         """
@@ -333,11 +433,12 @@ class Optimizer:
         picked_solutions = torch.cat((solutions, picked_fantasies), dim=-1)
         return picked_solutions
 
-    def generate_full_raw_samples(self) -> Tensor:
+    def generate_full_raw_samples(self, w_samples: Tensor = None) -> Tensor:
         """
         Generates the one-shot raw samples for start of the optimization.
         This is only to be used for starting optimization for the first time
         in a given loop. After that, we will utilize the fantasy solutions.
+        :param w_samples: If specified, the w component of the samples is restricted to this set
         :return: Raw samples
         """
         X_rnd = draw_sobol_samples(bounds=self.full_bounds, n=self.raw_samples, q=1)
@@ -352,6 +453,13 @@ class Optimizer:
         X_rnd[-num_non_random:, 0, -self.num_fantasies * self.dim_x:] = \
             self.inner_solutions[idx].view(num_non_random, self.num_fantasies * self.dim_x) \
             + torch.randn((num_non_random, self.num_fantasies * self.dim_x)) * 0.001
+
+        if w_samples is not None:
+            w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
+            w_picked = w_samples[w_ind, :]
+            for i in range(self.q):
+                X_rnd[..., i * self.dim + self.dim_x:(i+1)*self.dim] = w_picked[..., i, :].unsqueeze(-2)
+
         return X_rnd
 
     def evaluate_samples(self, acqf: VaRKG, samples: Tensor) -> Tensor:

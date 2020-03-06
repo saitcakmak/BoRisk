@@ -3,14 +3,14 @@ this is for analyzing batches of job runs
 """
 import torch
 import matplotlib.pyplot as plt
-from value_plotter import generate_values
+from helper_fns.value_plotter import generate_values
 from main_loop import function_picker
 import numpy as np
 
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
 function_name = 'sinequad'
-suffix = '_st'
+suffix = '_disc_5'
 filename = '%s%s' % (function_name, suffix)
 dim_w = 1
 iterations = 50

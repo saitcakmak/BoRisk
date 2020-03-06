@@ -16,7 +16,7 @@ from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from function_picker import function_picker
+from test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
 from optimizer import Optimizer
 
@@ -29,7 +29,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
               cuda: bool = False, reporting_la_samples: Tensor = None, reporting_rep: int = 0,
-              periods: int = 1000, kgcp: bool = False):
+              periods: int = 1000, kgcp: bool = False, disc: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -57,6 +57,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param reporting_rep: lookahead or sampling replications for reporting of the best
     :param periods: length of an optimization period in iterations
     :param kgcp: If True, the KGCP adaptation is used.
+    :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
     :return: None - saves the output.
     """
 
@@ -75,10 +76,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         filename = filename + '_a=%s' % alpha
     if q > 1 and "q=" not in filename:
         filename = filename + "_q=%d" % q
+    if kgcp and "kgcp" not in filename:
+        filename = filename + "_kgcp"
+    if disc and 'disc' not in filename:
+        filename = filename + "_disc"
     if random_sampling:
         filename = filename + '_random'
     try:
-        full_data = torch.load("new_output/%s.pt" % filename)
+        full_data = torch.load("detailed_output/%s.pt" % filename)
         last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
         last_data = full_data[last_iteration]
         seed_list = last_data['seed_list']
@@ -111,7 +116,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     if verbose and d == 2:
         import matplotlib.pyplot as plt
-        from plotter import contour_plotter
+        from helper_fns.plotter import contour_plotter
         plotter = contour_plotter
 
     # for timing
@@ -191,7 +196,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             if i >= iterations:
                 full_data['final_solution'] = current_best_sol
                 full_data['final_value'] = current_best_value
-                torch.save(full_data, 'new_output/%s.pt' % filename)
+                torch.save(full_data, 'detailed_output/%s.pt' % filename)
                 break
 
             # This is the seed of fantasy model sampler. If specified the all forward passes to var_kg will share same
@@ -212,7 +217,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                             num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
                             inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
                 opt_start = time()
-                candidate, value = optimizer.optimize_KGCP(kgcp)
+                if disc:
+                    candidate, value = optimizer.disc_optimize_KGCP(kgcp, w_samples)
+                else:
+                    candidate, value = optimizer.optimize_KGCP(kgcp)
                 opt_time += time() - opt_start
             else:
                 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
@@ -223,7 +231,10 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
                                inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
                 opt_start = time()
-                candidate, value = optimizer.optimize_VaRKG(var_kg)  # TODO: might want to go back later
+                if disc:
+                    candidate, value = optimizer.disc_optimize_VaRKG(var_kg, w_samples)
+                else:
+                    candidate, value = optimizer.optimize_VaRKG(var_kg)
                 opt_time += time() - opt_start
             candidate = candidate.cpu().detach()
             # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
@@ -243,7 +254,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                     'reporting_rep': reporting_rep, 'reporting_la_samples': reporting_la_samples,
                     'seed_list': seed_list}
             full_data[i] = data
-            torch.save(full_data, 'new_output/%s.pt' % filename)
+            torch.save(full_data, 'detailed_output/%s.pt' % filename)
 
             iteration_end = time()
             print("Iteration %d completed in %s" % (i, iteration_end - iteration_start))
@@ -342,14 +353,15 @@ if __name__ == "__main__":
     num_rep = 0
     num_fant = 25
     num_rest = 10
-    maxiter = 1000
+    maxiter = 100
     rand = False
     verb = False
     num_iter = 10
-    num_samp = 40
+    num_samp = 10
     kgcp = False
+    disc = True
     full_loop('sinequad', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
               num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
               random_sampling=rand, expectation=False, verbose=verb, cuda=False,
               lookahead_samples=la_samples,
-              num_repetitions=0, q=1, kgcp=kgcp)
+              num_repetitions=0, q=1, kgcp=kgcp, disc=disc)

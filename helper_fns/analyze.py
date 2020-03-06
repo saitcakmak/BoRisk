@@ -1,22 +1,20 @@
 import torch
-from torch import Tensor
 from botorch.models import SingleTaskGP
 from VaR_KG import VaRKG, InnerVaR
-from time import time, sleep
-from plotter import plotter_3D, contour_plotter
+from helper_fns.plotter import contour_plotter
 from botorch.models.transforms import Standardize
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 import matplotlib.pyplot as plt
 
-file_name = "imp2_branin_3256_1_50_run2.pt"
+file_name = "branin_kgcp_v_varkg_varkg_6044.pt"
 dim = 2
 dim_x = 1
 num_compare = 100  # number of random solutions to compare with
 if file_name[-3:] == '.pt':
     file_name = file_name[:-3]
-file_path = "new_output/%s.pt" % file_name
+file_path = "detailed_output/%s.pt" % file_name
 plotter = contour_plotter
 data = torch.load(file_path)
 noise_prior = GammaPrior(1.1, 0.5)

@@ -6,22 +6,24 @@ from main_loop import full_loop
 import torch
 
 function_name = input("function name: ")
-num_samples = 40
-num_fantasies = 25
+num_samples = 10
+num_fantasies = 50
 key_list = ['varkg_s00', 'kgcp_s00', 'kgcp_random_s00', 'varkg_random_s00',
-        'varkg_s01', 'kgcp_s01', 'kgcp_random_s01', 'varkg_random_s01',
-        'varkg_s10', 'kgcp_s10', 'kgcp_random_s10', 'varkg_random_s10']
-output_file = "%s_%s" % (function_name, "kgcp_v_varkg")
+            'varkg_s01', 'kgcp_s01', 'kgcp_random_s01', 'varkg_random_s01',
+            'varkg_s10', 'kgcp_s10', 'kgcp_random_s10', 'varkg_random_s10',
+            'varkg_s40', 'kgcp_s40', 'kgcp_random_s40', 'varkg_random_s40']
+output_file = "%s_%s" % (function_name, "disc_10samp")
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (3,))
+seed_list = torch.randint(10000, (1,))
 dim_w = 1
 iterations = 50
-num_restarts = 10
+num_restarts = 40
 maxiter = 1000
 periods = 1000
 CVaR = False
 alpha = 0.7
 cuda = False
+disc = True
 
 output_path = "batch_output/%s" % output_file
 
@@ -49,7 +51,7 @@ for key in key_list:
                            maxiter=maxiter, periods=periods,
                            num_repetitions=rep, lookahead_samples=la_samples,
                            reporting_rep=rep, reporting_la_samples=la_samples,
-                           kgcp=kgcp, random_sampling=random)
+                           kgcp=kgcp, random_sampling=random, disc=disc)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)

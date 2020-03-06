@@ -1,9 +1,8 @@
 import torch
-from torch import Tensor
 from botorch.models import SingleTaskGP
-from VaR_KG import VaRKG, InnerVaR
-from time import time, sleep
-from plotter import plotter_3D, contour_plotter
+from VaR_KG import InnerVaR
+from time import sleep
+from helper_fns.plotter import contour_plotter
 from botorch.models.transforms import Standardize
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -12,7 +11,7 @@ from gpytorch.priors.torch_priors import GammaPrior
 file_name = input("file name (w/o extension): ")
 if file_name[-3:] == '.pt':
     file_name = file_name[:-3]
-file_path = "new_output/%s.pt" % file_name
+file_path = "detailed_output/%s.pt" % file_name
 plotter = contour_plotter
 data = torch.load(file_path)
 noise_prior = GammaPrior(1.1, 0.5)
@@ -21,7 +20,7 @@ likelihood = GaussianLikelihood(
     noise_prior=noise_prior,
     batch_shape=[],
     noise_constraint=GreaterThan(
-        0.05,  # minimum observation noise assumed in the GP model
+        0.000005,  # minimum observation noise assumed in the GP model
         transform=None,
         initial_value=noise_prior_mode,
     ),
