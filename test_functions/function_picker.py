@@ -36,7 +36,8 @@ function_dict = {"simplequad": SimpleQuadratic,
                  "threehumpcamel": ThreeHumpCamel}
 
 
-def function_picker(function_name: str, noise_std: float = 0.1, negate=False) -> SyntheticTestFunction:
+def function_picker(function_name: str, noise_std: float = 0.1,
+                    negate: bool = False, reduce_dim: bool = False) -> SyntheticTestFunction:
     """
     Returns the appropriate function callable
     If adding new BoTorch test functions, run them through StandardizedFunction.
@@ -45,6 +46,7 @@ def function_picker(function_name: str, noise_std: float = 0.1, negate=False) ->
     :param function_name: Function to be used
     :param noise_std: observation noise level
     :param negate: In most cases, should be true for maximization
+    :param reduce_dim: If True, last dimension of the input is ignored by the function
     :return: Function callable
     """
     if function_name == 'newsvendor':
@@ -54,9 +56,11 @@ def function_picker(function_name: str, noise_std: float = 0.1, negate=False) ->
     elif function_name in function_dict.keys():
         if function_name[-1].isdigit():
             function = StandardizedFunction(function_dict[function_name](dim=int(function_name[-1]),
-                                                                         noise_std=noise_std, negate=negate))
+                                                                         noise_std=noise_std, negate=negate),
+                                            reduce_dim=reduce_dim)
         else:
-            function = StandardizedFunction(function_dict[function_name](noise_std=noise_std, negate=negate))
+            function = StandardizedFunction(function_dict[function_name](noise_std=noise_std, negate=negate),
+                                            reduce_dim=reduce_dim)
     else:
         raise ValueError("Function name was not found!")
 

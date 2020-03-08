@@ -10,7 +10,7 @@ import numpy as np
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
 function_name = 'sinequad'
-suffix = '_disc_5'
+suffix = '_disc_1samp'
 filename = '%s%s' % (function_name, suffix)
 dim_w = 1
 iterations = 50

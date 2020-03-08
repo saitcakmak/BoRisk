@@ -12,9 +12,9 @@ key_list = ['varkg_s00', 'kgcp_s00', 'kgcp_random_s00', 'varkg_random_s00']
 #            'varkg_s01', 'kgcp_s01', 'kgcp_random_s01', 'varkg_random_s01',
 #            'varkg_s10', 'kgcp_s10', 'kgcp_random_s10', 'varkg_random_s10',
 #            'varkg_s40', 'kgcp_s40', 'kgcp_random_s40', 'varkg_random_s40']
-output_file = "%s_%s" % (function_name, "disc_1samp")
+output_file = "%s_%s" % (function_name, "red_dim")
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (5,))
+seed_list = torch.randint(10000, (1,))
 dim_w = 1
 iterations = 50
 num_restarts = 40

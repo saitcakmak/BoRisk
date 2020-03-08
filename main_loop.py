@@ -29,7 +29,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
               cuda: bool = False, reporting_la_samples: Tensor = None, reporting_rep: int = 0,
-              periods: int = 1000, kgcp: bool = False, disc: bool = False):
+              periods: int = 1000, kgcp: bool = False, disc: bool = False, reduce_dim: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -58,13 +58,15 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param periods: length of an optimization period in iterations
     :param kgcp: If True, the KGCP adaptation is used.
     :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
+    :param reduce_dim: If True, the function ignores last dimension of the input. Useful for testing
+                        the VaRKG code in classical setting
     :return: None - saves the output.
     """
 
     # Initialize the test function
-    function = function_picker(function_name)
+    function = function_picker(function_name, reduce_dim=reduce_dim)
     d = function.dim  # dimension of train_X
-    n = 2 * d + 2  # training samples
+    n = 2 * (d - int(reduce_dim)) + 2   # training samples
     dim_x = d - dim_w  # dimension of the x component
 
     # If file already exists, we will do warm-starts, i.e. continue from where it was left.
@@ -289,7 +291,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 dummy = torch.rand((1, q, d))
             _ = gp.posterior(dummy).mean
 
-        except RuntimeError as err:
+        except ValueError as err:
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
             handling_count += 1
@@ -357,11 +359,12 @@ if __name__ == "__main__":
     rand = False
     verb = False
     num_iter = 10
-    num_samp = 10
+    num_samp = 1
     kgcp = False
     disc = True
-    full_loop('sinequad', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
+    red_dim = True
+    full_loop('branin', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
               num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
               random_sampling=rand, expectation=False, verbose=verb, cuda=False,
               lookahead_samples=la_samples,
-              num_repetitions=0, q=1, kgcp=kgcp, disc=disc)
+              num_repetitions=0, q=1, kgcp=kgcp, disc=disc, reduce_dim=red_dim)

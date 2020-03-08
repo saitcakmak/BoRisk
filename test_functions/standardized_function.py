@@ -10,19 +10,24 @@ class StandardizedFunction:
     This class normalizes those to the unit hypercube.
     """
 
-    def __init__(self, function: SyntheticTestFunction):
+    def __init__(self, function: SyntheticTestFunction, reduce_dim: bool = False):
         """
         Initialize the function
 
         :param function: the function to sample from, initialized with relevant parameters
+        :param reduce_dim: for testing the algorithm performance under the classical setting.
+                            Ignores the w dimension, assuming dim_w = 1.
         """
         super().__init__()
         try:
             self.function = function
             self.dim = function.dim
             self.bounds = Tensor(function._bounds).t()
+            if reduce_dim:
+                self.dim += 1
             self.scale = self.bounds[1] - self.bounds[0]
             self.l_bounds = self.bounds[0]
+            self.reduce_dim = reduce_dim
         except AttributeError:
             # in case a Class is given instead of an object
             # construct the object with noise_std = 0.1
@@ -35,6 +40,8 @@ class StandardizedFunction:
         :param seed: If given, the seed is set for random number generation
         :return: function value
         """
+        if self.reduce_dim:
+            X = X[..., :-1]
         old_state = torch.random.get_rng_state()
         try:
             torch.random.manual_seed(seed=seed)
@@ -54,6 +61,8 @@ class StandardizedFunction:
         :param X: Solutions from the relative scale of [0, 1]
         :return: function value
         """
+        if self.reduce_dim:
+            X = X[..., :-1]
         shape = list(X.size())
         shape[-1] = 1
         X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
