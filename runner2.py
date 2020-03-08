@@ -25,6 +25,7 @@ CVaR = False
 alpha = 0.7
 cuda = False
 disc = True
+red_dim = True
 
 output_path = "batch_output/%s" % output_file
 
@@ -52,7 +53,8 @@ for key in key_list:
                            maxiter=maxiter, periods=periods,
                            num_repetitions=rep, lookahead_samples=la_samples,
                            reporting_rep=rep, reporting_la_samples=la_samples,
-                           kgcp=kgcp, random_sampling=random, disc=disc)
+                           kgcp=kgcp, random_sampling=random, disc=disc,
+                           reduce_dim=red_dim)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)
