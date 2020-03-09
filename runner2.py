@@ -6,9 +6,9 @@ from main_loop import full_loop
 import torch
 
 function_name = input("function name: ")
-num_samples = 1
+num_samples = 10
 num_fantasies = 50
-key_list = ['varkg_s00', 'kgcp_s00', 'kgcp_random_s00', 'varkg_random_s00']
+key_list = ['varkg_s00', 'varkg_random_s00']
 #            'varkg_s01', 'kgcp_s01', 'kgcp_random_s01', 'varkg_random_s01',
 #            'varkg_s10', 'kgcp_s10', 'kgcp_random_s10', 'varkg_random_s10',
 #            'varkg_s40', 'kgcp_s40', 'kgcp_random_s40', 'varkg_random_s40']
@@ -22,10 +22,11 @@ raw_multiplier = 50
 maxiter = 1000
 periods = 1000
 CVaR = False
+expectation = True
 alpha = 0.7
 cuda = False
 disc = True
-red_dim = True
+red_dim = False
 
 output_path = "batch_output/%s" % output_file
 
@@ -54,7 +55,7 @@ for key in key_list:
                            num_repetitions=rep, lookahead_samples=la_samples,
                            reporting_rep=rep, reporting_la_samples=la_samples,
                            kgcp=kgcp, random_sampling=random, disc=disc,
-                           reduce_dim=red_dim)
+                           reduce_dim=red_dim, expectation=expectation)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)

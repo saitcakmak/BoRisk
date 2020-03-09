@@ -291,7 +291,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 dummy = torch.rand((1, q, d))
             _ = gp.posterior(dummy).mean
 
-        except ValueError as err:
+        except RuntimeError as err:
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
             handling_count += 1
