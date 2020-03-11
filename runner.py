@@ -11,12 +11,12 @@ function_name = input("function name: ")
 num_samples = 10
 num_fantasies = 50
 key_list = ['ts_s00',
-            # 'varkg_s00', 'kgcp_s00', 'random_s00',
+            'varkg_s00', 'kgcp_s00', 'random_s00',
             # 'varkg_s01', 'kgcp_s01', 'random_s01',
             # 'varkg_s10', 'kgcp_s10', 'random_s10',
             # 'varkg_s40', 'kgcp_s40', 'random_s40',
             ]
-output_file = "%s_%s" % (function_name, "exp")
+output_file = "%s_%s" % (function_name, "compare")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 seed_list = torch.randint(10000, (5,))
 dim_w = 1
@@ -26,9 +26,9 @@ raw_multiplier = 50
 maxiter = 1000
 periods = 1000
 CVaR = False
-expectation = True
+expectation = False
 alpha = 0.7
-cuda = True
+cuda = False
 disc = True
 red_dim = False
 

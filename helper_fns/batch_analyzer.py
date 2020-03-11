@@ -9,7 +9,7 @@ import numpy as np
 
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
-function_name = 'levy'
+function_name = 'branin'
 suffix = '_exp'
 filename = '%s%s' % (function_name, suffix)
 dim_w = 1
