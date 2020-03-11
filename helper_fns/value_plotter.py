@@ -7,30 +7,25 @@ from torch import Tensor
 import matplotlib.pyplot as plt
 import numpy as np
 from botorch.test_functions import Powell, Branin
-from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
-from test_functions.standardized_function import StandardizedFunction
-from test_functions.cont_newsvendor import ContinuousNewsvendor
 from typing import List
+from test_functions.function_picker import function_picker
 
 
 # Initialize the test function
 noise_std = 0  # observation noise level - no noise allows for a more precise evaluation
-# function = SimpleQuadratic(noise_std=noise_std)
-# function = SineQuadratic(noise_std=noise_std)
-function = StandardizedFunction(Powell(noise_std=noise_std))
-# function = StandardizedFunction(Branin(noise_std=noise_std))
-# function = ContinuousNewsvendor(run_length=10000, crn=True)
+function_name = 'levy'
+function = function_picker(function_name, noise_std)
 
-CVaR = False  # if true, calculate CVaR instead of VaR
-lb = [0.4, 0.4]
-ub = [0.6, 0.6]
-num_x = 20
-num_w = 100
+CVaR = True  # if true, calculate CVaR instead of VaR
+lb = [0., 0.]
+ub = [1., 1.]
+num_x = 1000
+num_w = 10
 d = function.dim  # dimension of train_X
 dim_w = 1  # dimension of w component
 n = 2 * d + 2  # training samples
 dim_x = d - dim_w  # dimension of the x component
-alpha = 0.7  # alpha of the risk function
+alpha = 0.  # alpha of the risk function
 
 
 def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1]):

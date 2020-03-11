@@ -11,7 +11,7 @@ from gpytorch.priors.torch_priors import GammaPrior
 file_name = input("file name (w/o extension): ")
 if file_name[-3:] == '.pt':
     file_name = file_name[:-3]
-file_path = "detailed_output/%s.pt" % file_name
+file_path = "../detailed_output/%s.pt" % file_name
 plotter = contour_plotter
 data = torch.load(file_path)
 noise_prior = GammaPrior(1.1, 0.5)
@@ -26,7 +26,8 @@ likelihood = GaussianLikelihood(
     ),
 )
 num_samples = 100
-alpha = 0.7
+CVaR = True
+alpha = 0.
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 
 
@@ -35,7 +36,7 @@ for i in range(len(data.keys())):
     gp = SingleTaskGP(iteration_data['train_X'], iteration_data['train_Y'].reshape(-1, 1), likelihood,
                       outcome_transform=Standardize(m=1))
     gp.load_state_dict(iteration_data['state_dict'])
-    inner_VaR = InnerVaR(model=gp, w_samples=fixed_samples, alpha=alpha, dim_x=1)
+    inner_VaR = InnerVaR(model=gp, w_samples=fixed_samples, alpha=alpha, dim_x=1, CVaR=CVaR)
     plotter(gp, inner_VaR, iteration_data['current_best_sol'], iteration_data['current_best_value'], iteration_data['candidate'])
     # input("Next?")
     sleep(1)

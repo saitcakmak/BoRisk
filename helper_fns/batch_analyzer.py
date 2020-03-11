@@ -14,15 +14,15 @@ suffix = '_exp'
 filename = '%s%s' % (function_name, suffix)
 dim_w = 1
 iterations = 50
-CVaR = False
-alpha = 0.7
+CVaR = True
+alpha = 0.
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
 num_x = 100000
 if dim_x == 2:
     num_x = int(np.sqrt(num_x))
-num_w = 5  # use larger if dim_w > 1
+num_w = 10  # use larger if dim_w > 1
 num_plot = 8  # max number of plot lines in a figure
 
 if dim_w == 1:
@@ -55,7 +55,7 @@ for j in range(len(keys)):
         vals = function(sols)
         vals, _ = torch.sort(vals, dim=-2)
         if CVaR:
-            values = torch.mean(vals[:, int(alpha * num_w), :], dim=-2)
+            values = torch.mean(vals[:, int(alpha * num_w):, :], dim=-2)
         else:
             values = vals[:, int(alpha * num_w), :]
         rep_out[i] = values.reshape(-1)
@@ -63,11 +63,6 @@ for j in range(len(keys)):
 
 gap = output - best_value
 log_gap = torch.log10(gap)
-
-if function_name == 'sinequad':
-    ub = 2
-else:
-    ub = 10
 
 # for i in range(len(keys)):
 #     plt.figure(int(i/num_plot))
