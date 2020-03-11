@@ -12,12 +12,12 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR import InnerVaR, pick_w_confidence
+from VaR_KG import InnerVaR, pick_w_confidence
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from function_picker import function_picker
+from test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
 from botorch.optim import optimize_acqf
 from botorch.utils import draw_sobol_samples
@@ -103,7 +103,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         noise_prior=noise_prior,
         batch_shape=[],
         noise_constraint=GreaterThan(
-            0.05,  # minimum observation noise assumed in the GP model
+            0.000005,  # minimum observation noise assumed in the GP model
             transform=None,
             initial_value=noise_prior_mode,
         ),

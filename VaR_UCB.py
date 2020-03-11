@@ -20,7 +20,6 @@ class InnerVaR(MCAcquisitionFunction):
 
     def __init__(self, model: Model, w_samples: Tensor,
                  alpha: float, dim_x: int, beta: float,
-                 beta_max: float = 0,
                  num_lookahead_repetitions: int = 0,
                  lookahead_samples: Tensor = None,
                  lookahead_seed: Optional[int] = None,
@@ -33,7 +32,6 @@ class InnerVaR(MCAcquisitionFunction):
         :param alpha: VaR risk level alpha
         :param dim_x: dimension of the x component
         :param beta: The beta parameter of VaR(mu + beta * sigma)
-        :param beta_max: The beta parameter of VaR(mu) + beta_max * max_w sigma
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
         :param lookahead_samples: if given, use this instead of generating the lookahead points. Just the w component
                                     num_lookahead_samples ('m' in the description) x dim_w
@@ -51,7 +49,6 @@ class InnerVaR(MCAcquisitionFunction):
         self.lookahead_samples = lookahead_samples
         self.dim_x = dim_x
         self.beta = beta
-        self.beta_max = beta_max
         self.dim_w = w_samples.size(-1)
         self.batch_shape = model._input_batch_shape
         self.CVaR = CVaR
@@ -99,10 +96,9 @@ class InnerVaR(MCAcquisitionFunction):
             # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (5 dim)
 
             # the UCB part here
-            if self.beta > 0 or self.beta_max > 0:
+            if self.beta > 0:
                 sigma = post.variance.pow(1/2)
-                max_sigma, _ = torch.max(sigma, dim=-2, keepdim=True)
-                samples = samples - self.beta * sigma - self.beta_max * max_sigma
+                samples = samples - self.beta * sigma
 
             # calculate C/VaR value
             samples, _ = torch.sort(samples, dim=-2)
@@ -121,10 +117,9 @@ class InnerVaR(MCAcquisitionFunction):
             samples = post.mean
 
             # the UCB part here
-            if self.beta > 0 or self.beta_max > 0:
+            if self.beta > 0:
                 sigma = post.variance.pow(1/2)
-                max_sigma, _ = torch.max(sigma, dim=-2, keepdim=True)
-                samples = samples - self.beta * sigma - self.beta_max * max_sigma
+                samples = samples - self.beta * sigma
 
             # calculate C/VaR value
             samples, _ = torch.sort(samples, dim=-2)
@@ -183,8 +178,6 @@ class w_KG(MCAcquisitionFunction):
         :param num_fantasies: Number of fantasies to consider
         :param alpha: VaR risk level alpha
         :param dim_x: dimension of the x component
-        :param beta: The beta parameter of VaR(mu + beta * sigma)
-        :param beta_max: The beta parameter of VaR(mu) + beta_max * max_w sigma
         :param fantasy_seed: Seed to generate fantasies with
         :param num_lookahead_repetitions: number of repetitions of the lookahead sample path enumeration
         :param lookahead_samples: if given, use this instead of generating the lookahead points. Just the w component

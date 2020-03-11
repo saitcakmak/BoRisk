@@ -17,7 +17,7 @@ from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
-from function_picker import function_picker
+from test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
 from botorch.optim import optimize_acqf
 
@@ -29,7 +29,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_lookahead_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, expectation: bool = False,
-              beta_c: float = 0, beta_d: float = 0, beta_max: float = 0, continuous: bool = False,
+              beta_c: float = 0, beta_d: float = 0,
               cuda: bool = False, reporting_la_samples: Tensor = None, reporting_la_rep: int = 0,
               random_sampling: bool = False, beta_pow: float = 2):
     """
@@ -53,9 +53,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param expectation: If true, we are running BQO optimization.
     :param beta_c: TODO: explain - these might have to go inside and become iteration dependent
     :param beta_d:
-    :param beta_max:
-    :param continuous: If true, then w is optimized in a continuous manner, otherwise
-                        picked from w_samples.
     :param cuda: True if using GPUs
     :param reporting_la_samples: lookahead samples for reporting of the best
     :param reporting_la_rep: lookahead replications for reporting of the best
