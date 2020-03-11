@@ -28,7 +28,7 @@ periods = 1000
 CVaR = False
 expectation = True
 alpha = 0.7
-cuda = False
+cuda = True
 disc = True
 red_dim = False
 
