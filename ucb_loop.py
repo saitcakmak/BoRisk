@@ -142,7 +142,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                  lookahead_samples=reporting_la_samples,
                                  lookahead_seed=reporting_la_seed,
                                  CVaR=CVaR, expectation=expectation,
-                                 beta=0, beta_max=0, cuda=cuda)
+                                 beta=0, cuda=cuda)
 
             current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
                                                              bounds=inner_bounds,

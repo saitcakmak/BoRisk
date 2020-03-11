@@ -28,11 +28,11 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               num_samples: int = 100, num_fantasies: int = 100,
               num_restarts: int = 100, raw_multiplier: int = 10,
               alpha: float = 0.7, q: int = 1,
-              num_lookahead_repetitions: int = 0,
+              num_repetitions: int = 0,
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
-              CVaR: bool = False, ts_k: int = 1000, cuda: bool = False,
+              CVaR: bool = False, ts_k: int = 0, cuda: bool = False,
               reporting_la_samples: Tensor = None, reporting_la_rep: int = 0,
-              random_sampling: bool = False):
+              random_sampling: bool = False, expectation: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -46,7 +46,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param raw_multiplier: Raw_samples = num_restarts * raw_multiplier
     :param alpha: The risk level of C/VaR.
     :param q: Number of parallel solutions to evaluate. Think qKG.
-    :param num_lookahead_repetitions: Number of repetitions of lookahead fantasy evaluations.
+    :param num_repetitions: see main_loop
     :param lookahead_samples: The samples to use to generate the lookahead fantasies
     :param verbose: Print more stuff and plot if d == 2.
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
@@ -56,6 +56,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param reporting_la_samples: lookahead samples for reporting of the best
     :param reporting_la_rep: lookahead replications for reporting of the best
     :param random_sampling: if True, samples are generated randomly
+    :param expectation: see main_loop
     :return: None - saves the output.
     """
 
@@ -64,6 +65,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     d = function.dim  # dimension of train_X
     n = 2 * d + 2  # training samples
     dim_x = d - dim_w  # dimension of the x component
+    if ts_k == 0:
+        ts_k = 250 * d
 
     # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
     torch.manual_seed(seed=seed)
@@ -139,9 +142,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             reporting_la_seed = int(torch.randint(100000, (1,)))
 
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                                 num_lookahead_repetitions=reporting_la_rep,
-                                 lookahead_samples=reporting_la_samples,
-                                 lookahead_seed=reporting_la_seed, CVaR=CVaR, cuda=cuda)
+                                 CVaR=CVaR, cuda=cuda, expectation=expectation)
 
             current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
                                                              bounds=inner_bounds,
@@ -166,9 +167,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                     ts_fantasy = gp.fantasize(X=ts_samples, sampler=sampler)
 
                 inner_VaR = InnerVaR(model=ts_fantasy, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                                     num_lookahead_repetitions=num_lookahead_repetitions,
-                                     lookahead_samples=lookahead_samples,
-                                     lookahead_seed=lookahead_seed, CVaR=CVaR, cuda=cuda)
+                                     CVaR=CVaR, cuda=cuda, expectation=expectation)
 
                 candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
                                                                bounds=inner_bounds,
