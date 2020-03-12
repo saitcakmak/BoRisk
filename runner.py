@@ -10,8 +10,8 @@ import torch
 function_name = input("function name: ")
 num_samples = 10
 num_fantasies = 50
-key_list = ['ts_s00',
-            'varkg_s00', 'kgcp_s00', 'random_s00',
+key_list = ['kgcp_s40',
+            #'varkg_s00', 'kgcp_s00', 'random_s00',
             # 'varkg_s01', 'kgcp_s01', 'random_s01',
             # 'varkg_s10', 'kgcp_s10', 'random_s10',
             # 'varkg_s40', 'kgcp_s40', 'random_s40',
