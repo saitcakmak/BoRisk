@@ -11,7 +11,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import VaRKG, InnerVaR, KGCP
+from VaR_KG import VaRKG, InnerVaR, KGCP, NestedVaRKG
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -19,16 +19,6 @@ from gpytorch.priors.torch_priors import GammaPrior
 from test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
 from optimizer import Optimizer
-import multiprocessing
-
-print("threads default", torch.get_num_threads())
-print("interop threads default", torch.get_num_interop_threads())
-cpu_count = multiprocessing.cpu_count()
-cpu_count = int(cpu_count)
-torch.set_num_threads(cpu_count)
-torch.set_num_interop_threads(cpu_count)
-print("threads updated", torch.get_num_threads())
-print("interop threads updated", torch.get_num_interop_threads())
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
@@ -39,7 +29,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, random_sampling: bool = False, expectation: bool = False,
               cuda: bool = False, reporting_la_samples: Tensor = None, reporting_rep: int = 0,
-              periods: int = 1000, kgcp: bool = False, disc: bool = False, reduce_dim: bool = False):
+              periods: int = 1000, kgcp: bool = False, disc: bool = False, reduce_dim: bool = False,
+              nested: bool = False):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -70,6 +61,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
     :param reduce_dim: If True, the function ignores last dimension of the input. Useful for testing
                         the VaRKG code in classical setting
+    :param nested: if True, VaRKG is optimized in a nested manner
     :return: None - saves the output.
     """
 
@@ -90,10 +82,19 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         filename = filename + "_q=%d" % q
     if kgcp and "kgcp" not in filename:
         filename = filename + "_kgcp"
+    if nested and "nested" not in filename:
+        filename = filename + "_nested"
     if disc and 'disc' not in filename:
         filename = filename + "_disc"
     if random_sampling:
         filename = filename + '_random'
+
+    if nested and kgcp:
+        raise ValueError("nested and kgcp cannot be both True!")
+
+    if nested:
+        raise NotImplementedError("Nested is not yet integrated. Use nested_loop instead.")
+
     try:
         full_data = torch.load("detailed_output/%s.pt" % filename)
         last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
@@ -360,7 +361,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
 if __name__ == "__main__":
     # this is for momentary testing of changes to the code
-    la_samples = torch.linspace(0, 1, 100).reshape(-1, 1)
+    # la_samples = torch.linspace(0, 1, 100).reshape(-1, 1)
     la_samples = None
     num_rep = 0
     num_fant = 25

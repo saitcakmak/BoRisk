@@ -4,7 +4,7 @@ In InnerVaR, we calculate the value of the inner problem.
 In VaRKG, we optimize this inner value to calculate VaR-KG value.
 """
 from math import ceil
-from typing import Optional, Union
+from typing import Optional, Union, Callable
 import torch
 from botorch import settings
 from botorch.acquisition import MCAcquisitionFunction
@@ -83,6 +83,8 @@ class InnerVaR(MCAcquisitionFunction):
             X = X.reshape(1, -1, 1, self.dim_x)
         elif len(self.batch_shape) == 1:
             X = X.reshape(-1, *self.batch_shape, 1, self.dim_x)
+            # TODO: this case assumes multiple starting sols and not fantasies?
+            #       or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
         elif len(self.batch_shape) == 2:
             X = X.reshape(*self.batch_shape, 1, self.dim_x)
         else:
@@ -166,7 +168,7 @@ class InnerVaR(MCAcquisitionFunction):
 
 class VaRKG(MCAcquisitionFunction):
     r"""
-    The VaR-KG acquisition function.
+    The one-shot VaR-KG acquisition function.
     """
 
     def __init__(self, model: Model,
@@ -243,8 +245,8 @@ class VaRKG(MCAcquisitionFunction):
 
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
-        self.mini_batch_size = 80
-        # TODO: this needs fixing
+        self.mini_batch_size = 100
+        # TODO: this needs fixing - will run into memory issues with large samples otherwise
         # if num_lookahead_repetitions is not None:
         #     factor = num_lookahead_repetitions
         # else:
@@ -415,13 +417,114 @@ class KGCP(VaRKG):
         x_comp = X[..., :self.dim_x]
         x_inner = torch.cat((x_comp, self.past_x.repeat(X.size(0), 1, 1)), dim=-2).repeat(self.num_fantasies, 1, 1, 1)
 
-        # TODO: can we get rid of this for loop?
         for i in range(values.size(0)):
             with settings.propagate_grads(True):
                 values[i] = - inner_VaR(x_inner[..., i, :].unsqueeze(-2))
         values, _ = torch.min(values, dim=0)
         values = self.current_best_VaR - torch.mean(values, dim=0)
         return values
+
+
+class NestedVaRKG(VaRKG):
+    r"""
+    The nested VaR-KG acquisition function.
+    """
+
+    def __init__(self, model: Model,
+                 num_samples: int, alpha: Union[Tensor, float],
+                 current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
+                 dim: int, dim_x: int, inner_optimizer: Callable,
+                 q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
+                 num_repetitions: int = 0,
+                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
+        """
+        Everthing is as explained in VaRKG
+        :param model:
+        :param num_samples:
+        :param alpha:
+        :param current_best_VaR:
+        :param num_fantasies:
+        :param fantasy_seed:
+        :param dim:
+        :param dim_x:
+        :param inner_optimizer: A callable for optimizing inner VaR
+        :param q:
+        :param fix_samples:
+        :param fixed_samples:
+        :param num_repetitions:
+        :param lookahead_samples:
+        :param inner_seed:
+        :param CVaR:
+        :param expectation:
+        :param cuda:
+        """
+        super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
+                         num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
+                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
+                         lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
+                         expectation=expectation, cuda=cuda)
+        self.inner_optimizer = inner_optimizer
+
+    def forward(self, X: Tensor) -> Tensor:
+        r"""
+        Calculate the value of VaRKG acquisition function by averaging over fantasies
+        :param X: batch_size x q x dim of solutions to evaluate
+        :return: value of VaR-KG at X (to be maximized) - size: batch_size
+        """
+        # make sure X has proper shape
+        X = X.reshape(-1, self.q, self.dim)
+        batch_size = X.size(0)
+
+        # generate w_samples
+        if self.fix_samples:
+            if self.fixed_samples is None:
+                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
+            w_samples = self.fixed_samples
+        else:
+            w_samples = torch.rand((self.num_samples, self.dim_w))
+
+        if self.fantasy_seed is None:
+            fantasy_seed = int(torch.randint(100000, (1,)))
+        else:
+            fantasy_seed = self.fantasy_seed
+
+        if self.inner_seed is None:
+            inner_seed = int(torch.randint(100000, (1,)))
+        else:
+            inner_seed = self.inner_seed
+
+        # generate separate seeds for each fantasy
+        # this is necessary since we are not doing batch evaluations
+        old_state = torch.random.get_rng_state()
+        torch.manual_seed(fantasy_seed)
+        fantasy_seeds = torch.randint(1000000, (self.num_fantasies, ))
+        torch.random.set_rng_state(old_state)
+
+        # TODO: refine
+        with settings.propagate_grads(True), torch.enable_grad():
+            values = torch.empty((batch_size, self.num_fantasies))
+            for i in range(batch_size):
+                w_actual = X[i, :, -self.dim_w:]
+                for j in range(self.num_fantasies):
+                    # construct the fantasy model
+                    sampler = SobolQMCNormalSampler(1, seed=int(fantasy_seeds[j]))
+                    fantasy_model = self.model.fantasize(X[i], sampler)
+
+                    inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
+                                         alpha=self.alpha, dim_x=self.dim_x,
+                                         num_repetitions=self.num_repetitions,
+                                         lookahead_samples=self.lookahead_samples,
+                                         inner_seed=inner_seed,
+                                         CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                         w_actual=w_actual)
+                    # TODO: is Inner VaR compatible with this?
+                    # optimize inner VaR
+                    solution, value = self.inner_optimizer(inner_VaR)
+                    value = -value
+                    values[i, j] = self.current_best_VaR - value
+
+        return torch.mean(values, dim=-1).squeeze()
 
 
 def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Tensor,
