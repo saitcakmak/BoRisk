@@ -19,6 +19,16 @@ from gpytorch.priors.torch_priors import GammaPrior
 from test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
 from optimizer import Optimizer
+import multiprocessing
+
+print("threads default", torch.get_num_threads())
+print("interop threads default", torch.get_num_interop_threads())
+cpu_count = multiprocessing.cpu_count()
+cpu_count = int(cpu_count)
+torch.set_num_threads(cpu_count)
+torch.set_num_interop_threads(cpu_count)
+print("threads updated", torch.get_num_threads())
+print("interop threads updated", torch.get_num_interop_threads())
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
