@@ -26,8 +26,8 @@ likelihood = GaussianLikelihood(
     ),
 )
 num_samples = 100
-CVaR = True
-alpha = 0.
+CVaR = False
+alpha = 0.7
 fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 
 

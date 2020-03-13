@@ -10,12 +10,12 @@ import numpy as np
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
 function_name = 'branin'
-suffix = '_exp'
+suffix = '_compare'
 filename = '%s%s' % (function_name, suffix)
 dim_w = 1
 iterations = 50
-CVaR = True
-alpha = 0.
+CVaR = False
+alpha = 0.7
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
@@ -40,6 +40,7 @@ iterations = iterations + int(post_edit_run)
 
 keys = list(data.keys())
 output = torch.empty((len(keys), iterations))
+alt_output = torch.empty((len(keys), iterations))
 for j in range(len(keys)):
     sub_data = data[keys[j]]
     inner_keys = list(sub_data.keys())
@@ -52,6 +53,9 @@ for j in range(len(keys)):
             actual_indices.append(i)
         best_list = sub_data[inner_keys[i]]['current_best'].reshape(-1, 1, dim_x)
         sols = torch.cat((best_list.repeat(1, num_w, 1), w_samples.repeat(iterations, 1, 1)), dim=-1)
+        if (sols > 1).any() or (sols < 0).any():
+            actual_indices.pop(-1)
+            continue
         vals = function(sols)
         vals, _ = torch.sort(vals, dim=-2)
         if CVaR:
@@ -60,24 +64,28 @@ for j in range(len(keys)):
             values = vals[:, int(alpha * num_w), :]
         rep_out[i] = values.reshape(-1)
     output[j] = torch.mean(rep_out[actual_indices], dim=0)
+    alt_output[j] = torch.mean(torch.log10(rep_out[actual_indices] - best_value), dim=0)
 
 gap = output - best_value
 log_gap = torch.log10(gap)
 
-# for i in range(len(keys)):
-#     plt.figure(int(i/num_plot))
-#     plt.title(function_name + ' gap')
-#     key = keys[i]
-#     plt.plot(range(iterations), gap[i], label=key)
-#     plt.ylim(0, ub)
-#     plt.legend()
 
 for i in range(len(keys)):
+    gap = output - best_value
+    log_gap = torch.log10(gap)
     plt.figure(100+int(i/num_plot))
-    plt.title(function_name + ' log_gap')
+    plt.title(filename + ' log_gap, log(avg)')
     key = keys[i]
     plt.plot(range(iterations), log_gap[i], label=key)
-    # plt.ylim(-5, 5)
+    plt.grid(True)
+    plt.legend()
+
+for i in range(len(keys)):
+    plt.figure(int(i/num_plot))
+    plt.title(filename + ' log_gap, avg(log)')
+    key = keys[i]
+    plt.plot(range(iterations), alt_output[i], label=key)
+    plt.grid(True)
     plt.legend()
 
 plt.show()
