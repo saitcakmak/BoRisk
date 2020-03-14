@@ -22,7 +22,7 @@ class InnerOptimizer:
     between iterations and not get stuck at the same point.
     """
     def __init__(self, num_restarts: int, raw_multiplier: int, dim_x: int,
-                 random_frac: float = 0.2, new_iter_frac: float = 0.5,
+                 random_frac: float = 0.5, new_iter_frac: float = 0.5,
                  limiter: float = 10, eta: float = 2.0, maxiter: int = 100):
         """
         Initialize with optimization settings.
