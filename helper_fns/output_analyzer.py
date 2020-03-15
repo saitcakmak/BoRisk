@@ -8,18 +8,18 @@ import matplotlib.pyplot as plt
 from helper_fns.value_plotter import generate_values
 
 
-directory = 'detailed_output/'
-prefix = 'cluster_'
+directory = '../nested_output/'
+prefix = ''
 # prefix = ''
 # prefix = 'imp2_'
-problem_name = 'sinequad'
+problem_name = 'branin'
 dim_w = 1
 iterations = 50
-num_x = 100  # squared if dim_x == 2
-num_w = 100  # number of w to draw to evaluate the true values, linspace if dim_w == 1, rand otherwise
-alpha = 0.7  # risk level
+num_x = 10000  # squared if dim_x == 2
+num_w = 10  # number of w to draw to evaluate the true values, linspace if dim_w == 1, rand otherwise
 eval_seed = 0  # seed used during final evaluations for both function eval and w generation if random
-CVaR = False
+CVaR = True
+alpha = 0.  # risk level
 
 # this is the powell seed list. Comment out and make others if needed.
 # seed = [123, 127, 1599, 18990, 2355, 234556, 9876, 7565, 45363, 243456]
@@ -31,7 +31,7 @@ CVaR = False
 # seed = [3452, 44331]
 # seed = [123, 127]
 # seed = [5637, 3256]
-seed = [22]
+seed = [6044]
 
 # file_name = []
 # for i in range(len(seed)):
@@ -51,16 +51,16 @@ file_list.append(full_path)
 #     full_path = "%s%s%s_%s_%s_%s_%s%s.pt" % (directory, prefix, problem_name, seed[i], dim_w, iterations, file_name[i], suffix)
 #     file_list.append(full_path)
 
-if problem_name == 'sinequad':
-    true_optimal = -1 + alpha ** 2
-elif problem_name == 'branin':
-    true_optimal = 33.36377
-# elif problem_name == 'powell':
-#     true_optimal = 3160  # approximate
-# elif problem_name == 'newsvendor':
-#     true_optimal = -0.2820  # approximate
+if dim_w == 1:
+    w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)
 else:
-    true_optimal = 0
+    w_samples = torch.rand((num_w, dim_w))
+
+function = function_picker(problem_name, 0)
+dim_x = function.dim - dim_w
+_, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, alpha=alpha, plug_in_w=w_samples, function=function,
+                       dim_x=dim_x, dim_w=dim_w)
+true_optimal = torch.min(y)
 
 value_diff_list = torch.empty((len(seed), iterations, 1))
 for j in range(len(seed)):
@@ -68,7 +68,6 @@ for j in range(len(seed)):
     dim = data[0]['train_X'].size(-1)
     dim_x = dim - dim_w
 
-    function = function_picker(problem_name, 0)
     best_solutions = torch.empty((iterations, dim_x))
 
     for i in range(iterations):
@@ -109,16 +108,13 @@ for j in range(len(seed)):
                 true_values[i] = torch.mean(values[int(num_w * alpha):])
             else:
                 true_values[i] = values[int(num_w * alpha)]
-    if problem_name not in ['branin', 'sinequad']:
-        _, true_optimal = generate_values(num_x, num_w, plug_in_w=w, CVaR=CVaR, function=function, dim_x=dim_x, dim_w=dim_w)
-        true_optimal = torch.min(true_optimal)
 
     value_diff_list[j] = true_values.reshape(-1, 1) - true_optimal
 
 value_diff = torch.mean(value_diff_list, dim=0)
-plt.figure(1)
-plt.plot(value_diff)
-plt.title('gap')
+# plt.figure(1)
+# plt.plot(value_diff)
+# plt.title('gap')
 plt.figure(2)
 plt.plot(torch.log10(value_diff))
 plt.title('log-gap')

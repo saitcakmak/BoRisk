@@ -121,6 +121,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         ),
     )
 
+    # TODO: add the return values
+
     # maximum iterations of LBFGS or ADAM
     inner_optimizer = InnerOptimizer(num_restarts=num_inner_restarts,
                                      raw_multiplier=inner_raw_multiplier,

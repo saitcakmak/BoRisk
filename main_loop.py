@@ -168,6 +168,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
         fit_gpytorch_model(mll)
 
+    # TODO: this doesn't get recovered when we do stop start!!
     current_best_list = torch.empty((iterations + 1, q, dim_x))
     current_best_value_list = torch.empty((iterations + 1, q, 1))
     kg_value_list = torch.empty((iterations, q, 1))
