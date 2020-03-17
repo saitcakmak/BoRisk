@@ -21,7 +21,7 @@ print("interop threads updated", torch.get_num_interop_threads())
 function_name = input("function name: ")
 num_samples = 10
 num_fantasies = 50
-key_list = ['varkg_s00',
+key_list = ['kgcp_s00',
             # 'varkg_s00', 'kgcp_s00', 'random_s00',
             # 'varkg_s01', 'kgcp_s01', 'random_s01',
             # 'varkg_s10', 'kgcp_s10', 'random_s10',
