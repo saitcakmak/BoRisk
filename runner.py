@@ -18,11 +18,11 @@ print("threads updated", torch.get_num_threads())
 print("interop threads updated", torch.get_num_interop_threads())
 
 # function_name = input("function name: ")
-function_name = 'branin'
+function_name = 'levy'
 num_samples = 10
 num_fantasies = 50
 key_list = ['tts_kgcp_s00',
-            # 'varkg_s00', 'kgcp_s00', 'random_s00',
+             'varkg_s00', 'kgcp_s00', 'random_s00',
             # 'varkg_s01', 'kgcp_s01', 'random_s01',
             # 'varkg_s10', 'kgcp_s10', 'random_s10',
             # 'varkg_s40', 'kgcp_s40', 'random_s40',
@@ -40,7 +40,7 @@ periods = 1000
 CVaR = False
 expectation = True
 alpha = 0.7
-cuda = True
+cuda = False
 disc = True
 red_dim = False
 beta = 0
