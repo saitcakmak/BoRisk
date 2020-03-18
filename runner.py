@@ -5,7 +5,6 @@ Modify this to fit the experiment you intend to run.
 from main_loop import full_loop
 from ts_loop import full_loop as ts_loop
 from ucb_loop import full_loop as ucb_loop
-from nested_loop import full_loop as nested_loop
 import torch
 import multiprocessing
 
@@ -22,7 +21,7 @@ print("interop threads updated", torch.get_num_interop_threads())
 function_name = 'branin'
 num_samples = 10
 num_fantasies = 50
-key_list = ['ts_b=0_s00',
+key_list = ['tts_kgcp_s00',
             # 'varkg_s00', 'kgcp_s00', 'random_s00',
             # 'varkg_s01', 'kgcp_s01', 'random_s01',
             # 'varkg_s10', 'kgcp_s10', 'random_s10',
@@ -69,7 +68,7 @@ for key in key_list:
         tts = 'tts' in key
         ts = 'ts' in key and not tts
         ucb = 'ucb' in key
-        if not (ts or ucb or nested):
+        if not (ts or ucb):
             output = full_loop(function_name, int(seed), dim_w, filename, iterations,
                                num_samples=num_samples, num_fantasies=num_fantasies,
                                num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
@@ -79,16 +78,7 @@ for key in key_list:
                                reporting_rep=rep, reporting_la_samples=la_samples,
                                kgcp=kgcp, random_sampling=random, disc=disc,
                                reduce_dim=red_dim, expectation=expectation,
-                               tts=tts)
-        elif nested:
-            output = nested_loop(function_name, int(seed), dim_w, filename, iterations,
-                                 num_samples=num_samples, num_fantasies=num_fantasies,
-                                 num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                                 raw_multiplier=raw_multiplier,
-                                 maxiter=maxiter,
-                                 num_repetitions=rep, lookahead_samples=la_samples,
-                                 random_sampling=random, expectation=expectation,
-                                 num_inner_restarts=num_inner_restarts)
+                               tts=tts, nested=nested)
         elif ts:
             output = ts_loop(function_name, int(seed), dim_w, filename, iterations,
                              num_samples=num_samples, num_fantasies=num_fantasies,
