@@ -18,8 +18,7 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
-from optimizer import Optimizer
-from inner_optimizer import InnerOptimizer
+from optimizer import Optimizer, InnerOptimizer
 
 
 def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iterations: int,
@@ -99,9 +98,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     if nested and kgcp:
         raise ValueError("nested and kgcp cannot be both True!")
-
-    if nested:
-        raise NotImplementedError("Nested is not yet integrated. Use nested_loop instead.")
 
     try:
         full_data = torch.load("detailed_output/%s.pt" % filename)
@@ -275,6 +271,20 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                     else:
                         candidate, value = optimizer.optimize_outer(var_kg)
                     opt_time += time() - opt_start
+                elif nested:
+                    var_kg = NestedVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                                         current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                                         fantasy_seed=fantasy_seed,
+                                         dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
+                                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
+                                         num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
+                                         inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                    opt_start = time()
+                    if disc:
+                        candidate, value = optimizer.disc_optimize_outer(var_kg, w_samples)
+                    else:
+                        candidate, value = optimizer.optimize_outer(var_kg)
+                    opt_time += time() - opt_start
                 else:
                     var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                                    current_best_VaR=current_best_value, num_fantasies=num_fantasies,
@@ -411,12 +421,14 @@ if __name__ == "__main__":
     verb = False
     num_iter = 10
     num_samp = 1
-    kgcp = True
+    kgcp = False
     disc = True
     red_dim = False
-    tts = True
+    tts = False
+    nested = True
     full_loop('branin', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
               num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
               random_sampling=rand, expectation=False, verbose=verb, cuda=False,
               lookahead_samples=la_samples,
-              num_repetitions=0, q=1, kgcp=kgcp, disc=disc, reduce_dim=red_dim, tts=tts)
+              num_repetitions=0, q=1, kgcp=kgcp, disc=disc, reduce_dim=red_dim, tts=tts,
+              nested=nested)

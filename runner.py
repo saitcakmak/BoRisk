@@ -22,7 +22,7 @@ print("interop threads updated", torch.get_num_interop_threads())
 function_name = 'branin'
 num_samples = 10
 num_fantasies = 50
-key_list = ['tts_kgcp_s00',
+key_list = ['ts_s00',
             # 'varkg_s00', 'kgcp_s00', 'random_s00',
             # 'varkg_s01', 'kgcp_s01', 'random_s01',
             # 'varkg_s10', 'kgcp_s10', 'random_s10',
@@ -44,6 +44,7 @@ alpha = 0.7
 cuda = False
 disc = True
 red_dim = False
+beta = 0
 
 output_path = "batch_output/%s" % output_file
 
@@ -93,7 +94,7 @@ for key in key_list:
                              num_samples=num_samples, num_fantasies=num_fantasies,
                              num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
                              cuda=cuda, raw_multiplier=raw_multiplier,
-                             maxiter=maxiter, expectation=expectation)
+                             maxiter=maxiter, expectation=expectation, beta=beta)
         else:
             raise NotImplementedError('UCB parameters need updating')
             output = ucb_loop(function_name, int(seed), dim_w, filename, iterations,

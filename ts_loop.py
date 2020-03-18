@@ -32,7 +32,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               lookahead_samples: Tensor = None, verbose: bool = False, maxiter: int = 100,
               CVaR: bool = False, ts_k: int = 0, cuda: bool = False,
               reporting_la_samples: Tensor = None, reporting_la_rep: int = 0,
-              random_sampling: bool = False, expectation: bool = False):
+              random_sampling: bool = False, expectation: bool = False, beta: float = 0):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -57,6 +57,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param reporting_la_rep: lookahead replications for reporting of the best
     :param random_sampling: if True, samples are generated randomly
     :param expectation: see main_loop
+    :param beta: for choosing the w component. 0 means, pick the w corresponding to VaR. Otherwise,
+        it defines a confidence interval around the VaR value and picks one randomly
     :return: None - saves the output.
     """
 
@@ -179,7 +181,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
                 # This is the alternative based on confidence region random sampling
                 candidate_w = pick_w_confidence(model=ts_fantasy,
-                                                beta=0,
+                                                beta=beta,
                                                 x_point=candidate_x,
                                                 w_samples=w_samples,
                                                 alpha=alpha,
