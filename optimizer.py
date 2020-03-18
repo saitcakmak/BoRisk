@@ -1,5 +1,7 @@
 from typing import Tuple, Optional, Union
 import torch
+from botorch import settings
+from botorch.acquisition import MCAcquisitionFunction
 from botorch.gen import gen_candidates_scipy
 from botorch.utils import draw_sobol_samples, standardize
 from torch import Tensor
