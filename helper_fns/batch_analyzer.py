@@ -10,8 +10,10 @@ import numpy as np
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
 function_name = 'branin'
+prefix = 'reoptimized_'
+# prefix = ''
 suffix = '_exp'
-filename = '%s%s' % (function_name, suffix)
+filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 1
 iterations = 50
 CVaR = True

@@ -182,7 +182,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                  inner_seed=inner_seed, CVaR=CVaR,
                                  expectation=expectation)
 
-            solution, value = optimizer.disc_optimize_KGCP(var_kg, w_samples)
+            solution, value = optimizer.disc_optimize_outer(var_kg, w_samples)
 
             candidate = solution.detach()
             value = value.detach()

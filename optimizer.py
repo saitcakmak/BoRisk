@@ -1,9 +1,9 @@
-from typing import Tuple, Optional
+from typing import Tuple, Optional, Union
 import torch
 from botorch.gen import gen_candidates_scipy
 from botorch.utils import draw_sobol_samples, standardize
 from torch import Tensor
-from VaR_KG import VaRKG, InnerVaR, KGCP
+from VaR_KG import VaRKG, InnerVaR, KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP
 from math import ceil
 
 
@@ -69,7 +69,7 @@ class Optimizer:
         self.q = q
         self.full_dim = q * dim + num_fantasies * dim_x
         self.inner_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim_x)
-        self.kgcp_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim)
+        self.outer_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim)
         self.outer_bounds = torch.tensor([[0.], [1.]]).repeat(1, q * dim)
         self.full_bounds = torch.tensor([[0.], [1.]]).repeat(1, self.full_dim)
         self.random_frac = random_frac
@@ -299,13 +299,13 @@ class Optimizer:
         best = torch.argmax(values)
         return solutions[best], values[best]
 
-    def generate_kgcp_restart_points(self, acqf: KGCP) -> Tensor:
+    def generate_outer_restart_points(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP]) -> Tensor:
         """
-        Generates the restarts points for KGCP
+        Generates the restarts points for KGCP, Nested or Tts
         :param acqf: The acquisition function being optimized
         :return: restart points
         """
-        X = draw_sobol_samples(bounds=self.kgcp_bounds, n=self.raw_samples, q=self.q)
+        X = draw_sobol_samples(bounds=self.outer_bounds, n=self.raw_samples, q=self.q)
         with torch.no_grad():
             Y = acqf(X)
         Y_std = Y.std()
@@ -322,36 +322,41 @@ class Optimizer:
             idcs[-1] = max_idx
         return X[idcs]
 
-    def optimize_KGCP(self, acqf: KGCP) -> Tuple[Tensor, Tensor]:
+    def optimize_outer(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP]) -> Tuple[Tensor, Tensor]:
         """
-        Optimizes the KGCP in a pretty naive way.
-        :param acqf: the KGCP object
+        Optimizes the KGCP, Nested or Tts in a pretty standard way.
+        :param acqf: the KGCP, Nested or Tts object
         :return: Optimal solution and value
         """
-        initial_conditions = self.generate_kgcp_restart_points(acqf)
+        initial_conditions = self.generate_outer_restart_points(acqf)
         options = {'maxiter': self.maxiter}
 
+        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
+            acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                  acquisition_function=acqf,
-                                                 lower_bounds=self.kgcp_bounds[0],
-                                                 upper_bounds=self.kgcp_bounds[1],
+                                                 lower_bounds=self.outer_bounds[0],
+                                                 upper_bounds=self.outer_bounds[1],
                                                  options=options)
         _, idx = torch.sort(values)
+        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
+            acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
                                                  acquisition_function=acqf,
-                                                 lower_bounds=self.kgcp_bounds[0],
-                                                 upper_bounds=self.kgcp_bounds[1],
+                                                 lower_bounds=self.outer_bounds[0],
+                                                 upper_bounds=self.outer_bounds[1],
                                                  options=options)
         best = torch.argmax(values)
         return solutions[best].cpu().detach(), values[best].cpu().detach()
 
-    def disc_generate_kgcp_restart_points(self, acqf: KGCP, w_samples: Tensor) -> Tensor:
+    def disc_generate_outer_restart_points(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP],
+                                           w_samples: Tensor) -> Tensor:
         """
-        Generates the restarts points for KGCP
+        Generates the restarts points for KGCP, Nested or Tts
         :param acqf: The acquisition function being optimized
         :return: restart points
         """
-        X = draw_sobol_samples(bounds=self.kgcp_bounds, n=self.raw_samples, q=self.q)
+        X = draw_sobol_samples(bounds=self.outer_bounds, n=self.raw_samples, q=self.q)
         w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
         X[..., self.dim_x:] = w_samples[w_ind, :]
         with torch.no_grad():
@@ -370,30 +375,35 @@ class Optimizer:
             idcs[-1] = max_idx
         return X[idcs]
 
-    def disc_optimize_KGCP(self, acqf: KGCP, w_samples: Tensor) -> Tuple[Tensor, Tensor]:
+    def disc_optimize_outer(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP],
+                            w_samples: Tensor) -> Tuple[Tensor, Tensor]:
         """
-        KGCP optimizer with w component restricted to w_samples
-        :param acqf: KGCP object
+        KGCP, Nested or Tts optimizer with w component restricted to w_samples
+        :param acqf: KGCP, Nested or Tts object
         :param w_samples: the set W to consider
         :return: Optimal solution and value
         """
-        initial_conditions = self.disc_generate_kgcp_restart_points(acqf, w_samples)
+        initial_conditions = self.disc_generate_outer_restart_points(acqf, w_samples)
         options = {'maxiter': self.maxiter}
         fixed_features = dict()
         for i in range(self.dim_x, self.dim):
             fixed_features[i] = None
 
+        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
+            acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                  acquisition_function=acqf,
-                                                 lower_bounds=self.kgcp_bounds[0],
-                                                 upper_bounds=self.kgcp_bounds[1],
+                                                 lower_bounds=self.outer_bounds[0],
+                                                 upper_bounds=self.outer_bounds[1],
                                                  options=options,
                                                  fixed_features=fixed_features)
         _, idx = torch.sort(values)
+        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
+            acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
                                                  acquisition_function=acqf,
-                                                 lower_bounds=self.kgcp_bounds[0],
-                                                 upper_bounds=self.kgcp_bounds[1],
+                                                 lower_bounds=self.outer_bounds[0],
+                                                 upper_bounds=self.outer_bounds[1],
                                                  options=options,
                                                  fixed_features=fixed_features)
         best = torch.argmax(values)

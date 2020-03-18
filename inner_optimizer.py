@@ -81,13 +81,6 @@ class InnerOptimizer:
         with torch.no_grad():
             Y = acqf(X)
         Ystd = Y.std()
-        if Ystd == 0:
-            warnings.warn(
-                "All acqusition values for raw samples points are the same. "
-                "Choosing initial conditions at random.",
-                BadInitialCandidatesWarning,
-            )
-            return X[torch.randperm(n=self.raw_samples)][:self.num_restarts]
 
         max_val, max_idx = torch.max(Y, dim=0)
         Z = (Y - Y.mean()) / Ystd

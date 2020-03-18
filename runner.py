@@ -18,10 +18,11 @@ cpu_count = int(cpu_count)
 print("threads updated", torch.get_num_threads())
 print("interop threads updated", torch.get_num_interop_threads())
 
-function_name = input("function name: ")
+# function_name = input("function name: ")
+function_name = 'branin'
 num_samples = 10
 num_fantasies = 50
-key_list = ['kgcp_s00',
+key_list = ['tts_kgcp_s00',
             # 'varkg_s00', 'kgcp_s00', 'random_s00',
             # 'varkg_s01', 'kgcp_s01', 'random_s01',
             # 'varkg_s10', 'kgcp_s10', 'random_s10',
@@ -62,9 +63,10 @@ for key in key_list:
         rep = int(key[-2:])
         random = 'random' in key
         la_samples = None
-        kgcp = key[0:4] == 'kgcp'
+        kgcp = 'kgcp' in key
         nested = 'nested' in key
-        ts = 'ts' in key
+        tts = 'tts' in key
+        ts = 'ts' in key and not tts
         ucb = 'ucb' in key
         if not (ts or ucb or nested):
             output = full_loop(function_name, int(seed), dim_w, filename, iterations,
@@ -75,7 +77,8 @@ for key in key_list:
                                num_repetitions=rep, lookahead_samples=la_samples,
                                reporting_rep=rep, reporting_la_samples=la_samples,
                                kgcp=kgcp, random_sampling=random, disc=disc,
-                               reduce_dim=red_dim, expectation=expectation)
+                               reduce_dim=red_dim, expectation=expectation,
+                               tts=tts)
         elif nested:
             output = nested_loop(function_name, int(seed), dim_w, filename, iterations,
                                  num_samples=num_samples, num_fantasies=num_fantasies,

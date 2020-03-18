@@ -31,7 +31,7 @@ alpha = 0.  # risk level
 # seed = [3452, 44331]
 # seed = [123, 127]
 # seed = [5637, 3256]
-seed = [6044]
+seed = [8239]
 
 # file_name = []
 # for i in range(len(seed)):
