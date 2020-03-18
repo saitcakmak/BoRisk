@@ -19,15 +19,15 @@ from botorch.fit import fit_gpytorch_model
 
 
 directory = '../detailed_output/'
-function_name = 'branin'
-suffix = '_exp_tts_kgcp_s00_'
+function_name = 'levy'
+suffix = '_exp_varkg_s00_'
 seed_list = [6044, 8239, 4933, 3760, 8963]
 suffix2 = '_disc.pt'
 dim_w = 1
-kgcp = True  # this is for reoptimization behavior
+kgcp = False  # this is for reoptimization behavior
 
-output_file = '../batch_output/reoptimized_branin_exp'
-output_key = 'tts_kgcp_kgcp_s00'
+output_file = '../batch_output/plot_levy_exp'
+output_key = 'varkg'
 
 num_samples = 10
 iterations = 50
