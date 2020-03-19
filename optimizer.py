@@ -208,6 +208,56 @@ class Optimizer:
         best = torch.argmax(values)
         return solutions[best].detach(), values[best].detach()
 
+    def simple_evaluate_VaRKG(self, acqf: VaRKG, X_outer: Tensor):
+        """
+        Evaluates one-shot VaRKG using a simple optimization with fixed features
+        :param acqf: VaRKG object
+        :param X_outer: The outer solution to evaluate. This should convert to 1 x (q x d)
+        :return: Value at the given outer solution
+        """
+        X_outer = X_outer.reshape(1, self.q * self.dim)
+        # generate the restart points
+        X = draw_sobol_samples(bounds=self.full_bounds, n=self.raw_samples, q=self.q)
+        X[:, :, :self.q * self.dim] = X_outer
+        with torch.no_grad():
+            Y = acqf(X)
+            Y = torch.mean(Y, dim=-1)
+        Y_std = Y.std()
+        max_val, max_idx = torch.max(Y, dim=0)
+        Z = (Y - Y.mean()) / Y_std
+        etaZ = self.eta * Z
+        weights = torch.exp(etaZ)
+        while torch.isinf(weights).any():
+            etaZ *= 0.5
+            weights = torch.exp(etaZ)
+        idx = torch.multinomial(weights, self.num_restarts)
+        # make sure we get the maximum
+        if max_idx not in idx:
+            idx[-1] = max_idx
+
+        initial_conditions = X[idx]
+        options = {'maxiter': self.maxiter}
+
+        fixed_features = dict()
+        for i in range(self.q * self.dim):
+            fixed_features[i] = None
+
+        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
+                                                 acquisition_function=acqf,
+                                                 lower_bounds=self.full_bounds[0],
+                                                 upper_bounds=self.full_bounds[1],
+                                                 options=options,
+                                                 fixed_features=fixed_features)
+        _, idx = torch.sort(torch.mean(values, dim=-1))
+        solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
+                                                 acquisition_function=acqf,
+                                                 lower_bounds=self.full_bounds[0],
+                                                 upper_bounds=self.full_bounds[1],
+                                                 options=options,
+                                                 fixed_features=fixed_features)
+        best = torch.argmax(torch.mean(values, dim=-1))
+        return solutions[best].detach(), torch.mean(values, dim=-1)[best].detach()
+
     def generate_simple_VaRKG_restart_points(self, acqf: VaRKG) -> Tensor:
         """
         Generates the restarts points for simple VaRKG
@@ -262,7 +312,6 @@ class Optimizer:
         :param w_samples: w_samples to optimize over
         :return: Optimal solution and value
         """
-        # TODO: test
         # make sure the cache of solutions is cleared
         if self.fant_sols is not None:
             self.new_iteration()
@@ -273,8 +322,9 @@ class Optimizer:
 
         options = {'maxiter': self.maxiter}
         fixed_features = dict()
-        for i in range(self.dim_x, self.dim):
-            fixed_features[i] = None
+        for j in range(self.q):
+            for i in range(self.dim_x, self.dim):
+                fixed_features[j * self.dim + i] = None
 
         initial_conditions = self.generate_initial_conditions(acqf, raw_samples, raw_values, permuted_samples)
 
@@ -388,8 +438,9 @@ class Optimizer:
         initial_conditions = self.disc_generate_outer_restart_points(acqf, w_samples)
         options = {'maxiter': self.maxiter}
         fixed_features = dict()
-        for i in range(self.dim_x, self.dim):
-            fixed_features[i] = None
+        for j in range(self.q):
+            for i in range(self.dim_x, self.dim):
+                fixed_features[j * self.dim + i] = None
 
         if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
             acqf.tts_reset()
