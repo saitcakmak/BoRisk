@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 seed = 0
 torch.manual_seed(seed)
 
-function_name = 'sinequad'
+function_name = 'branin'
 dim_w = 1
 num_samples = 10
 num_restarts = 40
@@ -31,9 +31,9 @@ maxiter = 1000
 periods = 1000
 num_fantasies = 50
 q = 1
-kgcp = False
-nested = True
-tts = False
+kgcp = True
+nested = False
+tts = True
 num_inner_restarts = 10
 inner_raw_multiplier = 5
 tts_frequency = 10
