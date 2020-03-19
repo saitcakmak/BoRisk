@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from helper_fns.value_plotter import generate_values
 
 
-directory = '../nested_output/'
+directory = '../detailed_output/'
 prefix = ''
 # prefix = ''
 # prefix = 'imp2_'
@@ -31,7 +31,7 @@ alpha = 0.  # risk level
 # seed = [3452, 44331]
 # seed = [123, 127]
 # seed = [5637, 3256]
-seed = [8239]
+seed = [6044]
 
 # file_name = []
 # for i in range(len(seed)):

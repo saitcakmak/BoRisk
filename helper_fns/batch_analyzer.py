@@ -10,14 +10,14 @@ import numpy as np
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
 function_name = 'branin'
-# prefix = 'plot_'
-prefix = ''
-suffix = '_compare'
+prefix = 'plot_'
+# prefix = ''
+suffix = '_exp'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 1
 iterations = 50
-CVaR = False
-alpha = 0.7
+CVaR = True
+alpha = 0.
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
@@ -25,7 +25,7 @@ num_x = 100000
 if dim_x == 2:
     num_x = int(np.sqrt(num_x))
 num_w = 10  # use larger if dim_w > 1
-num_plot = 8  # max number of plot lines in a figure
+num_plot = 10  # max number of plot lines in a figure
 
 if dim_w == 1:
     w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)

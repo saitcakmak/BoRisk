@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 seed = 0
 torch.manual_seed(seed)
 
-function_name = 'branin'
+function_name = 'sinequad'
 dim_w = 1
 num_samples = 10
 num_restarts = 40
@@ -149,6 +149,11 @@ nested_var_kg = NestedVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                             num_repetitions=num_repetitions,
                             inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
 
+
+sol = optimizer.disc_optimize_outer(tts_kgcp, w_samples)
+print(sol)
+tts_kgcp.tts_reset()
+
 k = 40  # number of points in x
 
 if kgcp:
@@ -178,13 +183,15 @@ for i in range(num_samples):
         if kgcp:
             if tts:
                 res[i, j] = tts_kgcp(X_outer)
+                tts_kgcp.tts_reset()
             else:
                 res[i, j] = kgcp_acqf(X_outer)
         elif nested:
             res[i, j] = nested_var_kg(X_outer)
         else:
             if tts:
-                tts_var_kg(X_outer)
+                res[i, j] = tts_var_kg(X_outer)
+                tts_var_kg.tts_reset()
             else:
                 _, res[i, j] = optimizer.simple_evaluate_VaRKG(var_kg, X_outer)
         print("sol %d, %d complete, time: %s " % (i, j, time() - start))
