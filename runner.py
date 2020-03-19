@@ -7,6 +7,8 @@ from ts_loop import full_loop as ts_loop
 from ucb_loop import full_loop as ucb_loop
 import torch
 import multiprocessing
+import sys
+
 
 print("threads default", torch.get_num_threads())
 print("interop threads default", torch.get_num_interop_threads())
@@ -18,7 +20,8 @@ print("threads updated", torch.get_num_threads())
 print("interop threads updated", torch.get_num_interop_threads())
 
 # function_name = input("function name: ")
-function_name = 'branin'
+# function_name = 'branin'
+function_name = sys.argv[2]
 num_samples = 10
 num_fantasies = 50
 key_list = ['tts_kgcp_s00', 'varkg_s00', 'kgcp_s00', 'random_s00',
