@@ -33,8 +33,10 @@ num_fantasies = 50
 q = 1
 kgcp = False
 nested = True
+tts = False
 num_inner_restarts = 10
 inner_raw_multiplier = 5
+tts_frequency = 10
 
 # Initialize the test function
 function = function_picker(function_name)
@@ -106,6 +108,23 @@ else:
     current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
     current_best_value = -current_best_value
 
+tts_kgcp = TtsKGCP(model=gp, num_samples=num_samples, alpha=alpha,
+                   current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                   fantasy_seed=fantasy_seed,
+                   dim=d, dim_x=dim_x, past_x=past_x, tts_frequency=tts_frequency, q=q,
+                   fix_samples=fix_samples, fixed_samples=fixed_samples,
+                   num_repetitions=num_repetitions,
+                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
+
+tts_var_kg = TtsVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                      current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                      fantasy_seed=fantasy_seed,
+                      dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
+                      tts_frequency=tts_frequency,
+                      q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
+                      num_repetitions=num_repetitions,
+                      inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
+
 kgcp_acqf = KGCP(model=gp, num_samples=num_samples, alpha=alpha,
                  current_best_VaR=current_best_value, num_fantasies=num_fantasies,
                  fantasy_seed=fantasy_seed,
@@ -138,6 +157,8 @@ elif nested:
     name = 'nested'
 else:
     name = 'varkg'
+if tts:
+    name = 'tts_' + name
 filename = 'other_output/acqf_val_%s_seed_%d_%s.pt' % (function_name, seed, name)
 try:
     res = torch.load(filename)
@@ -155,11 +176,17 @@ for i in range(num_samples):
             continue
         X_outer = xy[i, j]
         if kgcp:
-            res[i, j] = kgcp_acqf(X_outer)
+            if tts:
+                res[i, j] = tts_kgcp(X_outer)
+            else:
+                res[i, j] = kgcp_acqf(X_outer)
         elif nested:
             res[i, j] = nested_var_kg(X_outer)
         else:
-            _, res[i, j] = optimizer.simple_evaluate_VaRKG(var_kg, X_outer)
+            if tts:
+                tts_var_kg(X_outer)
+            else:
+                _, res[i, j] = optimizer.simple_evaluate_VaRKG(var_kg, X_outer)
         print("sol %d, %d complete, time: %s " % (i, j, time() - start))
     torch.save(res, filename)
 
