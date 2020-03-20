@@ -26,9 +26,9 @@ num_samples = 10
 num_fantasies = 50
 key_list = ['tts_kgcp_s00', 'varkg_s00', 'kgcp_s00', 'random_s00',
             #'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
-            'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
-            'tts_varkg_s40']
-output_file = "%s_%s" % (function_name, "compare")
+            #'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
+            'tts_varkg_s00']
+output_file = "%s_%s" % (function_name, "exp")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 seed_list = torch.randint(10000, (5,))
 dim_w = 1
@@ -39,7 +39,7 @@ num_inner_restarts = 10
 maxiter = 1000
 periods = 1000
 CVaR = False
-expectation = False
+expectation = True
 alpha = 0.7
 cuda = False
 disc = True
@@ -60,6 +60,7 @@ for key in key_list:
         seed = int(seed)
         if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
             continue
+        print('starting key %s seed %d' % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
         rep = int(key[-2:])
         random = 'random' in key
