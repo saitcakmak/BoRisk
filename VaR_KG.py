@@ -12,6 +12,7 @@ from botorch.models.model import Model
 from botorch.sampling.samplers import SobolQMCNormalSampler
 from botorch.utils import draw_sobol_normal_samples
 from torch import Tensor
+from time import time
 
 
 class InnerVaR(MCAcquisitionFunction):
@@ -728,12 +729,15 @@ class TtsVaRKG(VaRKG):
         torch.manual_seed(fantasy_seed)
         fantasy_seeds = torch.randint(1000000, (self.num_fantasies, ))
         torch.random.set_rng_state(old_state)
+        start = time()
 
         if self.last_inner_solution is None:
             self.last_inner_solution = torch.empty(batch_size, self.num_fantasies, self.dim_x)
         with settings.propagate_grads(True), torch.enable_grad():
             values = torch.empty((batch_size, self.num_fantasies))
             for i in range(batch_size):
+                # debug purposes:
+                print('TtsVaRKG %d/%d, time: %s' % (i, batch_size, time()-start))
                 w_actual = X[i, :, -self.dim_w:]
                 for j in range(self.num_fantasies):
                     # construct the fantasy model
