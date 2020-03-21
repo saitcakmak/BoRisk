@@ -640,30 +640,42 @@ class NestedVaRKG(VaRKG):
         torch.manual_seed(fantasy_seed)
         fantasy_seeds = torch.randint(1000000, (self.num_fantasies, ))
         torch.random.set_rng_state(old_state)
+        start = time()
 
-        with settings.propagate_grads(True), torch.enable_grad():
-            values = torch.empty((batch_size, self.num_fantasies))
-            for i in range(batch_size):
-                w_actual = X[i, :, -self.dim_w:]
-                for j in range(self.num_fantasies):
-                    # construct the fantasy model
-                    sampler = SobolQMCNormalSampler(1, seed=int(fantasy_seeds[j]))
-                    fantasy_model = self.model.fantasize(X[i], sampler)
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
+        num_batches = ceil(batch_size / self.mini_batch_size)
+        values = torch.empty(batch_size)
 
-                    inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
-                                         alpha=self.alpha, dim_x=self.dim_x,
-                                         num_repetitions=self.num_repetitions,
-                                         lookahead_samples=self.lookahead_samples,
-                                         inner_seed=inner_seed,
-                                         CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                         w_actual=w_actual)
-                    # TODO: is Inner VaR compatible with this?
-                    # optimize inner VaR
-                    solution, value = self.inner_optimizer(inner_VaR)
-                    value = -value
-                    values[i, j] = self.current_best_VaR - value
+        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
 
-        return torch.mean(values, dim=-1).squeeze()
+        for i in range(num_batches):
+            left_index = i * self.mini_batch_size
+            if i == num_batches - 1:
+                right_index = batch_size
+            else:
+                right_index = (i + 1) * self.mini_batch_size
+
+            # construct the fantasy model
+            if self.cuda:
+                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(), sampler).cuda()
+            else:
+                fantasy_model = self.model.fantasize(X[left_index:right_index], sampler)
+
+            w_actual = X[left_index:right_index, :, -self.dim_w:]
+
+            inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
+                                 alpha=self.alpha, dim_x=self.dim_x,
+                                 num_repetitions=self.num_repetitions,
+                                 lookahead_samples=self.lookahead_samples,
+                                 inner_seed=inner_seed,
+                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                 w_actual=w_actual)
+            # optimize inner VaR
+            with settings.propagate_grads(True):
+                solution, value = self.inner_optimizer(inner_VaR)
+            value = -value
+            values[left_index:right_index] = self.current_best_VaR - torch.mean(value, dim=0)
+        return values
 
 
 class TtsVaRKG(VaRKG):
@@ -791,9 +803,9 @@ class TtsVaRKG(VaRKG):
                     value = inner_VaR(self.last_inner_solution[:, left_index:right_index])
             value = -value
             values[left_index:right_index] = self.current_best_VaR - torch.mean(value, dim=0)
+            # for debugging purposes
             print('TtsVaRKG %d of batch_size: %d, time: %s' % (right_index, batch_size, time() - start))
         self.call_count += 1
-        # debug purposes:
         return values
 
     def tts_reset(self):
