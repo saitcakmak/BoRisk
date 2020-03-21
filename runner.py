@@ -89,11 +89,6 @@ for key in key_list:
                              maxiter=maxiter, expectation=expectation, beta=beta)
         else:
             raise NotImplementedError('UCB parameters need updating')
-            output = ucb_loop(function_name, int(seed), dim_w, filename, iterations,
-                              num_samples=num_samples, num_fantasies=num_fantasies,
-                              num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                              cuda=cuda, raw_multiplier=raw_multiplier,
-                              maxiter=maxiter, expectation=expectation)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)
