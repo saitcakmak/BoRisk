@@ -70,49 +70,69 @@ class InnerVaR(MCAcquisitionFunction):
                                                   seed=inner_seed)
             self.sobol_samples = raw_sobol.reshape(self.num_repetitions, self.num_fantasies, 1,
                                                    self.num_samples, 1)
+            # TODO: This is using different samples for each fantasy. Do we want this?
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Sample from GP and calculate the corresponding VaR(mu)
         :param X: The decision variable, only the x component.
             Shape: num_fantasies x num_starting_sols x 1 x dim_x (see below)
-        :return: -VaR(mu(X, w)). Shape: num_starting_sols
+        :return: -VaR(mu(X, w)). Shape: batch_shape (squeezed if self.batch_shape is 1 dim)
         """
+        # TODO: changes here are tested with unchanged acqf and doesn't raise issues
         # make sure X has proper shape, 4 dimensional to match the batch shape of VaRKG
         assert X.size(-1) == self.dim_x
-        if len(self.batch_shape) == 0:
-            X = X.reshape(1, -1, 1, self.dim_x)
-        elif len(self.batch_shape) == 1:
-            X = X.reshape(-1, *self.batch_shape, 1, self.dim_x)
-            # TODO: this case assumes multiple starting sols and not fantasies?
-            #       or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
-            #       This doesn't matter unless we use lookaheads.
-        elif len(self.batch_shape) == 2:
-            X = X.reshape(*self.batch_shape, 1, self.dim_x)
+        if X.dim() <= 4:
+            if len(self.batch_shape) == 0:
+                X = X.reshape(1, -1, 1, self.dim_x)
+            elif len(self.batch_shape) == 1:
+                X = X.reshape(-1, *self.batch_shape, 1, self.dim_x)
+                # TODO: this case assumes multiple starting sols and not fantasies?
+                #       or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
+                #       This doesn't matter unless we use lookaheads. Might not matter there either - not sure
+            elif len(self.batch_shape) == 2:
+                X = X.reshape(*self.batch_shape, 1, self.dim_x)
+            else:
+                raise ValueError("InnerVaR supports only up to 2 dimensional batch models")
         else:
-            raise ValueError("InnerVaR supports only up to 2 dimensional batch models")
+            if X.shape[-4:-2] != self.batch_shape:
+                raise ValueError('If passing large batch dimensional X, last two batch shapes'
+                                 ' must match the model batch_shape')
+            if len(self.batch_shape) > 2:
+                raise ValueError('This is not set to handle larger than 2 dimensional batch models.'
+                                 'Things can go wrong, it has not been tested.')
         batch_shape = X.shape[0: -2]
+        batch_dim = len(batch_shape)
 
         # Repeat w to get the appropriate batch shape, then concatenate with x to get the full solutions, uses CRN
         if self.w_samples.size() != (self.num_samples, self.dim_w):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
+        # TODO: this is a brute force fix to an error I can't make sense of.
+        #       When batch_dim = 3, repeat below breaks grad. That doesn't make sense.
+        if X.requires_grad:
+            torch.set_grad_enabled(True)
         if self.cuda:
-            z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1).cuda()
+            z = torch.cat((X.repeat(*[1]*batch_dim, self.num_samples, 1), w), -1).cuda()
         else:
-            z = torch.cat((X.repeat(1, 1, self.num_samples, 1), w), -1)
+            z = torch.cat((X.repeat(*[1]*batch_dim, self.num_samples, 1), w), -1)
 
         # get the samples using lookahead / sampling or mean
         if self.num_repetitions > 0 and self.lookahead_samples is not None:
             lookahead_model = self._get_lookahead_model(X, batch_shape)
-            z = z.repeat(self.num_repetitions, 1, 1, 1, 1)
+            z = z.repeat(self.num_repetitions, *[1]*z.dim())
             samples = lookahead_model.posterior(z).mean
-            # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (5 dim)
+            # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (3 + batch_dim dim)
         elif self.num_repetitions > 0:
-            base_samples = self.sobol_samples.repeat(1, 1, batch_shape[1], 1, 1)
+            # TODO: how do we handle >2 batch_dim? I think num_rep x * z.shape = *base_samples.shape is needed
+            #       This needs testing
+            base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
+            if batch_dim >= 3:
+                base_samples = base_samples.view(-1, *[1]*(batch_dim-2), -1, -1, -1, -1).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
             # TODO: this next line is the cause of runtime warning, specifically the rsample part
-            #       changing base samples doesn't do anything
+            #       changing base samples doesn't do anything - the reason is taking too many samples too
+            #       close to each other. See the issue in github.
             samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]), base_samples)
         else:
             # get the posterior mean
@@ -620,30 +640,42 @@ class NestedVaRKG(VaRKG):
         torch.manual_seed(fantasy_seed)
         fantasy_seeds = torch.randint(1000000, (self.num_fantasies, ))
         torch.random.set_rng_state(old_state)
+        start = time()
 
-        with settings.propagate_grads(True), torch.enable_grad():
-            values = torch.empty((batch_size, self.num_fantasies))
-            for i in range(batch_size):
-                w_actual = X[i, :, -self.dim_w:]
-                for j in range(self.num_fantasies):
-                    # construct the fantasy model
-                    sampler = SobolQMCNormalSampler(1, seed=int(fantasy_seeds[j]))
-                    fantasy_model = self.model.fantasize(X[i], sampler)
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
+        num_batches = ceil(batch_size / self.mini_batch_size)
+        values = torch.empty(batch_size)
 
-                    inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
-                                         alpha=self.alpha, dim_x=self.dim_x,
-                                         num_repetitions=self.num_repetitions,
-                                         lookahead_samples=self.lookahead_samples,
-                                         inner_seed=inner_seed,
-                                         CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                         w_actual=w_actual)
-                    # TODO: is Inner VaR compatible with this?
-                    # optimize inner VaR
-                    solution, value = self.inner_optimizer(inner_VaR)
-                    value = -value
-                    values[i, j] = self.current_best_VaR - value
+        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
 
-        return torch.mean(values, dim=-1).squeeze()
+        for i in range(num_batches):
+            left_index = i * self.mini_batch_size
+            if i == num_batches - 1:
+                right_index = batch_size
+            else:
+                right_index = (i + 1) * self.mini_batch_size
+
+            # construct the fantasy model
+            if self.cuda:
+                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(), sampler).cuda()
+            else:
+                fantasy_model = self.model.fantasize(X[left_index:right_index], sampler)
+
+            w_actual = X[left_index:right_index, :, -self.dim_w:]
+
+            inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
+                                 alpha=self.alpha, dim_x=self.dim_x,
+                                 num_repetitions=self.num_repetitions,
+                                 lookahead_samples=self.lookahead_samples,
+                                 inner_seed=inner_seed,
+                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                 w_actual=w_actual)
+            # optimize inner VaR
+            with settings.propagate_grads(True):
+                solution, value = self.inner_optimizer(inner_VaR)
+            value = -value
+            values[left_index:right_index] = self.current_best_VaR - torch.mean(value, dim=0)
+        return values
 
 
 class TtsVaRKG(VaRKG):
@@ -731,37 +763,50 @@ class TtsVaRKG(VaRKG):
         torch.random.set_rng_state(old_state)
         start = time()
 
-        if self.last_inner_solution is None:
-            self.last_inner_solution = torch.empty(batch_size, self.num_fantasies, self.dim_x)
-        with settings.propagate_grads(True), torch.enable_grad():
-            values = torch.empty((batch_size, self.num_fantasies))
-            for i in range(batch_size):
-                # debug purposes:
-                print('TtsVaRKG %d/%d, time: %s' % (i, batch_size, time()-start))
-                w_actual = X[i, :, -self.dim_w:]
-                for j in range(self.num_fantasies):
-                    # construct the fantasy model
-                    sampler = SobolQMCNormalSampler(1, seed=int(fantasy_seeds[j]))
-                    fantasy_model = self.model.fantasize(X[i], sampler)
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
+        num_batches = ceil(batch_size / self.mini_batch_size)
+        values = torch.empty(batch_size)
 
-                    inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
-                                         alpha=self.alpha, dim_x=self.dim_x,
-                                         num_repetitions=self.num_repetitions,
-                                         lookahead_samples=self.lookahead_samples,
-                                         inner_seed=inner_seed,
-                                         CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                         w_actual=w_actual)
-                    # TODO: is Inner VaR compatible with this?
-                    # optimize inner VaR
-                    if self.call_count % self.tts_frequency == 0:
-                        solution, value = self.inner_optimizer(inner_VaR)
-                        self.last_inner_solution[i, j] = solution
-                    else:
-                        value = inner_VaR(self.last_inner_solution[i, j])
-                    value = -value
-                    values[i, j] = self.current_best_VaR - value
+        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
+
+        if self.last_inner_solution is None:
+            self.last_inner_solution = torch.empty(self.num_fantasies, batch_size, 1, self.dim_x)
+
+        for i in range(num_batches):
+            left_index = i * self.mini_batch_size
+            if i == num_batches - 1:
+                right_index = batch_size
+            else:
+                right_index = (i + 1) * self.mini_batch_size
+
+            # construct the fantasy model
+            if self.cuda:
+                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(), sampler).cuda()
+            else:
+                fantasy_model = self.model.fantasize(X[left_index:right_index], sampler)
+
+            w_actual = X[left_index:right_index, :, -self.dim_w:]
+
+            inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
+                                 alpha=self.alpha, dim_x=self.dim_x,
+                                 num_repetitions=self.num_repetitions,
+                                 lookahead_samples=self.lookahead_samples,
+                                 inner_seed=inner_seed,
+                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                 w_actual=w_actual)
+            # optimize inner VaR
+            with settings.propagate_grads(True):
+                if self.call_count % self.tts_frequency == 0:
+                    solution, value = self.inner_optimizer(inner_VaR)
+                    self.last_inner_solution[:, left_index:right_index] = solution
+                else:
+                    value = inner_VaR(self.last_inner_solution[:, left_index:right_index])
+            value = -value
+            values[left_index:right_index] = self.current_best_VaR - torch.mean(value, dim=0)
+            # for debugging purposes
+            print('TtsVaRKG %d of batch_size: %d, time: %s' % (right_index, batch_size, time() - start))
         self.call_count += 1
-        return torch.mean(values, dim=-1).squeeze()
+        return values
 
     def tts_reset(self):
         """

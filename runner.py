@@ -80,7 +80,7 @@ for key in key_list:
                                reporting_rep=rep, reporting_la_samples=la_samples,
                                kgcp=kgcp, random_sampling=random, disc=disc,
                                reduce_dim=red_dim, expectation=expectation,
-                               tts=tts, nested=nested)
+                               tts=tts, nested=nested, num_inner_restarts=num_inner_restarts)
         elif ts:
             output = ts_loop(function_name, int(seed), dim_w, filename, iterations,
                              num_samples=num_samples, num_fantasies=num_fantasies,

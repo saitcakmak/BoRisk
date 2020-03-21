@@ -353,6 +353,13 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             _ = gp.posterior(dummy).mean
 
         except RuntimeError as err:
+            import sys
+            gettrace = getattr(sys, 'gettrace', None)
+            if gettrace is None:
+                print('No sys.gettrace, attempting to handle')
+            elif gettrace():
+                print('Detected debug mode. Throwing exception!')
+                raise RuntimeError(err)
             print("Runtime error %s" % err)
             print('Attempting to rerun the iteration to get around it. Seed changed for sampling.')
             handling_count += 1

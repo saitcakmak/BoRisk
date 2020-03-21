@@ -752,23 +752,34 @@ class InnerOptimizer:
         self.eta = eta
         self.options = {'maxiter': maxiter}
 
-    def generate_raw_samples(self) -> Tensor:
+    def generate_raw_samples(self, batch_shape: torch.Size) -> Tensor:
         """
         Generates raw_samples according to the settings specified in init.
+        :param batch_shape: batch_shape of solutions to generate
         :return: raw samples
         """
+        # TODO: this needs testing
+        batch_size = int(torch.prod(torch.tensor(batch_shape)))
         if self.previous_solutions is None:
-            return draw_sobol_samples(bounds=self.bounds, n=self.raw_samples, q=1)
+            samples = draw_sobol_samples(bounds=self.bounds, n=self.raw_samples * batch_size, q=1)
+            return samples.reshape(self.raw_samples, *batch_shape, 1, self.dim_x)
         elif self.previous_solutions.size(0) < (1 - self.random_frac) * self.raw_samples:
             num_reused = self.previous_solutions.size(0)
             num_remaining = self.raw_samples - num_reused
-            random_samples = draw_sobol_samples(bounds=self.bounds, n=num_remaining, q=1)
-            return torch.cat((self.previous_solutions, random_samples), dim=0)
+            random_samples = draw_sobol_samples(bounds=self.bounds, n=num_remaining * batch_size, q=1)
+            random_samples = random_samples.reshape(num_remaining, *batch_shape, 1, self.dim_x)
+            reused_samples = self.previous_solutions.view(-1, *[1]*3, self.dim_x).repeat(1, *batch_shape, 1, 1)
+            samples = torch.cat((reused_samples, random_samples), dim=0)
+            return samples
         else:
-            reused = self.previous_solutions[torch.randperm(n=self.previous_solutions.size(0))][:self.raw_samples]
+            idx = torch.randint(self.previous_solutions.size(0),
+                                (int(self.raw_samples * (1 - self.random_frac)), *batch_shape))
+            reused = self.previous_solutions[idx, :, :]
             random_samples = draw_sobol_samples(bounds=self.bounds,
-                                                n=int(self.raw_samples * self.random_frac), q=1)
-            return torch.cat((reused, random_samples), dim=0)
+                                                n=int(self.raw_samples * self.random_frac * batch_size), q=1)
+            random_samples = random_samples.reshape(int(self.raw_samples * self.random_frac), *batch_shape, 1, self.dim_x)
+            samples = torch.cat((reused, random_samples), dim=0)
+            return samples
 
     def generate_restart_points(self, acqf: MCAcquisitionFunction) -> Tensor:
         """
@@ -776,23 +787,33 @@ class InnerOptimizer:
         :param acqf: The acquisition function being optimized
         :return: restart points
         """
-        X = self.generate_raw_samples()
+        batch_shape = acqf.batch_shape
+        batch_size = int(torch.prod(torch.tensor(batch_shape)))
+        X = self.generate_raw_samples(batch_shape)
         with torch.no_grad():
-            Y = acqf(X)
-        Ystd = Y.std()
+            Y = acqf(X).detach()
+        Ystd = Y.std(dim=0)
 
         max_val, max_idx = torch.max(Y, dim=0)
-        Z = (Y - Y.mean()) / Ystd
+        Z = (Y - Y.mean(dim=0)) / Ystd
         etaZ = self.eta * Z
         weights = torch.exp(etaZ)
         while torch.isinf(weights).any():
             etaZ *= 0.5
             weights = torch.exp(etaZ)
+        # Permuting here to get the raw_samples in the row
+        weights = weights.reshape(self.raw_samples, -1).permute(1, 0)
         idcs = torch.multinomial(weights, self.num_restarts)
+
         # make sure we get the maximum
-        if max_idx not in idcs:
-            idcs[-1] = max_idx
-        return X[idcs]
+        max_idx = max_idx.reshape(-1)
+        idcs = idcs.reshape(-1, self.num_restarts)
+        for i in range(batch_size):
+            if max_idx[i] not in idcs[i]:
+                idcs[i, -1] = max_idx[i]
+        idcs = idcs.reshape(*batch_shape, -1).permute(2, 0, 1)
+        # gather the indices from X
+        return X.gather(dim=0, index=idcs.view(*idcs.shape, 1, 1))
 
     def optimize(self, acqf: MCAcquisitionFunction) -> Tuple[Tensor, Tensor]:
         """
@@ -800,21 +821,19 @@ class InnerOptimizer:
         :param acqf: The acquisition function being optimized
         :return: Best solution and value
         """
+        initial_conditions = self.generate_restart_points(acqf)
         with settings.propagate_grads(True):
-            initial_conditions = self.generate_restart_points(acqf)
             solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                      acquisition_function=acqf,
                                                      lower_bounds=self.bounds[0],
                                                      upper_bounds=self.bounds[1],
                                                      options=self.options)
-            self.add_solutions(solutions.detach())
-            best = torch.argmax(values.view(-1), dim=0)
-            solution = solutions[best]
-            value = values[best]
-            if not value.requires_grad:
-                with torch.enable_grad():
-                    value = acqf(solution)
-            return solution, value
+        self.add_solutions(solutions.view(-1, 1, self.dim_x).detach())
+        best_ind = torch.argmax(values, dim=0)
+        solution = solutions.gather(dim=0, index=best_ind.view(1, *best_ind.shape, 1, 1))
+        with settings.propagate_grads(True):
+            value = acqf(solution)
+        return solution, value.reshape(*acqf.batch_shape)
 
     def new_iteration(self):
         """
