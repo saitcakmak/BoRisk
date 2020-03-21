@@ -701,6 +701,9 @@ class TtsVaRKG(VaRKG):
         X = X.reshape(-1, self.q, self.dim)
         batch_size = X.size(0)
 
+        # for debugging purposes:
+        print('TtsVaRKG, call %d, batch_size %d' % (self.call_count, batch_size))
+
         # generate w_samples
         if self.fix_samples:
             if self.fixed_samples is None:

@@ -113,7 +113,7 @@ class Optimizer:
         """
         X = self.generate_inner_raw_samples()
         with torch.no_grad():
-            Y = acqf(X)
+            Y = acqf(X).detach()
         Y_std = Y.std()
         max_val, max_idx = torch.max(Y, dim=0)
         Z = (Y - Y.mean()) / Y_std
@@ -220,7 +220,7 @@ class Optimizer:
         X = draw_sobol_samples(bounds=self.full_bounds, n=self.raw_samples, q=self.q)
         X[:, :, :self.q * self.dim] = X_outer
         with torch.no_grad():
-            Y = acqf(X)
+            Y = acqf(X).detach()
             Y = torch.mean(Y, dim=-1)
         Y_std = Y.std()
         max_val, max_idx = torch.max(Y, dim=0)
@@ -266,7 +266,7 @@ class Optimizer:
         """
         X = draw_sobol_samples(bounds=self.full_bounds, n=self.raw_samples, q=self.q)
         with torch.no_grad():
-            Y = acqf(X)
+            Y = acqf(X).detach()
             Y = torch.mean(Y, dim=-1)
         Y_std = Y.std()
         max_val, max_idx = torch.max(Y, dim=0)
@@ -359,7 +359,7 @@ class Optimizer:
         """
         X = draw_sobol_samples(bounds=self.outer_bounds, n=self.raw_samples, q=self.q)
         with torch.no_grad():
-            Y = acqf(X)
+            Y = acqf(X).detach()
         Y_std = Y.std()
         max_val, max_idx = torch.max(Y, dim=0)
         Z = (Y - Y.mean()) / Y_std
@@ -412,7 +412,7 @@ class Optimizer:
         w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
         X[..., self.dim_x:] = w_samples[w_ind, :]
         with torch.no_grad():
-            Y = acqf(X)
+            Y = acqf(X).detach()
         Y_std = Y.std()
         max_val, max_idx = torch.max(Y, dim=0)
         Z = (Y - Y.mean()) / Y_std
@@ -534,7 +534,7 @@ class Optimizer:
             raise ValueError('Samples must be num_solutions x 1 x full_dim')
         with torch.no_grad():
             # Y is num_solutions x num_fantasies
-            Y = acqf(samples)
+            Y = acqf(samples).detach()
         outer_values = torch.mean(Y, dim=-1)
         self.add_full_solutions(samples, Y)
         return outer_values
