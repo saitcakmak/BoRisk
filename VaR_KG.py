@@ -129,7 +129,7 @@ class InnerVaR(MCAcquisitionFunction):
             #       This needs testing
             base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
             if batch_dim >= 3:
-                base_samples = base_samples.view(-1, *[1]*(batch_dim-2), -1, -1, -1, -1).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
+                base_samples = base_samples.view(-1, *[1]*(batch_dim-2), *base_samples.shape[-4:]).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
             # TODO: this next line is the cause of runtime warning, specifically the rsample part
             #       changing base samples doesn't do anything - the reason is taking too many samples too
             #       close to each other. See the issue in github.
