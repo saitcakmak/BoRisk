@@ -813,7 +813,7 @@ class InnerOptimizer:
                 idcs[i, -1] = max_idx[i]
         idcs = idcs.reshape(*batch_shape, -1).permute(2, 0, 1)
         # gather the indices from X
-        return X.gather(dim=0, index=idcs.view(*idcs.shape, 1, 1))
+        return X.gather(dim=0, index=idcs.view(*idcs.shape, 1, 1).repeat(*[1]*(idcs.dim() + 1), self.dim_x))
 
     def optimize(self, acqf: MCAcquisitionFunction) -> Tuple[Tensor, Tensor]:
         """
@@ -830,7 +830,7 @@ class InnerOptimizer:
                                                      options=self.options)
         self.add_solutions(solutions.view(-1, 1, self.dim_x).detach())
         best_ind = torch.argmax(values, dim=0)
-        solution = solutions.gather(dim=0, index=best_ind.view(1, *best_ind.shape, 1, 1))
+        solution = solutions.gather(dim=0, index=best_ind.view(1, *best_ind.shape, 1, 1).repeat(*[1]*(best_ind.dim() + 2), self.dim_x))
         with settings.propagate_grads(True):
             value = acqf(solution)
         return solution, value.reshape(*acqf.batch_shape)
