@@ -31,7 +31,7 @@ key_list = ['tts_kgcp_s00', 'varkg_s00', 'kgcp_s00', 'random_s00',
 output_file = "%s_%s" % (function_name, "exp")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 #seed_list = torch.randint(10000, (5,))
-seed_list = [3760]
+seed_list = [4933]
 dim_w = 1
 iterations = 50
 num_restarts = 40
