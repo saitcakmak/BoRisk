@@ -3,4 +3,4 @@
 python -W ignore runner.py
 
 # make sure to enter the instance id here
-aws ec2 stop-instances --instance-ids i-05d31175b5c0bc5d2
+aws ec2 stop-instances --instance-ids i-00f24de3ed5809e79
