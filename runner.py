@@ -20,18 +20,19 @@ print("threads updated", torch.get_num_threads())
 print("interop threads updated", torch.get_num_interop_threads())
 
 # function_name = input("function name: ")
-function_name = 'branin'
+function_name = 'hartmann6'
 # function_name = sys.argv[1]
 num_samples = 10
-num_fantasies = 10  # default 50
-key_list = ['tts_kgcp_s00', # 'varkg_s00', 'random_s00',
+num_fantasies = 50  # default 50
+key_list = ['tts_varkg_s00', # 'varkg_s00', 'random_s00',
             #'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
             #'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
             #'tts_varkg_s00'
             ]
 output_file = "%s_%s" % (function_name, "exp_low_fant")
 torch.manual_seed(0)  # to ensure the produced seed are same!
-seed_list = torch.randint(10000, (5,))
+# seed_list = torch.randint(10000, (5,))
+# seed_list = [6044, 8239, 4933, 3760, 8963]
 # seed_list = [4933]
 dim_w = 1
 iterations = 50
