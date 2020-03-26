@@ -32,8 +32,8 @@ key_list = ['tts_varkg_s00', # 'varkg_s00', 'random_s00',
 output_file = "%s_%s" % (function_name, "exp_10_fant_20_raw")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 # seed_list = torch.randint(10000, (5,))
-# seed_list = [6044, 8239, 4933, 3760, 8963]
-seed_list = [4933, 8963]
+seed_list = [6044, 8239, 4933, 3760, 8963]
+# seed_list = [4933, 8963]
 dim_w = 1
 iterations = 50
 num_restarts = 40
