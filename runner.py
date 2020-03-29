@@ -24,12 +24,12 @@ function_name = 'hartmann6'
 # function_name = sys.argv[1]
 num_samples = 10
 num_fantasies = 10  # default 50
-key_list = ['tts_varkg_s00', # 'varkg_s00', 'random_s00',
+key_list = ['random_s40', 'tts_kgcp_s40', 'tts_kgcp_s04',
             #'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
             #'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
-            #'tts_varkg_s00'
+            'tts_varkg_10fant_s40'
             ]
-output_file = "%s_%s" % (function_name, "exp_10_fant_20_raw")
+output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 # seed_list = torch.randint(10000, (5,))
 seed_list = [6044, 8239, 4933, 3760, 8963]
@@ -37,12 +37,12 @@ seed_list = [6044, 8239, 4933, 3760, 8963]
 dim_w = 1
 iterations = 50
 num_restarts = 40
-raw_multiplier = 20  # default 50
+raw_multiplier = 50  # default 50
 num_inner_restarts = 10
 maxiter = 1000
 periods = 1000
 CVaR = False
-expectation = True
+expectation = False
 alpha = 0.7
 cuda = False
 disc = True
