@@ -72,7 +72,7 @@ class Optimizer:
         self.full_dim = q * dim + num_fantasies * dim_x
         self.inner_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim_x)
         self.outer_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim)
-        self.outer_bounds = torch.tensor([[0.], [1.]]).repeat(1, q * dim)
+        self.one_shot_outer_bounds = torch.tensor([[0.], [1.]]).repeat(1, q * dim)
         self.full_bounds = torch.tensor([[0.], [1.]]).repeat(1, self.full_dim)
         self.random_frac = random_frac
         self.limit = self.raw_samples * limiter
@@ -490,7 +490,7 @@ class Optimizer:
         idx[-1] = torch.argmax(outer_values)
         solutions = outer_sols[idx].unsqueeze(-2)
 
-        random_outer = draw_sobol_samples(self.outer_bounds, self.num_restarts, q=1)
+        random_outer = draw_sobol_samples(self.one_shot_outer_bounds, self.num_restarts, q=1)
         solutions = torch.cat((random_outer, solutions), dim=0)
 
         picked_solutions = torch.cat((solutions, picked_fantasies), dim=-1)
@@ -583,7 +583,7 @@ class Optimizer:
         :param num_random_outer: Number of which to have random outer solutions
         :return: Picked solutions, n x 1 x full_dim
         """
-        random_outer = draw_sobol_samples(self.outer_bounds, num_random_outer, 1)
+        random_outer = draw_sobol_samples(self.one_shot_outer_bounds, num_random_outer, 1)
         fantasy_sols = self.pick_fantasy_solutions(n).reshape(n, 1, -1)
         picked_outer = self.pick_outer_solutions(n - num_random_outer)
         if picked_outer is not None:
