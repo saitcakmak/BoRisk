@@ -9,19 +9,19 @@ import numpy as np
 
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "batch_output/"
-function_name = 'branin'
+function_name = 'hartmann6'
 prefix = 'plot_'
 # prefix = ''
-suffix = '_exp'
+suffix = '_var'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 1
-iterations = 50
-CVaR = True
-alpha = 0.
+iterations = 50  # default 50
+CVaR = False
+alpha = 0.7
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
-num_x = 100000
+num_x = 1000000
 if dim_x == 2:
     num_x = int(np.sqrt(num_x))
 num_w = 10  # use larger if dim_w > 1
@@ -53,8 +53,12 @@ for j in range(len(keys)):
             continue
         else:
             actual_indices.append(i)
-        best_list = sub_data[inner_keys[i]]['current_best'].reshape(-1, 1, dim_x)
-        sols = torch.cat((best_list.repeat(1, num_w, 1), w_samples.repeat(iterations, 1, 1)), dim=-1)
+        try:
+            best_list = sub_data[inner_keys[i]]['current_best'].reshape(-1, 1, dim_x)[:iterations]
+            sols = torch.cat((best_list.repeat(1, num_w, 1), w_samples.repeat(iterations, 1, 1)), dim=-1)
+        except RuntimeError:
+            actual_indices.remove(i)
+            continue
         if (sols > 1).any() or (sols < 0).any():
             actual_indices.pop(-1)
             continue
@@ -82,12 +86,12 @@ for i in range(len(keys)):
     plt.grid(True)
     plt.legend()
 
-for i in range(len(keys)):
-    plt.figure(int(i/num_plot))
-    plt.title(filename + ' log_gap, avg(log)')
-    key = keys[i]
-    plt.plot(range(iterations), alt_output[i], label=key)
-    plt.grid(True)
-    plt.legend()
+# for i in range(len(keys)):
+#     plt.figure(int(i/num_plot))
+#     plt.title(filename + ' log_gap, avg(log)')
+#     key = keys[i]
+#     plt.plot(range(iterations), alt_output[i], label=key)
+#     plt.grid(True)
+#     plt.legend()
 
 plt.show()

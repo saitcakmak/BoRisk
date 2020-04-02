@@ -22,18 +22,18 @@ import matplotlib.pyplot as plt
 seed = 0
 torch.manual_seed(seed)
 
-function_name = 'sinequad'
+function_name = 'branin'
 dim_w = 1
 num_samples = 10
 num_restarts = 40
 raw_multiplier = 50
 maxiter = 1000
 periods = 1000
-num_fantasies = 50
+num_fantasies = 10
 q = 1
-kgcp = True
+kgcp = False
 nested = False
-tts = True
+tts = False
 num_inner_restarts = 10
 inner_raw_multiplier = 5
 tts_frequency = 10
@@ -42,6 +42,7 @@ tts_frequency = 10
 function = function_picker(function_name)
 d = function.dim  # dimension of train_X
 n = 2 * d + 2  # training samples
+# n = 30
 dim_x = d - dim_w  # dimension of the x component
 
 train_X = torch.rand((n, d))
@@ -150,9 +151,9 @@ nested_var_kg = NestedVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                             inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
 
 
-sol = optimizer.disc_optimize_outer(tts_kgcp, w_samples)
-print(sol)
-tts_kgcp.tts_reset()
+# sol = optimizer.disc_optimize_outer(tts_kgcp, w_samples)
+# print(sol)
+# tts_kgcp.tts_reset()
 
 k = 40  # number of points in x
 
@@ -164,7 +165,7 @@ else:
     name = 'varkg'
 if tts:
     name = 'tts_' + name
-filename = 'other_output/acqf_val_%s_seed_%d_%s.pt' % (function_name, seed, name)
+filename = 'other_output/acqf_val_%s_seed_%d_%s_10_fant.pt' % (function_name, seed, name)
 try:
     res = torch.load(filename)
 except FileNotFoundError:

@@ -19,21 +19,23 @@ from botorch.fit import fit_gpytorch_model
 
 
 directory = '../detailed_output/'
-function_name = 'branin'
-suffix = '_exp_tts_varkg_s00_'
+# directory = '../raul_experiments/'
+function_name = 'hartmann6'
+suffix = '_var_random_s40_'
 seed_list = [6044, 8239, 4933, 3760, 8963]
+# seed_list = [3760]
 suffix2 = '_disc.pt'
 dim_w = 1
-kgcp = False  # this is for reoptimization behavior
+kgcp = 'kgcp' in suffix  # this is for reoptimization behavior
 
-output_file = '../batch_output/plot_branin_exp'
-output_key = 'tts_varkg'
+output_file = '../batch_output/plot_%s_var' % function_name
+output_key = 'random_s40'
 
 num_samples = 10
-iterations = 50
+iterations = 50  # default 50
 q = 1
 CVaR = False
-expectation = True
+expectation = 'exp' in output_file
 alpha = 0.7
 w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
 function = function_picker(function_name)
@@ -139,8 +141,8 @@ def reeval(seed, kgcp: bool = False):
         current_best_value = - values[best]
     else:
         current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
-    current_best_list[50] = current_best_sol
-    current_best_value_list[50] = current_best_value
+    current_best_list[iterations] = current_best_sol
+    current_best_value_list[iterations] = current_best_value
 
     output = {'current_best': current_best_list,
               'current_best_value': current_best_value_list,
