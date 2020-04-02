@@ -24,7 +24,7 @@ function_name = 'hartmann6'
 # function_name = sys.argv[1]
 num_samples = 10
 num_fantasies = 10  # default 50
-key_list = ['tts_kgcp_s40', 'tts_kgcp_s04',
+key_list = ['tts_kgcp_q05_s40', 'tts_kgcp_q05_s04',
             #'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
             #'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
             # 'tts_varkg_10fant_s40'
@@ -35,7 +35,8 @@ torch.manual_seed(0)  # to ensure the produced seed are same!
 seed_list = [6044, 8239, 4933, 3760, 8963]
 # seed_list = [4933, 8963]
 dim_w = 1
-iterations = 50
+q = 5
+iterations = 10
 num_restarts = 40
 raw_multiplier = 50  # default 50
 num_inner_restarts = 10
@@ -78,7 +79,7 @@ for key in key_list:
                                num_samples=num_samples, num_fantasies=num_fantasies,
                                num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
                                cuda=cuda, raw_multiplier=raw_multiplier,
-                               maxiter=maxiter, periods=periods,
+                               maxiter=maxiter, periods=periods, q=q,
                                num_repetitions=rep, lookahead_samples=la_samples,
                                reporting_rep=rep, reporting_la_samples=la_samples,
                                kgcp=kgcp, random_sampling=random, disc=disc,
