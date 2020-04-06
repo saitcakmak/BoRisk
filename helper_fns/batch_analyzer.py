@@ -18,6 +18,9 @@ dim_w = 1
 iterations = 50  # default 50
 CVaR = False
 alpha = 0.7
+if 'exp' in filename:
+    CVaR = True
+    alpha = 0.
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
@@ -26,6 +29,7 @@ if dim_x == 2:
     num_x = int(np.sqrt(num_x))
 num_w = 10  # use larger if dim_w > 1
 num_plot = 10  # max number of plot lines in a figure
+# TODO: handle q>0
 
 if dim_w == 1:
     w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)

@@ -21,7 +21,7 @@ from botorch.fit import fit_gpytorch_model
 directory = '../detailed_output/'
 # directory = '../raul_experiments/'
 function_name = 'hartmann6'
-suffix = '_var_random_s40_'
+suffix = '_nested_nested_s40_'
 seed_list = [6044, 8239, 4933, 3760, 8963]
 # seed_list = [3760]
 suffix2 = '_disc.pt'
@@ -29,9 +29,10 @@ dim_w = 1
 kgcp = 'kgcp' in suffix  # this is for reoptimization behavior
 
 output_file = '../batch_output/plot_%s_var' % function_name
-output_key = 'random_s40'
+output_key = 'nested_s40'
 
 num_samples = 10
+# TODO: handle q>1
 iterations = 50  # default 50
 q = 1
 CVaR = False
