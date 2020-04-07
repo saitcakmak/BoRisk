@@ -20,11 +20,11 @@ print("threads updated", torch.get_num_threads())
 print("interop threads updated", torch.get_num_interop_threads())
 
 # function_name = input("function name: ")
-function_name = 'levy'
+function_name = 'hartmann6'
 # function_name = sys.argv[1]
 num_samples = 10
 num_fantasies = 50  # default 50
-key_list = ['tts_kgcp_s40', 'random_s40',
+key_list = ['tts_kgcp_q01_s40', 'tts_kgcp_q01_s04', 'random_s04', 'random_s40',
             #'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
             #'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
             # 'tts_varkg_10fant_s40'
@@ -36,7 +36,7 @@ seed_list = [6044, 8239, 4933, 3760, 8963]
 # seed_list = [4933, 8963]
 dim_w = 1
 q = 1
-iterations = 25
+iterations = 50
 num_restarts = 40
 raw_multiplier = 50  # default 50
 num_inner_restarts = 10
