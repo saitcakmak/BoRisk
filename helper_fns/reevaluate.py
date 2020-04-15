@@ -19,8 +19,7 @@ from botorch.fit import fit_gpytorch_model
 
 
 directory = '../detailed_output/'
-# directory = '../raul_experiments/'
-function_name = 'hartmann6'
+function_name = 'branin'
 suffix = '_nested_nested_s40_'
 seed_list = [6044, 8239, 4933, 3760, 8963]
 # seed_list = [3760]
@@ -32,9 +31,13 @@ output_file = '../batch_output/plot_%s_var' % function_name
 output_key = 'nested_s40'
 
 num_samples = 10
-# TODO: handle q>1
-iterations = 50  # default 50
-q = 1
+if "_q" in output_key:
+    sub = output_key[output_key.find("_q")+1:]
+    next_ = sub.find("_")
+    q = int(sub[1:next_])
+else:
+    q = 1
+iterations = int(43 / q)  # default 50
 CVaR = False
 expectation = 'exp' in output_file
 alpha = 0.7
@@ -66,9 +69,9 @@ def reeval(seed, kgcp: bool = False):
         ),
     )
 
-    current_best_list = torch.empty((iterations + 1, q, dim_x))
-    current_best_value_list = torch.empty((iterations + 1, q, 1))
-    kg_value_list = torch.empty((iterations, q, 1))
+    current_best_list = torch.empty((iterations + 1, 1, dim_x))
+    current_best_value_list = torch.empty((iterations + 1, 1, 1))
+    kg_value_list = torch.empty((iterations, 1, 1))
     candidate_list = torch.empty((iterations, q, dim))
 
     optimizer = Optimizer(num_restarts=num_restarts,
@@ -162,6 +165,9 @@ if output_key not in full_out.keys():
     full_out[output_key] = dict()
 for seed in seed_list:
     output = reeval(seed)
-    full_out[output_key][seed] = output
+    if output is not None:
+        full_out[output_key][seed] = output
+    elif seed in full_out[output_key].keys():
+        full_out[output_key].pop(seed)
 
 torch.save(full_out, output_file)
