@@ -31,7 +31,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
               cuda: bool = False, reporting_la_samples: Tensor = None, reporting_rep: int = 0,
               periods: int = 1000, kgcp: bool = False, disc: bool = False, reduce_dim: bool = False,
               nested: bool = False, tts: bool = False, tts_frequency: int = 10,
-              num_inner_restarts: int = 10, inner_raw_multiplier: int = 5):
+              num_inner_restarts: int = 10, inner_raw_multiplier: int = 5, weights: Tensor = None):
     """
     The full_loop in callable form
     :param seed: The seed for initializing things
@@ -67,6 +67,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param tts_frequency: The frequency of two-time-scale. See TtsVaRKG for details.
     :param num_inner_restarts: Inner restarts for nested optimization
     :param inner_raw_multiplier: raw multipler for nested optimization
+    :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+        A 1-dim tensor of size num_samples
     :return: None - saves the output.
     """
 
@@ -95,6 +97,11 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
         filename = filename + '_random'
     if tts and 'tts' not in filename:
         filename = filename + '_tts'
+    if weights is not None and 'weights' not in filename:
+        filename = filename + '_weights'
+
+    if weights is not None and dim_w != 1:
+        raise ValueError('Weights are only implemented for dim_w = 1!')
 
     if nested and kgcp:
         raise ValueError("nested and kgcp cannot be both True!")
@@ -121,11 +128,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     else:
         w_samples = torch.rand((num_samples, dim_w))
 
-    # fixed_samples and fix_samples makes it SAA approach - the preferred method
-    if dim_w == 1:
-        fixed_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
-    else:
-        fixed_samples = torch.rand((num_samples, dim_w))
+    fixed_samples = w_samples
     fix_samples = True
     # comment out above and uncomment below for an SGD-like approach
     # fix_samples = False
@@ -201,7 +204,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                                  num_repetitions=reporting_rep,
                                  lookahead_samples=reporting_la_samples,
-                                 inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                 inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                 weights=weights)
 
             if kgcp:
                 past_x = train_X[:, :dim_x]
@@ -241,7 +245,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                    dim=d, dim_x=dim_x, past_x=past_x, tts_frequency=tts_frequency, q=q,
                                    fix_samples=fix_samples, fixed_samples=fixed_samples,
                                    num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                   weights=weights)
                 else:
                     kgcp = KGCP(model=gp, num_samples=num_samples, alpha=alpha,
                                 current_best_VaR=current_best_value, num_fantasies=num_fantasies,
@@ -249,7 +254,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                 dim=d, dim_x=dim_x, past_x=past_x, q=q,
                                 fix_samples=fix_samples, fixed_samples=fixed_samples,
                                 num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                weights=weights)
                 opt_start = time()
                 if disc:
                     candidate, value = optimizer.disc_optimize_outer(kgcp, w_samples)
@@ -265,7 +271,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                       tts_frequency=tts_frequency,
                                       q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
                                       num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                      inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                      inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                      weights=weights)
                     opt_start = time()
                     if disc:
                         candidate, value = optimizer.disc_optimize_outer(var_kg, w_samples)
@@ -279,7 +286,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                          dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
                                          q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
                                          num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                         inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                         inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                         weights=weights)
                     opt_start = time()
                     if disc:
                         candidate, value = optimizer.disc_optimize_outer(var_kg, w_samples)
@@ -293,7 +301,8 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                    dim=d, dim_x=dim_x, q=q,
                                    fix_samples=fix_samples, fixed_samples=fixed_samples,
                                    num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda)
+                                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                   weights=weights)
                     opt_start = time()
                     if disc:
                         candidate, value = optimizer.disc_optimize_VaRKG(var_kg, w_samples)
@@ -422,21 +431,22 @@ if __name__ == "__main__":
     # la_samples = torch.linspace(0, 1, 100).reshape(-1, 1)
     la_samples = None
     num_rep = 0
-    num_fant = 25
+    num_fant = 10
     num_rest = 10
     maxiter = 100
     rand = False
-    verb = False
+    verb = True
     num_iter = 10
-    num_samp = 1
-    kgcp = False
+    num_samp = 5
+    kgcp = True
     disc = True
     red_dim = False
-    tts = False
-    nested = True
+    tts = True
+    nested = False
+    weights = torch.tensor([0.3, 0.2, 0.1, 0.1, 0.3])
     full_loop('branin', 0, 1, 'tester', 10, num_samples=num_samp, maxiter=maxiter,
               num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
-              random_sampling=rand, expectation=False, verbose=verb, cuda=False,
+              random_sampling=rand, CVaR=False, expectation=False, verbose=verb, cuda=False,
               lookahead_samples=la_samples,
               num_repetitions=0, q=1, kgcp=kgcp, disc=disc, reduce_dim=red_dim, tts=tts,
-              nested=nested)
+              nested=nested, weights=weights)
