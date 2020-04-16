@@ -12,6 +12,7 @@ from botorch.models.model import Model
 from botorch.sampling.samplers import SobolQMCNormalSampler
 from botorch.utils import draw_sobol_normal_samples
 from torch import Tensor
+import warnings
 from time import time
 
 
@@ -26,7 +27,8 @@ class InnerVaR(MCAcquisitionFunction):
                  lookahead_samples: Tensor = None,
                  inner_seed: Optional[int] = None,
                  CVaR: bool = False, expectation: bool = False,
-                 cuda: bool = False, w_actual: Tensor = None):
+                 cuda: bool = False, w_actual: Tensor = None,
+                 weights: Tensor = None):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -43,6 +45,8 @@ class InnerVaR(MCAcquisitionFunction):
         :param cuda: True if using GPUs
         :param w_actual: If VaRKG is being evaluated with lookaheads, then w component of the point being
             evaluated is added to the lookahead points
+        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+            A 1-dim tensor of size num_samples
         """
         super().__init__(model)
         self.num_samples = w_samples.size(0)
@@ -70,7 +74,14 @@ class InnerVaR(MCAcquisitionFunction):
                                                   seed=inner_seed)
             self.sobol_samples = raw_sobol.reshape(self.num_repetitions, self.num_fantasies, 1,
                                                    self.num_samples, 1)
-            # TODO: This is using different samples for each fantasy. Do we want this?
+            # This is using different samples for each fantasy. Do we want this?
+        if weights is not None:
+            if weights.size(0) != w_samples.size(0):
+                raise ValueError("Weigts must be of size num_samples.")
+            if sum(weights) != 1:
+                raise ValueError("Weights must sum up to 1.")
+            weights = weights.reshape(-1)
+        self.weights = weights
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -79,7 +90,6 @@ class InnerVaR(MCAcquisitionFunction):
             Shape: num_fantasies x num_starting_sols x 1 x dim_x (see below)
         :return: -VaR(mu(X, w)). Shape: batch_shape (squeezed if self.batch_shape is 1 dim)
         """
-        # TODO: changes here are tested with unchanged acqf and doesn't raise issues
         # make sure X has proper shape, 4 dimensional to match the batch shape of VaRKG
         assert X.size(-1) == self.dim_x
         if X.dim() <= 4:
@@ -87,9 +97,9 @@ class InnerVaR(MCAcquisitionFunction):
                 X = X.reshape(1, -1, 1, self.dim_x)
             elif len(self.batch_shape) == 1:
                 X = X.reshape(-1, *self.batch_shape, 1, self.dim_x)
-                # TODO: this case assumes multiple starting sols and not fantasies?
-                #       or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
-                #       This doesn't matter unless we use lookaheads. Might not matter there either - not sure
+                # this case assumes multiple starting sols and not fantasies?
+                # or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
+                # This doesn't matter unless we use lookaheads. Might not matter there either - not sure
             elif len(self.batch_shape) == 2:
                 X = X.reshape(*self.batch_shape, 1, self.dim_x)
             else:
@@ -109,8 +119,8 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
-        # TODO: this is a brute force fix to an error I can't make sense of.
-        #       When batch_dim = 3, repeat below breaks grad. That doesn't make sense.
+        # this is a brute force fix to an error I can't make sense of.
+        # When batch_dim = 3, repeat below breaks grad. That doesn't make sense.
         if X.requires_grad:
             torch.set_grad_enabled(True)
         if self.cuda:
@@ -125,14 +135,12 @@ class InnerVaR(MCAcquisitionFunction):
             samples = lookahead_model.posterior(z).mean
             # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (3 + batch_dim dim)
         elif self.num_repetitions > 0:
-            # TODO: how do we handle >2 batch_dim? I think num_rep x * z.shape = *base_samples.shape is needed
-            #       This needs testing
             base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
             if batch_dim >= 3:
                 base_samples = base_samples.view(-1, *[1]*(batch_dim-2), *base_samples.shape[-4:]).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
-            # TODO: this next line is the cause of runtime warning, specifically the rsample part
-            #       changing base samples doesn't do anything - the reason is taking too many samples too
-            #       close to each other. See the issue in github.
+            # this next line is the cause of runtime warning, specifically the rsample part
+            # changing base samples doesn't do anything - the reason is taking too many samples too
+            # close to each other. See the issue in github.
             samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]), base_samples)
         else:
             # get the posterior mean
@@ -140,13 +148,37 @@ class InnerVaR(MCAcquisitionFunction):
             samples = post.mean
 
         # calculate C/VaR value
-        samples, _ = torch.sort(samples, dim=-2)
-        if self.CVaR:
-            values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
-        elif self.expectation:
-            values = torch.mean(samples, dim=-2)
+        samples, ind = torch.sort(samples, dim=-2)
+
+        if self.weights is None:
+            if self.CVaR:
+                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
+            elif self.expectation:
+                values = torch.mean(samples, dim=-2)
+            else:
+                values = samples[..., int(self.num_samples * self.alpha), :]
         else:
-            values = samples[..., int(self.num_samples * self.alpha), :]
+            weights = self.weights[ind]
+            summed_weights = torch.empty(weights.size())
+            summed_weights[..., 0, :] = weights[..., 0, :]
+            for i in range(1, weights.size(-2)):
+                summed_weights[..., i, :] = summed_weights[..., i-1, :] + weights[..., i, :]
+            if not self.expectation:
+                gr_ind = summed_weights >= self.alpha
+                var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1], dtype=torch.long) * weights.size(-2)
+                for i in range(weights.size(-2)):
+                    var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]], torch.tensor([i]))
+
+                if self.CVaR:
+                    # deletes (zeroes) the non-tail weights
+                    weights = weights * gr_ind
+                    total = (samples * weights).sum(dim=-2)
+                    weight_total = weights.sum(dim=-2)
+                    values = total / weight_total
+                else:
+                    values = torch.gather(samples, dim=-2, index=var_ind).squeeze(-2)
+            else:
+                values = torch.mean(samples * weights, dim=-2)
 
         # Average over repetitions
         if self.num_repetitions > 0:
@@ -200,7 +232,8 @@ class VaRKG(MCAcquisitionFunction):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_repetitions: int = 0,
                  lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
+                 weights: Tensor = None):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
@@ -229,6 +262,8 @@ class VaRKG(MCAcquisitionFunction):
         :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
         :param expectation: If true, this is BQO.
         :param cuda: True if using GPUs
+        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+            A 1-dim tensor of size num_samples
         """
         super().__init__(model)
         self.num_samples = num_samples
@@ -264,6 +299,7 @@ class VaRKG(MCAcquisitionFunction):
         if lookahead_samples is not None and (lookahead_samples.dim() != 2 or lookahead_samples.size(-1) != self.dim_w):
             raise ValueError("lookahead_samples must be of size num_lookahead_samples x dim_w")
         self.lookahead_samples = lookahead_samples
+        self.weights = weights
 
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
@@ -285,6 +321,8 @@ class VaRKG(MCAcquisitionFunction):
             being evaluated, the remaining (num_fantasies x dim_x) are the solutions to the inner problem.
         :return: value of VaR-KG at X (to be maximized) - size: batch size x num_fantasies
         """
+        warnings.warn("This works very poorly due to poor optimization. "
+                      "Use the nested VaRKG if possible.")
         # make sure X has proper shape
         X = X.reshape(-1, 1, X.size(-1))
         batch_size = X.size(0)
@@ -344,7 +382,8 @@ class VaRKG(MCAcquisitionFunction):
                                  lookahead_samples=self.lookahead_samples,
                                  inner_seed=inner_seed,
                                  CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                 w_actual=w_actual[left_index:right_index])
+                                 w_actual=w_actual[left_index:right_index],
+                                 weights=self.weights)
             # sample and return
             with settings.propagate_grads(True):
                 inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
@@ -364,7 +403,8 @@ class KGCP(VaRKG):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_repetitions: int = 0,
                  lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
+                 weights: Tensor = None):
         """
         Everthing is as explained in VaRKG
         :param model:
@@ -385,12 +425,14 @@ class KGCP(VaRKG):
         :param CVaR:
         :param expectation:
         :param cuda:
+        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+            A 1-dim tensor of size num_samples
         """
         super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
                          num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
                          q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
                          lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda)
+                         expectation=expectation, cuda=cuda, weights=weights)
         self.past_x = past_x.reshape(-1, self.dim_x)
 
     def forward(self, X: Tensor) -> Tensor:
@@ -434,7 +476,7 @@ class KGCP(VaRKG):
                              lookahead_samples=self.lookahead_samples,
                              inner_seed=inner_seed,
                              CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                             w_actual=w_actual)
+                             w_actual=w_actual, weights=self.weights)
 
         x_comp = X[..., :self.dim_x]
         x_inner = torch.cat((x_comp, self.past_x.repeat(X.size(0), 1, 1)), dim=-2).repeat(self.num_fantasies, 1, 1, 1)
@@ -459,7 +501,8 @@ class TtsKGCP(VaRKG):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_repetitions: int = 0,
                  lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
+                 weights: Tensor = None):
         """
         Everthing is as explained in VaRKG
         :param model:
@@ -482,12 +525,14 @@ class TtsKGCP(VaRKG):
         :param CVaR:
         :param expectation:
         :param cuda:
+        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+            A 1-dim tensor of size num_samples
         """
         super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
                          num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
                          q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
                          lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda)
+                         expectation=expectation, cuda=cuda, weights=weights)
         self.past_x = past_x.reshape(-1, self.dim_x)
         self.tts_frequency = tts_frequency
         self.call_count = 0
@@ -534,7 +579,7 @@ class TtsKGCP(VaRKG):
                              lookahead_samples=self.lookahead_samples,
                              inner_seed=inner_seed,
                              CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                             w_actual=w_actual)
+                             w_actual=w_actual, weights=self.weights)
 
         if self.call_count % self.tts_frequency == 0:
             x_comp = X[..., :self.dim_x]
@@ -577,7 +622,8 @@ class NestedVaRKG(VaRKG):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_repetitions: int = 0,
                  lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
+                 weights: Tensor = None):
         """
         Everthing is as explained in VaRKG
         :param model:
@@ -598,12 +644,14 @@ class NestedVaRKG(VaRKG):
         :param CVaR:
         :param expectation:
         :param cuda:
+        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+            A 1-dim tensor of size num_samples
         """
         super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
                          num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
                          q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
                          lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda)
+                         expectation=expectation, cuda=cuda, weights=weights)
         self.inner_optimizer = inner_optimizer
 
     def forward(self, X: Tensor) -> Tensor:
@@ -669,7 +717,7 @@ class NestedVaRKG(VaRKG):
                                  lookahead_samples=self.lookahead_samples,
                                  inner_seed=inner_seed,
                                  CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                 w_actual=w_actual)
+                                 w_actual=w_actual, weights=self.weights)
             # optimize inner VaR
             with settings.propagate_grads(True):
                 solution, value = self.inner_optimizer(inner_VaR)
@@ -690,7 +738,8 @@ class TtsVaRKG(VaRKG):
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_repetitions: int = 0,
                  lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False):
+                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
+                 weights: Tensor = None):
         """
         Everthing is as explained in VaRKG
         :param model:
@@ -713,12 +762,14 @@ class TtsVaRKG(VaRKG):
         :param CVaR:
         :param expectation:
         :param cuda:
+        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+            A 1-dim tensor of size num_samples
         """
         super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
                          num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
                          q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
                          lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda)
+                         expectation=expectation, cuda=cuda, weights=weights)
         self.inner_optimizer = inner_optimizer
         self.tts_frequency = tts_frequency
         self.call_count = 0
@@ -793,7 +844,7 @@ class TtsVaRKG(VaRKG):
                                  lookahead_samples=self.lookahead_samples,
                                  inner_seed=inner_seed,
                                  CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                 w_actual=w_actual)
+                                 w_actual=w_actual, weights=self.weights)
             # optimize inner VaR
             with settings.propagate_grads(True):
                 if self.call_count % self.tts_frequency == 0:

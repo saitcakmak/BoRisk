@@ -758,7 +758,6 @@ class InnerOptimizer:
         :param batch_shape: batch_shape of solutions to generate
         :return: raw samples
         """
-        # TODO: this needs testing
         batch_size = int(torch.prod(torch.tensor(batch_shape)))
         if self.previous_solutions is None:
             samples = draw_sobol_samples(bounds=self.bounds, n=self.raw_samples * batch_size, q=1)

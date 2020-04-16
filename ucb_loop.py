@@ -51,7 +51,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
     :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG.
     :param expectation: If true, we are running BQO optimization.
-    :param beta_c: TODO: explain - these might have to go inside and become iteration dependent
+    :param beta_c: explain - these might have to go inside and become iteration dependent
     :param beta_d:
     :param cuda: True if using GPUs
     :param reporting_la_samples: lookahead samples for reporting of the best
@@ -146,7 +146,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
             current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
                                                              bounds=inner_bounds,
-                                                             q=q,  # TODO: q>1 not implemented
+                                                             q=q,  # q>1 not implemented
                                                              num_restarts=num_restarts,
                                                              raw_samples=num_restarts * raw_multiplier)
             current_best_list[i] = current_best.detach()
@@ -164,7 +164,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
                 candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
                                                                bounds=inner_bounds,
-                                                               q=q,  # TODO: q>1 not implemented
+                                                               q=q,  # q>1 not implemented
                                                                num_restarts=num_restarts,
                                                                raw_samples=num_restarts * raw_multiplier)
                 candidate_x_value = -candidate_x_value.detach().cpu()
@@ -191,7 +191,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
             # if continuous:
             #     candidate_w, w_kg_value = optimize_acqf(acq_function=w_kg,
             #                                             bounds=w_bounds,
-            #                                             q=q,  # TODO: q>1 not valid
+            #                                             q=q,  # q>1 not valid
             #                                             num_restarts=num_restarts,
             #                                             raw_samples=num_restarts * raw_multiplier,
             #                                             options={'maxiter': maxiter})
