@@ -74,7 +74,7 @@ class InnerVaR(MCAcquisitionFunction):
                                                   seed=inner_seed)
             self.sobol_samples = raw_sobol.reshape(self.num_repetitions, self.num_fantasies, 1,
                                                    self.num_samples, 1)
-            # TODO: This is using different samples for each fantasy. Do we want this?
+            # This is using different samples for each fantasy. Do we want this?
         if weights is not None:
             if weights.size(0) != w_samples.size(0):
                 raise ValueError("Weigts must be of size num_samples.")
@@ -90,7 +90,6 @@ class InnerVaR(MCAcquisitionFunction):
             Shape: num_fantasies x num_starting_sols x 1 x dim_x (see below)
         :return: -VaR(mu(X, w)). Shape: batch_shape (squeezed if self.batch_shape is 1 dim)
         """
-        # TODO: changes here are tested with unchanged acqf and doesn't raise issues
         # make sure X has proper shape, 4 dimensional to match the batch shape of VaRKG
         assert X.size(-1) == self.dim_x
         if X.dim() <= 4:
@@ -98,9 +97,9 @@ class InnerVaR(MCAcquisitionFunction):
                 X = X.reshape(1, -1, 1, self.dim_x)
             elif len(self.batch_shape) == 1:
                 X = X.reshape(-1, *self.batch_shape, 1, self.dim_x)
-                # TODO: this case assumes multiple starting sols and not fantasies?
-                #       or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
-                #       This doesn't matter unless we use lookaheads. Might not matter there either - not sure
+                # this case assumes multiple starting sols and not fantasies?
+                # or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
+                # This doesn't matter unless we use lookaheads. Might not matter there either - not sure
             elif len(self.batch_shape) == 2:
                 X = X.reshape(*self.batch_shape, 1, self.dim_x)
             else:
@@ -120,8 +119,8 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
-        # TODO: this is a brute force fix to an error I can't make sense of.
-        #       When batch_dim = 3, repeat below breaks grad. That doesn't make sense.
+        # this is a brute force fix to an error I can't make sense of.
+        # When batch_dim = 3, repeat below breaks grad. That doesn't make sense.
         if X.requires_grad:
             torch.set_grad_enabled(True)
         if self.cuda:
@@ -136,14 +135,12 @@ class InnerVaR(MCAcquisitionFunction):
             samples = lookahead_model.posterior(z).mean
             # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (3 + batch_dim dim)
         elif self.num_repetitions > 0:
-            # TODO: how do we handle >2 batch_dim? I think num_rep x * z.shape = *base_samples.shape is needed
-            #       This needs testing
             base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
             if batch_dim >= 3:
                 base_samples = base_samples.view(-1, *[1]*(batch_dim-2), *base_samples.shape[-4:]).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
-            # TODO: this next line is the cause of runtime warning, specifically the rsample part
-            #       changing base samples doesn't do anything - the reason is taking too many samples too
-            #       close to each other. See the issue in github.
+            # this next line is the cause of runtime warning, specifically the rsample part
+            # changing base samples doesn't do anything - the reason is taking too many samples too
+            # close to each other. See the issue in github.
             samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]), base_samples)
         else:
             # get the posterior mean
@@ -172,8 +169,6 @@ class InnerVaR(MCAcquisitionFunction):
                 for i in range(weights.size(-2)):
                     var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]], torch.tensor([i]))
 
-                # TODO: possible size mismatch. Might need unsqueeze at gr_ind and weights
-                #       test for VaR, CVaR and Exp
                 if self.CVaR:
                     # deletes (zeroes) the non-tail weights
                     weights = weights * gr_ind

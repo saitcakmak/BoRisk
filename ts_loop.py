@@ -148,7 +148,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
             current_best, current_best_value = optimize_acqf(acq_function=inner_VaR,
                                                              bounds=inner_bounds,
-                                                             q=q,  # TODO: q>1 not implemented
+                                                             q=q,  # q>1 not implemented
                                                              num_restarts=num_restarts,
                                                              raw_samples=num_restarts * raw_multiplier)
             current_best_list[i] = current_best.detach()
@@ -158,7 +158,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 break
 
             if not random_sampling:
-                # take the ts fantasies here - TODO: not implemented for q>1
+                # take the ts fantasies here - not implemented for q>1
                 if cuda:
                     ts_samples = draw_sobol_samples(bounds=dim_bounds, n=ts_k, q=q).reshape(-1, d).cuda()
                     sampler = sampler_engine(1).cuda()
@@ -173,7 +173,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
                 candidate_x, candidate_x_value = optimize_acqf(acq_function=inner_VaR,
                                                                bounds=inner_bounds,
-                                                               q=q,  # TODO: q>1 not implemented
+                                                               q=q,  # q>1 not implemented
                                                                num_restarts=num_restarts,
                                                                raw_samples=num_restarts * raw_multiplier)
                 candidate_x_value = -candidate_x_value.detach().cpu()

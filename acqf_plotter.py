@@ -67,7 +67,7 @@ gp = SingleTaskGP(train_X, train_Y, likelihood, outcome_transform=Standardize(m=
 mll = ExactMarginalLogLikelihood(gp.likelihood, gp)
 fit_gpytorch_model(mll)
 
-# TODO: if needed, in order to evaluate a specific situation, we could load the GP here and use that instead.
+# if needed, in order to evaluate a specific situation, we could load the GP here and use that instead.
 
 inner_optimizer = InnerOptimizer(num_restarts=num_inner_restarts,
                                  raw_multiplier=inner_raw_multiplier,
