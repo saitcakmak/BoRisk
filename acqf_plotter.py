@@ -7,7 +7,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import VaRKG, InnerVaR, KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP
+from VaR_KG import OneShotVaRKG, InnerVaR, VaRKG, KGCP
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -33,10 +33,10 @@ num_fantasies = 10
 q = 1
 kgcp = False
 nested = False
-tts = False
 num_inner_restarts = 10
 inner_raw_multiplier = 5
-tts_frequency = 10
+tts_frequency = 1  # increase if TTS is desired
+weights = None  # If non-uniform, update this
 
 # Initialize the test function
 function = function_picker(function_name)
@@ -95,7 +95,8 @@ inner_seed = int(torch.randint(10000, (1,)))
 
 inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                      num_repetitions=num_repetitions,
-                     inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
+                     inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
+                     weights=weights)
 
 past_x = train_X[:, :dim_x]
 
@@ -109,51 +110,33 @@ else:
     current_best_sol, current_best_value = optimizer.optimize_inner(inner_VaR)
     current_best_value = -current_best_value
 
-tts_kgcp = TtsKGCP(model=gp, num_samples=num_samples, alpha=alpha,
-                   current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                   fantasy_seed=fantasy_seed,
-                   dim=d, dim_x=dim_x, past_x=past_x, tts_frequency=tts_frequency, q=q,
-                   fix_samples=fix_samples, fixed_samples=fixed_samples,
-                   num_repetitions=num_repetitions,
-                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
-
-tts_var_kg = TtsVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                      current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                      fantasy_seed=fantasy_seed,
-                      dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
-                      tts_frequency=tts_frequency,
-                      q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
-                      num_repetitions=num_repetitions,
-                      inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
-
 kgcp_acqf = KGCP(model=gp, num_samples=num_samples, alpha=alpha,
                  current_best_VaR=current_best_value, num_fantasies=num_fantasies,
                  fantasy_seed=fantasy_seed,
-                 dim=d, dim_x=dim_x, past_x=past_x, q=q,
+                 dim=d, dim_x=dim_x, past_x=past_x, tts_frequency=tts_frequency, q=q,
                  fix_samples=fix_samples, fixed_samples=fixed_samples,
                  num_repetitions=num_repetitions,
-                 inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
+                 inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
+                 weights=weights)
 
 var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                current_best_VaR=current_best_value, num_fantasies=num_fantasies,
                fantasy_seed=fantasy_seed,
-               dim=d, dim_x=dim_x, q=q,
-               fix_samples=fix_samples, fixed_samples=fixed_samples,
+               dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
+               tts_frequency=tts_frequency,
+               q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
                num_repetitions=num_repetitions,
-               inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
+               inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
+               weights=weights)
 
-nested_var_kg = NestedVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                            current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                            fantasy_seed=fantasy_seed,
-                            dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
-                            q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
-                            num_repetitions=num_repetitions,
-                            inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
-
-
-# sol = optimizer.disc_optimize_outer(tts_kgcp, w_samples)
-# print(sol)
-# tts_kgcp.tts_reset()
+os_var_kg = OneShotVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                         current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                         fantasy_seed=fantasy_seed,
+                         dim=d, dim_x=dim_x, q=q,
+                         fix_samples=fix_samples, fixed_samples=fixed_samples,
+                         num_repetitions=num_repetitions,
+                         inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
+                         weights=weights)
 
 k = 40  # number of points in x
 
@@ -163,9 +146,9 @@ elif nested:
     name = 'nested'
 else:
     name = 'varkg'
-if tts:
+if tts_frequency > 1:
     name = 'tts_' + name
-filename = 'other_output/acqf_val_%s_seed_%d_%s_10_fant.pt' % (function_name, seed, name)
+filename = 'other_output/acqf_val_%s_seed_%d_%s.pt' % (function_name, seed, name)
 try:
     res = torch.load(filename)
 except FileNotFoundError:
@@ -182,19 +165,11 @@ for i in range(num_samples):
             continue
         X_outer = xy[i, j]
         if kgcp:
-            if tts:
-                res[i, j] = tts_kgcp(X_outer)
-                tts_kgcp.tts_reset()
-            else:
-                res[i, j] = kgcp_acqf(X_outer)
+            res[i, j] = kgcp_acqf(X_outer)
         elif nested:
-            res[i, j] = nested_var_kg(X_outer)
+            res[i, j] = var_kg(X_outer)
         else:
-            if tts:
-                res[i, j] = tts_var_kg(X_outer)
-                tts_var_kg.tts_reset()
-            else:
-                _, res[i, j] = optimizer.simple_evaluate_VaRKG(var_kg, X_outer)
+            _, res[i, j] = optimizer.simple_evaluate_OSVaRKG(os_var_kg, X_outer)
         print("sol %d, %d complete, time: %s " % (i, j, time() - start))
     torch.save(res, filename)
 

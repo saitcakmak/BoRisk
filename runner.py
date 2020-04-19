@@ -2,20 +2,20 @@
 This is the main file to be run on the cluster.
 Modify this to fit the experiment you intend to run.
 """
-from main_loop import full_loop
-from ts_loop import full_loop as ts_loop
-from ucb_loop import full_loop as ucb_loop
+from exp_loop import exp_loop
 import torch
 import multiprocessing
 import sys
+
+# TODO: this is affected by recent changes. Fix!
 
 
 print("threads default", torch.get_num_threads())
 print("interop threads default", torch.get_num_interop_threads())
 cpu_count = multiprocessing.cpu_count()
 cpu_count = int(cpu_count)
-#torch.set_num_threads(cpu_count)
-#torch.set_num_interop_threads(cpu_count)
+# torch.set_num_threads(cpu_count)
+# torch.set_num_interop_threads(cpu_count)
 print("threads updated", torch.get_num_threads())
 print("interop threads updated", torch.get_num_interop_threads())
 
@@ -25,8 +25,8 @@ function_name = 'hartmann6'
 num_samples = 10
 num_fantasies = 10  # default 50
 key_list = ['tts_kgcp_q01_s40', 'tts_kgcp_q01_s04', 'random_s04', 'random_s40',
-            #'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
-            #'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
+            # 'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
+            # 'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
             # 'tts_varkg_10fant_s40'
             ]
 output_file = "%s_%s" % (function_name, "var_10_fant")
@@ -49,6 +49,7 @@ cuda = False
 disc = True
 red_dim = False
 beta = 0
+bm_alg = None  # specify the benchmark algorithm here
 
 output_path = "batch_output/%s" % output_file
 
@@ -61,6 +62,7 @@ for key in key_list:
     if key not in output_dict.keys():
         output_dict[key] = dict()
     for seed in seed_list:
+        # TODO: update the one-shot / nested stuff. Clean up
         seed = int(seed)
         if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
             continue
@@ -72,27 +74,17 @@ for key in key_list:
         kgcp = 'kgcp' in key
         nested = 'nested' in key
         tts = 'tts' in key
-        ts = 'ts' in key and not tts
-        ucb = 'ucb' in key
-        if not (ts or ucb):
-            output = full_loop(function_name, int(seed), dim_w, filename, iterations,
-                               num_samples=num_samples, num_fantasies=num_fantasies,
-                               num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                               cuda=cuda, raw_multiplier=raw_multiplier,
-                               maxiter=maxiter, periods=periods, q=q,
-                               num_repetitions=rep, lookahead_samples=la_samples,
-                               reporting_rep=rep, reporting_la_samples=la_samples,
-                               kgcp=kgcp, random_sampling=random, disc=disc,
-                               reduce_dim=red_dim, expectation=expectation,
-                               tts=tts, nested=nested, num_inner_restarts=num_inner_restarts)
-        elif ts:
-            output = ts_loop(function_name, int(seed), dim_w, filename, iterations,
-                             num_samples=num_samples, num_fantasies=num_fantasies,
-                             num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
-                             cuda=cuda, raw_multiplier=raw_multiplier,
-                             maxiter=maxiter, expectation=expectation, beta=beta)
-        else:
-            raise NotImplementedError('UCB parameters need updating')
+        output = exp_loop(function_name, seed=int(seed), dim_w=dim_w, filename=filename, iterations=iterations,
+                          num_samples=num_samples, num_fantasies=num_fantasies,
+                          num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
+                          cuda=cuda, raw_multiplier=raw_multiplier,
+                          maxiter=maxiter, periods=periods, q=q,
+                          num_repetitions=rep, lookahead_samples=la_samples,
+                          reporting_rep=rep, reporting_la_samples=la_samples,
+                          kgcp=kgcp, random_sampling=random, disc=disc,
+                          expectation=expectation,
+                          tts=tts, nested=nested, num_inner_restarts=num_inner_restarts,
+                          benchmark_alg=bm_alg)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)
