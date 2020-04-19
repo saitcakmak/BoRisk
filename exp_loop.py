@@ -1,0 +1,218 @@
+"""
+This is the loop for using the Experiment class to run experiments with.
+A full optimization loop of VaRKG with some pre-specified parameters.
+Specify the problem to use as the 'function', adjust the parameters and run.
+Make sure that the problem is defined over unit-hypercube, including the w components.
+The w components will be drawn as i.i.d. uniform(0, 1) and the problem is expected to convert these to appropriate
+random variables.
+"""
+import torch
+from time import time
+from botorch.acquisition import AcquisitionFunction
+from experiment import Experiment, BenchmarkExp
+import warnings
+from botorch.acquisition import (
+    PosteriorMean,
+    AcquisitionFunction,
+    ExpectedImprovement,
+    NoisyExpectedImprovement,
+    ProbabilityOfImprovement,
+    UpperConfidenceBound,
+    qMaxValueEntropy,
+    qKnowledgeGradient
+)
+
+
+def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benchmark_alg: AcquisitionFunction = None,
+             **kwargs):
+    """
+    See Experiment for arg list.
+    :param function_name: name of the function being optimized
+    :param seed: seed for randomness in the system
+    :param filename: output file name
+    :param iterations: number of iterations of algorithm to run
+    :param benchmark_alg: If we're running BenchmarkExp, specify the algorithm here.
+    :param x_samples: overwrites init samples etc. All initalization is done on full w_samples set
+        for each x in x_samples.
+    :return: None - saves the output.
+    """
+    # TODO: filename handling
+    # # If file already exists, we will do warm-starts, i.e. continue from where it was left.
+    # if CVaR and "cvar" not in filename:
+    #     filename = filename + '_cvar'
+    # if expectation and "exp" not in filename:
+    #     filename = filename + '_exp'
+    # if alpha != 0.7 and "a=" not in filename:
+    #     filename = filename + '_a=%s' % alpha
+    # if q > 1 and "q=" not in filename:
+    #     filename = filename + "_q=%d" % q
+    # if kgcp and "kgcp" not in filename:
+    #     filename = filename + "_kgcp"
+    # if nested and "nested" not in filename:
+    #     filename = filename + "_nested"
+    # if disc and 'disc' not in filename:
+    #     filename = filename + "_disc"
+    # if random_sampling and 'random' not in filename:
+    #     filename = filename + '_random'
+    # if tts and 'tts' not in filename:
+    #     filename = filename + '_tts'
+    # if weights is not None and 'weights' not in filename:
+    #     filename = filename + '_weights'
+    # TODO: read previous output if available
+    # try:
+    #     full_data = torch.load("detailed_output/%s.pt" % filename)
+    #     last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
+    #     last_data = full_data[last_iteration]
+    #     seed_list = last_data['seed_list']
+    #     train_X = last_data['train_X']
+    #     train_Y = last_data['train_Y']
+    # except FileNotFoundError:
+    #     # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
+    #     torch.manual_seed(seed=seed)
+    #     seed_list = torch.randint(1000000, (1000,))
+    #     last_iteration = -1
+    #     full_data = dict()
+    #     train_X = torch.rand((n, d))
+    #     train_Y = function(train_X, seed_list[-1])
+
+    full_data = dict()
+    last_iteration = -1  # temp
+    # for timing
+    start = time()
+    torch.manual_seed(seed)
+    if benchmark_alg is None:
+        exp = Experiment(function=function_name,
+                         filename=filename,
+                         **kwargs)
+        if 'x_samples' in kwargs.keys():
+            x_samples = kwargs.get('x_samples').reshape(-1, 1, exp.dim_x)
+            init_samples = torch.cat([x_samples.repeat(1, exp.num_samples, 1),
+                                     exp.w_samples.repeat(x_samples.size(0), 1, 1)], dim=-2)
+        else:
+            init_samples = kwargs.get('init_samples')
+        exp.initialize_gp(init_samples=init_samples, n=kwargs.get('n'))
+
+    else:
+        exp = BenchmarkExp(function=function_name,
+                           filename=filename,
+                           **kwargs)
+        # TODO: this needs to be a set of x_samples
+        exp.initialize_benchmark_gp(x_samples=kwargs.get('x_samples'))
+        if exp.q != 1:
+            warnings.warn("q != 1 with a benchmark algorithm. Is this intentional!?!")
+
+    # this doesn't get recovered when we do stop start!!
+    #   this is fine, we can just reevaluate. Not so important
+    current_best_list = torch.empty((iterations + 1, exp.q, exp.dim_x))
+    current_best_value_list = torch.empty((iterations + 1, exp.q, 1))
+    kg_value_list = torch.empty((iterations, exp.q, 1))
+    candidate_list = torch.empty((iterations, exp.q, exp.dim))
+
+    i = last_iteration + 1
+    handling_count = 0
+
+    while i < iterations:
+        try:
+            print('Starting iteration %d' % i)
+            if benchmark_alg:
+                iter_out = exp.one_iteration(acqf=benchmark_alg)
+            else:
+                iter_out = exp.one_iteration()
+            current_best_list[i] = iter_out[0]
+            current_best_value_list[i] = iter_out[1]
+            kg_value_list[i] = iter_out[2]
+            candidate_list[i] = iter_out[3]
+
+            exp_data = vars(exp).copy()
+            data = {'state_dict': exp_data.pop('model').state_dict(), 'train_Y': exp_data.pop('Y'),
+                    'train_X': exp_data.pop('X'), **exp_data}
+            full_data[i] = data
+            torch.save(full_data, 'detailed_output/%s.pt' % filename)
+
+        except RuntimeError as err:
+            import sys
+            gettrace = getattr(sys, 'gettrace', None)
+            if gettrace is None:
+                print('No sys.gettrace, attempting to handle')
+            elif gettrace():
+                print('Detected debug mode. Throwing exception!')
+                raise RuntimeError(err)
+            print("Runtime error %s" % err)
+            print('Attempting to handle.')
+            handling_count += 1
+            if exp.passed:
+                print('Got the error while fitting the GP.')
+                if handling_count < 5:
+                    try:
+                        print('Trying to refit the GP.')
+                        exp.fit_gp()
+                        i = i + 1
+                        continue
+                    except RuntimeError:
+                        print('Refit failed, perturbing the last solution and refitting.')
+                        rand_X = torch.randn((q, d)) * 0.05
+                        exp.X[-exp.q:] = exp.X[-exp.q:] + rand_X
+                        exp.Y[-exp.q:] = exp.function(exp.X[-exp.q:])
+                        try:
+                            exp.fit_gp()
+                            i = i + 1
+                            continue
+                        except RuntimeError:
+                            print('This also failed!')
+                            print('Deleting the last candidate and re-running the iteration.')
+                            exp.X = exp.X[:-exp.q]
+                            exp.Y = exp.Y[:-exp.q]
+                            try:
+                                exp.fit_gp()
+                                continue
+                            except RuntimeError:
+                                print('Too many errors!')
+                                return None
+                else:
+                    print("Too many tries, returning None!")
+                    return None
+            else:
+                if handling_count >= 5:
+                    print("Too many tries, returning None!")
+                    return None
+                print('Got the error while running the algorithm. Retrying.')
+                continue
+        else:
+            i = i + 1
+            handling_count = 0
+
+    current_out = exp.current_best()
+    full_data['final_solution'] = current_out[0]
+    full_data['final_value'] = current_out[1]
+    torch.save(full_data, 'detailed_output/%s.pt' % filename)
+
+    print("total time: ", time() - start)
+
+    output = {'current_best': current_best_list,
+              'current_best_value': current_best_value_list,
+              'kg_value': kg_value_list,
+              'candidate': candidate_list}
+    return output
+
+
+if __name__ == "__main__":
+    # this is for momentary testing of changes to the code
+    num_fant = 10
+    num_rest = 10
+    maxiter = 100
+    rand = False
+    verb = False
+    num_iter = 10
+    num_samp = 5
+    kgcp = True
+    disc = True
+    tts_frequency = 10
+    one_shot = False
+    weights = torch.tensor([0.3, 0.2, 0.1, 0.1, 0.3])
+    bm_alg = qKnowledgeGradient
+    x_samples = torch.rand((5, 1))
+    exp_loop('branin', 0, 'tester', 100, dim_w=1, num_samples=num_samp, maxiter=maxiter,
+             num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,
+             random_sampling=rand, CVaR=True, expectation=False, verbose=verb, cuda=False,
+             q=1, kgcp=kgcp, disc=disc, tts_frequency=tts_frequency,
+             one_shot=one_shot, weights=weights, benchmark_alg=bm_alg, x_samples=x_samples)

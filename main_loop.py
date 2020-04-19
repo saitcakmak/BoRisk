@@ -1,4 +1,5 @@
 """
+Recommended to use exp_loop instead!
 This version is to be callable from some other python code.
 A full optimization loop of VaRKG with some pre-specified parameters.
 Specify the problem to use as the 'function', adjust the parameters and run.
@@ -11,7 +12,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import VaRKG, InnerVaR, KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP
+from VaR_KG import OneShotVaRKG, InnerVaR, VaRKG, KGCP
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -60,8 +61,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     :param periods: length of an optimization period in iterations
     :param kgcp: If True, the KGCP adaptation is used.
     :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
-    :param reduce_dim: If True, the function ignores last dimension of the input. Useful for testing
-                        the VaRKG code in classical setting
     :param nested: if True, VaRKG is optimized in a nested manner
     :param tts: If True, do two time scale optimization
     :param tts_frequency: The frequency of two-time-scale. See TtsVaRKG for details.
@@ -73,7 +72,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
     """
 
     # Initialize the test function
-    function = function_picker(function_name, reduce_dim=reduce_dim)
+    function = function_picker(function_name)
     d = function.dim  # dimension of train_X
     n = 2 * (d - int(reduce_dim)) + 2  # training samples
     dim_x = d - dim_w  # dimension of the x component
@@ -105,6 +104,9 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
     if nested and kgcp:
         raise ValueError("nested and kgcp cannot be both True!")
+
+    if not tts:
+        tts_frequency = 1
 
     try:
         full_data = torch.load("detailed_output/%s.pt" % filename)
@@ -238,24 +240,14 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                 candidate = torch.rand((1, q * d))
                 value = torch.tensor([0])
             elif kgcp:
-                if tts:
-                    kgcp = TtsKGCP(model=gp, num_samples=num_samples, alpha=alpha,
-                                   current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                                   fantasy_seed=fantasy_seed,
-                                   dim=d, dim_x=dim_x, past_x=past_x, tts_frequency=tts_frequency, q=q,
-                                   fix_samples=fix_samples, fixed_samples=fixed_samples,
-                                   num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
-                                   weights=weights)
-                else:
-                    kgcp = KGCP(model=gp, num_samples=num_samples, alpha=alpha,
-                                current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                                fantasy_seed=fantasy_seed,
-                                dim=d, dim_x=dim_x, past_x=past_x, q=q,
-                                fix_samples=fix_samples, fixed_samples=fixed_samples,
-                                num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
-                                weights=weights)
+                kgcp = KGCP(model=gp, num_samples=num_samples, alpha=alpha,
+                            current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                            fantasy_seed=fantasy_seed,
+                            dim=d, dim_x=dim_x, past_x=past_x, tts_frequency=tts_frequency, q=q,
+                            fix_samples=fix_samples, fixed_samples=fixed_samples,
+                            num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
+                            inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                            weights=weights)
                 opt_start = time()
                 if disc:
                     candidate, value = optimizer.disc_optimize_outer(kgcp, w_samples)
@@ -263,31 +255,16 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                     candidate, value = optimizer.optimize_outer(kgcp)
                 opt_time += time() - opt_start
             else:
-                if tts:
-                    var_kg = TtsVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                                      current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                                      fantasy_seed=fantasy_seed,
-                                      dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
-                                      tts_frequency=tts_frequency,
-                                      q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
-                                      num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                      inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
-                                      weights=weights)
-                    opt_start = time()
-                    if disc:
-                        candidate, value = optimizer.disc_optimize_outer(var_kg, w_samples)
-                    else:
-                        candidate, value = optimizer.optimize_outer(var_kg)
-                    opt_time += time() - opt_start
-                elif nested:
-                    var_kg = NestedVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                                         current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                                         fantasy_seed=fantasy_seed,
-                                         dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
-                                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
-                                         num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                         inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
-                                         weights=weights)
+                if tts or nested:
+                    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                                   current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                                   fantasy_seed=fantasy_seed,
+                                   dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
+                                   tts_frequency=tts_frequency,
+                                   q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
+                                   num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
+                                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                   weights=weights)
                     opt_start = time()
                     if disc:
                         candidate, value = optimizer.disc_optimize_outer(var_kg, w_samples)
@@ -295,19 +272,19 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                         candidate, value = optimizer.optimize_outer(var_kg)
                     opt_time += time() - opt_start
                 else:
-                    var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                                   current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                                   fantasy_seed=fantasy_seed,
-                                   dim=d, dim_x=dim_x, q=q,
-                                   fix_samples=fix_samples, fixed_samples=fixed_samples,
-                                   num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
-                                   inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
-                                   weights=weights)
+                    var_kg = OneShotVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
+                                          current_best_VaR=current_best_value, num_fantasies=num_fantasies,
+                                          fantasy_seed=fantasy_seed,
+                                          dim=d, dim_x=dim_x, q=q,
+                                          fix_samples=fix_samples, fixed_samples=fixed_samples,
+                                          num_repetitions=num_repetitions, lookahead_samples=lookahead_samples,
+                                          inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
+                                          weights=weights)
                     opt_start = time()
                     if disc:
-                        candidate, value = optimizer.disc_optimize_VaRKG(var_kg, w_samples)
+                        candidate, value = optimizer.disc_optimize_OSVaRKG(var_kg, w_samples)
                     else:
-                        candidate, value = optimizer.optimize_VaRKG(var_kg)
+                        candidate, value = optimizer.optimize_OSVaRKG(var_kg)
                     opt_time += time() - opt_start
             candidate = candidate.cpu().detach()
             # the value might not be completely reliable. It doesn't have to be non-negative even at the optimal.
@@ -325,7 +302,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                     'num_repetitions': num_repetitions, 'lookahead_samples': lookahead_samples,
                     'seed': seed, 'fantasy_seed': fantasy_seed, 'inner_seed': inner_seed,
                     'reporting_rep': reporting_rep, 'reporting_la_samples': reporting_la_samples,
-                    'seed_list': seed_list}
+                    'seed_list': seed_list, 'weights': weights, 'w_samples': w_samples}
             full_data[i] = data
             torch.save(full_data, 'detailed_output/%s.pt' % filename)
 

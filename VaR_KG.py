@@ -3,6 +3,7 @@ This is the VaR-KG acquisition function.
 In InnerVaR, we calculate the value of the inner problem.
 In VaRKG, we optimize this inner value to calculate VaR-KG value.
 """
+from abc import ABC
 from math import ceil
 from typing import Optional, Union, Callable
 import torch
@@ -28,7 +29,7 @@ class InnerVaR(MCAcquisitionFunction):
                  inner_seed: Optional[int] = None,
                  CVaR: bool = False, expectation: bool = False,
                  cuda: bool = False, w_actual: Tensor = None,
-                 weights: Tensor = None):
+                 weights: Tensor = None, **kwargs):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -47,6 +48,7 @@ class InnerVaR(MCAcquisitionFunction):
             evaluated is added to the lookahead points
         :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
             A 1-dim tensor of size num_samples
+        :param kwargs: throwaway arguments - ignored
         """
         super().__init__(model)
         self.num_samples = w_samples.size(0)
@@ -220,9 +222,9 @@ class InnerVaR(MCAcquisitionFunction):
         return lookahead_model
 
 
-class VaRKG(MCAcquisitionFunction):
+class AbsKG(MCAcquisitionFunction, ABC):
     r"""
-    The one-shot VaR-KG acquisition function.
+    The abstract base class for VaRKG and it's variants
     """
 
     def __init__(self, model: Model,
@@ -233,7 +235,7 @@ class VaRKG(MCAcquisitionFunction):
                  num_repetitions: int = 0,
                  lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
                  CVaR: bool = False, expectation: bool = False, cuda: bool = False,
-                 weights: Tensor = None):
+                 weights: Tensor = None, **kwargs):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
@@ -264,6 +266,7 @@ class VaRKG(MCAcquisitionFunction):
         :param cuda: True if using GPUs
         :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
             A 1-dim tensor of size num_samples
+        :param kwargs: throwaway arguments - ignored
         """
         super().__init__(model)
         self.num_samples = num_samples
@@ -312,11 +315,17 @@ class VaRKG(MCAcquisitionFunction):
         # while self.mini_batch_size * num_fantasies * factor > 1000 and self.mini_batch_size > 1:
         #     self.mini_batch_size = int(self.mini_batch_size / 2)
 
+
+class OneShotVaRKG(AbsKG):
+    r"""
+    The one-shot VaR-KG acquisition function. The creator is identical to AbsKG.
+    Not recommended unless you know what you're doing.
+    """
+
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Calculate the value of VaRKG acquisition function by averaging over fantasies - currently not averaged
-        NOTE: Does not return the value of VaRKG unless optimized - Use evaluate_kg for that. It calls evaluate_kg if
-        the input is of size(-1) is q x dim
+        NOTE: Does not return the value of VaRKG unless optimized! - Use VaRKG for that.
         :param X: batch size x 1 x (q x dim + num_fantasies x dim_x) of which the first (q x dim) is for q points
             being evaluated, the remaining (num_fantasies x dim_x) are the solutions to the inner problem.
         :return: value of VaR-KG at X (to be maximized) - size: batch size x num_fantasies
@@ -391,148 +400,21 @@ class VaRKG(MCAcquisitionFunction):
         return values
 
 
-class KGCP(VaRKG):
-    """
-    The KGCP implementation for C/VaR
-    """
-
-    def __init__(self, model: Model,
-                 num_samples: int, alpha: Union[Tensor, float],
-                 current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
-                 dim: int, dim_x: int, past_x: Tensor,
-                 q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
-                 num_repetitions: int = 0,
-                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
-                 weights: Tensor = None):
-        """
-        Everthing is as explained in VaRKG
-        :param model:
-        :param num_samples:
-        :param alpha:
-        :param current_best_VaR:
-        :param num_fantasies:
-        :param fantasy_seed:
-        :param dim:
-        :param dim_x:
-        :param past_x: x component of the past evaluations
-        :param q:
-        :param fix_samples:
-        :param fixed_samples:
-        :param num_repetitions:
-        :param lookahead_samples:
-        :param inner_seed:
-        :param CVaR:
-        :param expectation:
-        :param cuda:
-        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
-            A 1-dim tensor of size num_samples
-        """
-        super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
-                         num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
-                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
-                         lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda, weights=weights)
-        self.past_x = past_x.reshape(-1, self.dim_x)
-
-    def forward(self, X: Tensor) -> Tensor:
-        """
-        This is a mock-up implementation of KGCP algorithm for C/VaR.
-        :param X: The tensor of candidate points, batch_size x q x dim
-        :return: the KGCP value of batch_size
-        """
-        X = X.reshape(-1, self.q, self.dim)
-        values = torch.empty(self.past_x.size(0) + self.q, self.num_fantasies, X.size(0))
-
-        # generate w_samples
-        if self.fix_samples:
-            if self.fixed_samples is None:
-                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
-            w_samples = self.fixed_samples
-        else:
-            w_samples = torch.rand((self.num_samples, self.dim_w))
-
-        if self.fantasy_seed is None:
-            fantasy_seed = int(torch.randint(100000, (1,)))
-        else:
-            fantasy_seed = self.fantasy_seed
-
-        if self.inner_seed is None:
-            inner_seed = int(torch.randint(100000, (1,)))
-        else:
-            inner_seed = self.inner_seed
-
-        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
-        if self.cuda:
-            fantasy_model = self.model.fantasize(X.cuda(), sampler).cuda()
-        else:
-            fantasy_model = self.model.fantasize(X, sampler)
-
-        w_actual = X[..., -self.dim_w:]
-
-        inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
-                             alpha=self.alpha, dim_x=self.dim_x,
-                             num_repetitions=self.num_repetitions,
-                             lookahead_samples=self.lookahead_samples,
-                             inner_seed=inner_seed,
-                             CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                             w_actual=w_actual, weights=self.weights)
-
-        x_comp = X[..., :self.dim_x]
-        x_inner = torch.cat((x_comp, self.past_x.repeat(X.size(0), 1, 1)), dim=-2).repeat(self.num_fantasies, 1, 1, 1)
-
-        for i in range(values.size(0)):
-            with settings.propagate_grads(True):
-                values[i] = - inner_VaR(x_inner[..., i, :].unsqueeze(-2))
-        values, _ = torch.min(values, dim=0)
-        values = self.current_best_VaR - torch.mean(values, dim=0)
-        return values
-
-
-class TtsKGCP(VaRKG):
+class KGCP(AbsKG):
     r"""
     The nested VaR-KG acquisition function with two time scale optimization.
     """
 
-    def __init__(self, model: Model,
-                 num_samples: int, alpha: Union[Tensor, float],
-                 current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
-                 dim: int, dim_x: int, past_x: Tensor, tts_frequency: int,
-                 q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
-                 num_repetitions: int = 0,
-                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
-                 weights: Tensor = None):
+    def __init__(self, past_x: Tensor, tts_frequency: int = 1, **kwargs):
         """
-        Everthing is as explained in VaRKG
-        :param model:
-        :param num_samples:
-        :param alpha:
-        :param current_best_VaR:
-        :param num_fantasies:
-        :param fantasy_seed:
-        :param dim:
-        :param dim_x:
-        :param inner_optimizer: A callable for optimizing inner VaR
+        Everything is as explained in AbsKG.
+        In addition:
+        :param past_x: Previously evaluated solutions. A tensor of only x components.
         :param tts_frequency: The frequency for two time scale optimization. Every tts_frequency calls,
             the inner optimization is performed. The old solution is used otherwise.
-        :param q:
-        :param fix_samples:
-        :param fixed_samples:
-        :param num_repetitions:
-        :param lookahead_samples:
-        :param inner_seed:
-        :param CVaR:
-        :param expectation:
-        :param cuda:
-        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
-            A 1-dim tensor of size num_samples
+            If tts_frequency = 1, then it is normal KGCP.
         """
-        super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
-                         num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
-                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
-                         lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda, weights=weights)
+        super().__init__(**kwargs)
         self.past_x = past_x.reshape(-1, self.dim_x)
         self.tts_frequency = tts_frequency
         self.call_count = 0
@@ -604,172 +486,28 @@ class TtsKGCP(VaRKG):
         evaluation and the subsequent optimization as well. To be safe, call this before calling the optimizer.
         It will make sure that the tts does inner optimization starting in the first call, and ensure that
         the batch sizes of tensors are adequate.
+        Only needed if tts_frequency > 1
         :return: None
         """
         self.call_count = 0
         self.last_inner_solution = None
 
 
-class NestedVaRKG(VaRKG):
-    r"""
-    The nested VaR-KG acquisition function.
-    """
-
-    def __init__(self, model: Model,
-                 num_samples: int, alpha: Union[Tensor, float],
-                 current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
-                 dim: int, dim_x: int, inner_optimizer: Callable,
-                 q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
-                 num_repetitions: int = 0,
-                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
-                 weights: Tensor = None):
-        """
-        Everthing is as explained in VaRKG
-        :param model:
-        :param num_samples:
-        :param alpha:
-        :param current_best_VaR:
-        :param num_fantasies:
-        :param fantasy_seed:
-        :param dim:
-        :param dim_x:
-        :param inner_optimizer: A callable for optimizing inner VaR
-        :param q:
-        :param fix_samples:
-        :param fixed_samples:
-        :param num_repetitions:
-        :param lookahead_samples:
-        :param inner_seed:
-        :param CVaR:
-        :param expectation:
-        :param cuda:
-        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
-            A 1-dim tensor of size num_samples
-        """
-        super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
-                         num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
-                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
-                         lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda, weights=weights)
-        self.inner_optimizer = inner_optimizer
-
-    def forward(self, X: Tensor) -> Tensor:
-        r"""
-        Calculate the value of VaRKG acquisition function by averaging over fantasies
-        :param X: batch_size x q x dim of solutions to evaluate
-        :return: value of VaR-KG at X (to be maximized) - size: batch_size
-        """
-        # make sure X has proper shape
-        X = X.reshape(-1, self.q, self.dim)
-        batch_size = X.size(0)
-
-        # generate w_samples
-        if self.fix_samples:
-            if self.fixed_samples is None:
-                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
-            w_samples = self.fixed_samples
-        else:
-            w_samples = torch.rand((self.num_samples, self.dim_w))
-
-        if self.fantasy_seed is None:
-            fantasy_seed = int(torch.randint(100000, (1,)))
-        else:
-            fantasy_seed = self.fantasy_seed
-
-        if self.inner_seed is None:
-            inner_seed = int(torch.randint(100000, (1,)))
-        else:
-            inner_seed = self.inner_seed
-
-        # generate separate seeds for each fantasy
-        # this is necessary since we are not doing batch evaluations
-        old_state = torch.random.get_rng_state()
-        torch.manual_seed(fantasy_seed)
-        fantasy_seeds = torch.randint(1000000, (self.num_fantasies, ))
-        torch.random.set_rng_state(old_state)
-        start = time()
-
-        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
-        num_batches = ceil(batch_size / self.mini_batch_size)
-        values = torch.empty(batch_size)
-
-        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
-
-        for i in range(num_batches):
-            left_index = i * self.mini_batch_size
-            if i == num_batches - 1:
-                right_index = batch_size
-            else:
-                right_index = (i + 1) * self.mini_batch_size
-
-            # construct the fantasy model
-            if self.cuda:
-                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(), sampler).cuda()
-            else:
-                fantasy_model = self.model.fantasize(X[left_index:right_index], sampler)
-
-            w_actual = X[left_index:right_index, :, -self.dim_w:]
-
-            inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
-                                 alpha=self.alpha, dim_x=self.dim_x,
-                                 num_repetitions=self.num_repetitions,
-                                 lookahead_samples=self.lookahead_samples,
-                                 inner_seed=inner_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                                 w_actual=w_actual, weights=self.weights)
-            # optimize inner VaR
-            with settings.propagate_grads(True):
-                solution, value = self.inner_optimizer(inner_VaR)
-            value = -value
-            values[left_index:right_index] = self.current_best_VaR - torch.mean(value, dim=0)
-        return values
-
-
-class TtsVaRKG(VaRKG):
+class VaRKG(AbsKG):
     r"""
     The nested VaR-KG acquisition function with two time scale optimization.
     """
 
-    def __init__(self, model: Model,
-                 num_samples: int, alpha: Union[Tensor, float],
-                 current_best_VaR: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
-                 dim: int, dim_x: int, inner_optimizer: Callable, tts_frequency: int,
-                 q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
-                 num_repetitions: int = 0,
-                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
-                 weights: Tensor = None):
+    def __init__(self, inner_optimizer: Callable, tts_frequency: int, **kwargs):
         """
-        Everthing is as explained in VaRKG
-        :param model:
-        :param num_samples:
-        :param alpha:
-        :param current_best_VaR:
-        :param num_fantasies:
-        :param fantasy_seed:
-        :param dim:
-        :param dim_x:
+        Everthing is as explained in AbsKG
+        In addition:
         :param inner_optimizer: A callable for optimizing inner VaR
         :param tts_frequency: The frequency for two time scale optimization. Every tts_frequency calls,
             the inner optimization is performed. The old solution is used otherwise.
-        :param q:
-        :param fix_samples:
-        :param fixed_samples:
-        :param num_repetitions:
-        :param lookahead_samples:
-        :param inner_seed:
-        :param CVaR:
-        :param expectation:
-        :param cuda:
-        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
-            A 1-dim tensor of size num_samples
+            If tts_frequency = 1, then doing normal nested optimization.
         """
-        super().__init__(model=model, num_samples=num_samples, alpha=alpha, current_best_VaR=current_best_VaR,
-                         num_fantasies=num_fantasies, fantasy_seed=fantasy_seed, dim=dim, dim_x=dim_x,
-                         q=q, fix_samples=fix_samples, fixed_samples=fixed_samples, num_repetitions=num_repetitions,
-                         lookahead_samples=lookahead_samples, inner_seed=inner_seed, CVaR=CVaR,
-                         expectation=expectation, cuda=cuda, weights=weights)
+        super().__init__(**kwargs)
         self.inner_optimizer = inner_optimizer
         self.tts_frequency = tts_frequency
         self.call_count = 0
@@ -866,6 +604,7 @@ class TtsVaRKG(VaRKG):
         evaluation and the subsequent optimization as well. To be safe, call this before calling the optimizer.
         It will make sure that the tts does inner optimization starting in the first call, and ensure that
         the batch sizes of tensors are adequate.
+        Only needed if tts_frequency > 1.
         :return: None
         """
         self.call_count = 0

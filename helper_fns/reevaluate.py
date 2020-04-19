@@ -4,6 +4,8 @@ Initially, the aim is to fix the output of the start / stop runs
 and see if evaluating VaRKG in KGCP like way improves the performance.
 """
 
+# TODO: this is affected by recent changes. Fix!
+
 import torch
 from botorch.models import SingleTaskGP
 from VaR_KG import InnerVaR

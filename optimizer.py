@@ -5,7 +5,7 @@ from botorch.acquisition import MCAcquisitionFunction
 from botorch.gen import gen_candidates_scipy
 from botorch.utils import draw_sobol_samples, standardize
 from torch import Tensor
-from VaR_KG import VaRKG, InnerVaR, KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP
+from VaR_KG import OneShotVaRKG, InnerVaR, VaRKG, KGCP
 from math import ceil
 
 
@@ -149,7 +149,7 @@ class Optimizer:
         self.current_best = -value
         return solution, value
 
-    def optimize_VaRKG(self, acqf: VaRKG) -> Tuple[Tensor, Tensor]:
+    def optimize_OSVaRKG(self, acqf: OneShotVaRKG) -> Tuple[Tensor, Tensor]:
         """
         Optimizes VaRKG in a smart way.
         We start by generating raw samples, then permute their solutions based
@@ -159,7 +159,7 @@ class Optimizer:
         some additional raw samples (including these obtained solutions)from which
         we pick the starting solutions for the next period. It keeps going on like
         this.
-        :param acqf: VaRKG object to be optimized
+        :param acqf: OneShotVaRKG object to be optimized
         :return: Optimal solution and value
         """
         # make sure the cache of solutions is cleared
@@ -208,7 +208,7 @@ class Optimizer:
         best = torch.argmax(values)
         return solutions[best].detach(), values[best].detach()
 
-    def simple_evaluate_VaRKG(self, acqf: VaRKG, X_outer: Tensor):
+    def simple_evaluate_OSVaRKG(self, acqf: OneShotVaRKG, X_outer: Tensor):
         """
         Evaluates one-shot VaRKG using a simple optimization with fixed features
         :param acqf: VaRKG object
@@ -258,9 +258,9 @@ class Optimizer:
         best = torch.argmax(torch.mean(values, dim=-1))
         return solutions[best].detach(), torch.mean(values, dim=-1)[best].detach()
 
-    def generate_simple_VaRKG_restart_points(self, acqf: VaRKG) -> Tensor:
+    def generate_simple_OSVaRKG_restart_points(self, acqf: OneShotVaRKG) -> Tensor:
         """
-        Generates the restarts points for simple VaRKG
+        Generates the restarts points for simple one-shot VaRKG
         :param acqf: The acquisition function being optimized
         :return: restart points
         """
@@ -282,13 +282,13 @@ class Optimizer:
             idcs[-1] = max_idx
         return X[idcs]
 
-    def simple_optimize_VaRKG(self, acqf: VaRKG) -> Tuple[Tensor, Tensor]:
+    def simple_optimize_OSVaRKG(self, acqf: OneShotVaRKG) -> Tuple[Tensor, Tensor]:
         """
-        Optimizes the VaRKG in a pretty naive way.
+        Optimizes the one-shot VaRKG in a pretty naive way.
         :param acqf: the VaRKG object
         :return: Optimal solution and value
         """
-        initial_conditions = self.generate_simple_VaRKG_restart_points(acqf)
+        initial_conditions = self.generate_simple_OSVaRKG_restart_points(acqf)
         options = {'maxiter': self.maxiter}
 
         solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
@@ -305,7 +305,7 @@ class Optimizer:
         best = torch.argmax(torch.mean(values, dim=-1))
         return solutions[best].detach(), torch.mean(values, dim=-1)[best].detach()
 
-    def disc_optimize_VaRKG(self, acqf: VaRKG, w_samples: Tensor) -> Tuple[Tensor, Tensor]:
+    def disc_optimize_OSVaRKG(self, acqf: OneShotVaRKG, w_samples: Tensor) -> Tuple[Tensor, Tensor]:
         """
         Optimizer that restricts w component to w_samples.
         :param acqf: VaRKG object to be optimized
@@ -351,9 +351,9 @@ class Optimizer:
         best = torch.argmax(values)
         return solutions[best], values[best]
 
-    def generate_outer_restart_points(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP]) -> Tensor:
+    def generate_outer_restart_points(self, acqf: Union[VaRKG, KGCP]) -> Tensor:
         """
-        Generates the restarts points for KGCP, Nested or Tts
+        Generates the restarts points for KGCP or VaRKG
         :param acqf: The acquisition function being optimized
         :return: restart points
         """
@@ -374,25 +374,23 @@ class Optimizer:
             idcs[-1] = max_idx
         return X[idcs]
 
-    def optimize_outer(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP]) -> Tuple[Tensor, Tensor]:
+    def optimize_outer(self, acqf: Union[VaRKG, KGCP]) -> Tuple[Tensor, Tensor]:
         """
-        Optimizes the KGCP, Nested or Tts in a pretty standard way.
+        Optimizes the KGCP or VaRKG in a pretty standard way.
         :param acqf: the KGCP, Nested or Tts object
         :return: Optimal solution and value
         """
         initial_conditions = self.generate_outer_restart_points(acqf)
         options = {'maxiter': self.maxiter}
 
-        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
-            acqf.tts_reset()
+        acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.outer_bounds[0],
                                                  upper_bounds=self.outer_bounds[1],
                                                  options=options)
         _, idx = torch.sort(values)
-        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
-            acqf.tts_reset()
+        acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.outer_bounds[0],
@@ -401,11 +399,12 @@ class Optimizer:
         best = torch.argmax(values)
         return solutions[best].cpu().detach(), values[best].cpu().detach()
 
-    def disc_generate_outer_restart_points(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP],
+    def disc_generate_outer_restart_points(self, acqf: Union[VaRKG, KGCP],
                                            w_samples: Tensor) -> Tensor:
         """
-        Generates the restarts points for KGCP, Nested or Tts
+        Generates the restarts points for KGCP or VaRKG
         :param acqf: The acquisition function being optimized
+        :param w_samples: the list of w samples to use
         :return: restart points
         """
         X = draw_sobol_samples(bounds=self.outer_bounds, n=self.raw_samples, q=self.q)
@@ -427,11 +426,11 @@ class Optimizer:
             idcs[-1] = max_idx
         return X[idcs]
 
-    def disc_optimize_outer(self, acqf: Union[KGCP, NestedVaRKG, TtsVaRKG, TtsKGCP],
+    def disc_optimize_outer(self, acqf: Union[VaRKG, KGCP],
                             w_samples: Tensor) -> Tuple[Tensor, Tensor]:
         """
         KGCP, Nested or Tts optimizer with w component restricted to w_samples
-        :param acqf: KGCP, Nested or Tts object
+        :param acqf: KGCP or VaRKG object
         :param w_samples: the set W to consider
         :return: Optimal solution and value
         """
@@ -442,8 +441,7 @@ class Optimizer:
             for i in range(self.dim_x, self.dim):
                 fixed_features[j * self.dim + i] = None
 
-        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
-            acqf.tts_reset()
+        acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.outer_bounds[0],
@@ -451,8 +449,7 @@ class Optimizer:
                                                  options=options,
                                                  fixed_features=fixed_features)
         _, idx = torch.sort(values)
-        if isinstance(acqf, (TtsVaRKG, TtsKGCP)):
-            acqf.tts_reset()
+        acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.outer_bounds[0],
@@ -525,7 +522,7 @@ class Optimizer:
 
         return X_rnd
 
-    def evaluate_samples(self, acqf: VaRKG, samples: Tensor) -> Tensor:
+    def evaluate_samples(self, acqf: OneShotVaRKG, samples: Tensor) -> Tensor:
         """
         Evaluates the samples and saves the values to inner solutions
         :return: Values
@@ -594,7 +591,7 @@ class Optimizer:
         full_sols = torch.cat((outer_sols, fantasy_sols), dim=-1)
         return full_sols
 
-    def generate_initial_conditions(self, acqf: VaRKG, sol_eval: Tensor,
+    def generate_initial_conditions(self, acqf: OneShotVaRKG, sol_eval: Tensor,
                                     val_eval: Tensor, sol_no_eval: Tensor) -> Tensor:
         """
         Takes a bunch of raw solutions and returns initial conditions.
