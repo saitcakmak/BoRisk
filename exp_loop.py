@@ -36,70 +36,67 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
         for each x in x_samples.
     :return: None - saves the output.
     """
-    # TODO: filename handling
-    # # If file already exists, we will do warm-starts, i.e. continue from where it was left.
-    # if CVaR and "cvar" not in filename:
-    #     filename = filename + '_cvar'
-    # if expectation and "exp" not in filename:
-    #     filename = filename + '_exp'
-    # if alpha != 0.7 and "a=" not in filename:
-    #     filename = filename + '_a=%s' % alpha
-    # if q > 1 and "q=" not in filename:
-    #     filename = filename + "_q=%d" % q
-    # if kgcp and "kgcp" not in filename:
-    #     filename = filename + "_kgcp"
-    # if nested and "nested" not in filename:
-    #     filename = filename + "_nested"
-    # if disc and 'disc' not in filename:
-    #     filename = filename + "_disc"
-    # if random_sampling and 'random' not in filename:
-    #     filename = filename + '_random'
-    # if tts and 'tts' not in filename:
-    #     filename = filename + '_tts'
-    # if weights is not None and 'weights' not in filename:
-    #     filename = filename + '_weights'
-    # TODO: read previous output if available
-    # try:
-    #     full_data = torch.load("detailed_output/%s.pt" % filename)
-    #     last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
-    #     last_data = full_data[last_iteration]
-    #     seed_list = last_data['seed_list']
-    #     train_X = last_data['train_X']
-    #     train_Y = last_data['train_Y']
-    # except FileNotFoundError:
-    #     # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
-    #     torch.manual_seed(seed=seed)
-    #     seed_list = torch.randint(1000000, (1000,))
-    #     last_iteration = -1
-    #     full_data = dict()
-    #     train_X = torch.rand((n, d))
-    #     train_Y = function(train_X, seed_list[-1])
-
-    full_data = dict()
-    last_iteration = -1  # temp
     # for timing
     start = time()
     torch.manual_seed(seed)
-    if benchmark_alg is None:
-        exp = Experiment(function=function_name,
-                         filename=filename,
-                         **kwargs)
-        if 'x_samples' in kwargs.keys():
-            x_samples = kwargs.get('x_samples').reshape(-1, 1, exp.dim_x)
-            init_samples = torch.cat([x_samples.repeat(1, exp.num_samples, 1),
-                                     exp.w_samples.repeat(x_samples.size(0), 1, 1)], dim=-2)
+    # If file already exists, we will do warm-starts, i.e. continue from where it was left.
+    if kwargs.get('CVaR') and "cvar" not in filename:
+        filename = filename + '_cvar'
+    if kwargs.get('expectation') and "exp" not in filename:
+        filename = filename + '_exp'
+    if kwargs.get('alpha', 0.7) != 0.7 and "a=" not in filename:
+        filename = filename + '_a=%s' % alpha
+    if kwargs.get('q', 1) > 1 and "q=" not in filename:
+        filename = filename + "_q=%d" % q
+    if not benchmark_alg:
+        if kwargs.get('kgcp') and "kgcp" not in filename:
+            filename = filename + "_kgcp"
+        if kwargs.get('one_shot') and "one_shot" not in filename:
+            filename = filename + "_one_shot"
+        if not kwargs.get('disc') and 'cont' not in filename:
+            filename = filename + "_cont"
+        if kwargs.get('random_sampling') and 'random' not in filename:
+            filename = filename + '_random'
+        if kwargs.get('tts_frequency', 1) > 1 and 'tts' not in filename:
+            filename = filename + '_tts'
+    if kwargs.get('weights') is not None and 'weights' not in filename:
+        filename = filename + '_weights'
+    try:
+        full_data = torch.load("detailed_output/%s.pt" % filename)
+        last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
+        last_data = full_data[last_iteration]
+        if benchmark_alg is None:
+            exp = Experiment(function=function_name,
+                             **kwargs)
         else:
-            init_samples = kwargs.get('init_samples')
-        exp.initialize_gp(init_samples=init_samples, n=kwargs.get('n'))
+            exp = BenchmarkExp(function=function_name,
+                               **kwargs)
+        exp.X = last_data['train_X']
+        exp.Y = last_data['train_Y']
+        exp.fit_gp()
+    except FileNotFoundError:
+        # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
+        torch.manual_seed(seed=seed)
+        last_iteration = -1
+        full_data = dict()
+        if benchmark_alg is None:
+            exp = Experiment(function=function_name,
+                             **kwargs)
+            if 'x_samples' in kwargs.keys():
+                x_samples = kwargs.get('x_samples').reshape(-1, 1, exp.dim_x)
+                init_samples = torch.cat([x_samples.repeat(1, exp.num_samples, 1),
+                                         exp.w_samples.repeat(x_samples.size(0), 1, 1)], dim=-2)
+            else:
+                init_samples = kwargs.get('init_samples')
+            exp.initialize_gp(init_samples=init_samples, n=kwargs.get('n'))
 
-    else:
-        exp = BenchmarkExp(function=function_name,
-                           filename=filename,
-                           **kwargs)
-        # TODO: this needs to be a set of x_samples
-        exp.initialize_benchmark_gp(x_samples=kwargs.get('x_samples'))
-        if exp.q != 1:
-            warnings.warn("q != 1 with a benchmark algorithm. Is this intentional!?!")
+        else:
+            exp = BenchmarkExp(function=function_name,
+                               **kwargs)
+            # this needs to be a set of x_samples
+            exp.initialize_benchmark_gp(x_samples=kwargs.get('x_samples'))
+            if exp.q != 1:
+                warnings.warn("q != 1 with a benchmark algorithm. Is this intentional!?!")
 
     # this doesn't get recovered when we do stop start!!
     #   this is fine, we can just reevaluate. Not so important
@@ -209,7 +206,7 @@ if __name__ == "__main__":
     tts_frequency = 10
     one_shot = False
     weights = torch.tensor([0.3, 0.2, 0.1, 0.1, 0.3])
-    bm_alg = qKnowledgeGradient
+    bm_alg = ExpectedImprovement
     x_samples = torch.rand((5, 1))
     exp_loop('branin', 0, 'tester', 100, dim_w=1, num_samples=num_samp, maxiter=maxiter,
              num_fantasies=num_fant, num_restarts=num_rest, raw_multiplier=10,

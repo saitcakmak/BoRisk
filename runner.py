@@ -6,37 +6,48 @@ from exp_loop import exp_loop
 import torch
 import multiprocessing
 import sys
+from botorch.acquisition import (
+    ExpectedImprovement,
+    ProbabilityOfImprovement,
+    UpperConfidenceBound,
+    qMaxValueEntropy,
+    qKnowledgeGradient
+)
+from test_functions.function_picker import function_picker
 
-# TODO: this is affected by recent changes. Fix!
-
-
-print("threads default", torch.get_num_threads())
-print("interop threads default", torch.get_num_interop_threads())
-cpu_count = multiprocessing.cpu_count()
-cpu_count = int(cpu_count)
-# torch.set_num_threads(cpu_count)
-# torch.set_num_interop_threads(cpu_count)
-print("threads updated", torch.get_num_threads())
-print("interop threads updated", torch.get_num_interop_threads())
+# Modify this and make sure it does what you want!
 
 # function_name = input("function name: ")
-function_name = 'hartmann6'
+function_name = 'branin'
 # function_name = sys.argv[1]
-num_samples = 10
+num_samples = 4
 num_fantasies = 10  # default 50
-key_list = ['tts_kgcp_q01_s40', 'tts_kgcp_q01_s04', 'random_s04', 'random_s40',
-            # 'tts_kgcp_s10', 'varkg_s10', 'kgcp_s10', 'random_s10',
-            # 'tts_kgcp_s40', 'varkg_s40', 'kgcp_s40', 'random_s40',
-            # 'tts_varkg_10fant_s40'
+key_list = ['tts_kgcp', 'random',
+            'EI',
+            'MES',
+            'PoI',
+            'qKG',
+            'UCB'
             ]
-output_file = "%s_%s" % (function_name, "var_10_fant")
+# this should be a list of bm algorithms corresponding to the keys. None if VaRKG
+bm_alg_list = [None,
+               None,
+               ExpectedImprovement,
+               qMaxValueEntropy,
+               ProbabilityOfImprovement,
+               qKnowledgeGradient,
+               UpperConfidenceBound
+               ]
+output_file = "%s_%s" % (function_name, "var_4samp_10fant_4start_compare")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 # seed_list = torch.randint(10000, (5,))
 seed_list = [6044, 8239, 4933, 3760, 8963]
 # seed_list = [4933, 8963]
 dim_w = 1
-q = 1
-iterations = 50
+function = function_picker(function_name)
+dim_x = function.dim - dim_w
+q_base = 4  # q for VaRKG. For others, it is q_base / num_samples
+iterations = 25
 num_restarts = 40
 raw_multiplier = 50  # default 50
 num_inner_restarts = 10
@@ -50,6 +61,9 @@ disc = True
 red_dim = False
 beta = 0
 bm_alg = None  # specify the benchmark algorithm here
+init_samples = None
+num_x_samples = 4
+
 
 output_path = "batch_output/%s" % output_file
 
@@ -58,33 +72,38 @@ try:
 except FileNotFoundError:
     output_dict = dict()
 
-for key in key_list:
+for i, key in enumerate(key_list):
     if key not in output_dict.keys():
         output_dict[key] = dict()
     for seed in seed_list:
-        # TODO: update the one-shot / nested stuff. Clean up
+        # TODO: Clean up
         seed = int(seed)
         if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
             continue
         print('starting key %s seed %d' % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
-        rep = int(key[-2:])
         random = 'random' in key
-        la_samples = None
         kgcp = 'kgcp' in key
-        nested = 'nested' in key
-        tts = 'tts' in key
+        one_shot = 'one_shot' in key
+        if 'tts' in key:
+            tts_frequency = 10
+        else:
+            tts_frequency = 1
+        if num_x_samples:
+            x_samples = torch.rand(num_x_samples, dim_x)
+        else:
+            x_samples = None
+        q = int(q_base / num_samples)
         output = exp_loop(function_name, seed=int(seed), dim_w=dim_w, filename=filename, iterations=iterations,
                           num_samples=num_samples, num_fantasies=num_fantasies,
                           num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,
+                          init_samples=init_samples, x_samples=x_samples,
                           cuda=cuda, raw_multiplier=raw_multiplier,
                           maxiter=maxiter, periods=periods, q=q,
-                          num_repetitions=rep, lookahead_samples=la_samples,
-                          reporting_rep=rep, reporting_la_samples=la_samples,
                           kgcp=kgcp, random_sampling=random, disc=disc,
-                          expectation=expectation,
-                          tts=tts, nested=nested, num_inner_restarts=num_inner_restarts,
-                          benchmark_alg=bm_alg)
+                          expectation=expectation, tts_frequency=tts_frequency,
+                          one_shot=one_shot, num_inner_restarts=num_inner_restarts,
+                          benchmark_alg=bm_alg_list[i])
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)

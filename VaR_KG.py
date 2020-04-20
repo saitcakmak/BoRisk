@@ -188,7 +188,10 @@ class InnerVaR(MCAcquisitionFunction):
 
         # return negative so that the optimization minimizes the function
         if len(self.batch_shape) < 2:
-            return -values.squeeze()
+            values = - values.squeeze()
+            if values.size() == torch.Size([]):
+                values = values.reshape(-1)
+            return values
         else:
             return -values.squeeze(-1)
 

@@ -60,13 +60,12 @@ class Experiment:
                  'fix_samples': True
                  }
 
-    def __init__(self, function: str, filename: str, **kwargs):
+    def __init__(self, function: str, **kwargs):
         """
         The experiment settings:
-        :param function_name: The problem function to be used.
+        :param function: The problem function to be used.
         :param noise_std: standard deviation of the function evaluation noise. Defaults to 0.1
         :param dim_w: Dimension of the w component.
-        :param filename: Output file name. TODO: if exists, read the file
         :param num_samples: Number of samples of w to be used to evaluate C/VaR.
         :param w_samples: option to explicitly specify the samples. If given, num_samples is ignored.
             One of these is necessary!
@@ -101,7 +100,6 @@ class Experiment:
         else:
             self.function = function_picker(function)
         self.dim = self.function.dim
-        self.filename = filename
         # read the attributes with default values
         # set the defaults first, then overwrite.
         # this lets us store everything passed with kwargs
