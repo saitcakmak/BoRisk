@@ -55,8 +55,6 @@ expectation = False
 alpha = 0.7
 cuda = False
 disc = True
-red_dim = False
-beta = 0
 init_samples = None
 num_x_samples = 4
 
