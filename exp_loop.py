@@ -62,7 +62,8 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
     if kwargs.get('weights') is not None and 'weights' not in filename:
         filename = filename + '_weights'
     try:
-        full_data = torch.load("detailed_output/%s.pt" % filename)
+        # TODO: this could read the kwargs from last_data as well!
+        full_data = torch.load("exp_output/%s.pt" % filename)
         last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
         last_data = full_data[last_iteration]
         if benchmark_alg is None:
@@ -85,7 +86,7 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
             if 'x_samples' in kwargs.keys():
                 x_samples = kwargs.get('x_samples').reshape(-1, 1, exp.dim_x)
                 init_samples = torch.cat([x_samples.repeat(1, exp.num_samples, 1),
-                                         exp.w_samples.repeat(x_samples.size(0), 1, 1)], dim=-2)
+                                          exp.w_samples.repeat(x_samples.size(0), 1, 1)], dim=-2)
             else:
                 init_samples = kwargs.get('init_samples')
             exp.initialize_gp(init_samples=init_samples, n=kwargs.get('n'))
@@ -124,7 +125,7 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
             data = {'state_dict': exp_data.pop('model').state_dict(), 'train_Y': exp_data.pop('Y'),
                     'train_X': exp_data.pop('X'), **exp_data}
             full_data[i] = data
-            torch.save(full_data, 'detailed_output/%s.pt' % filename)
+            torch.save(full_data, 'exp_output/%s.pt' % filename)
 
         except RuntimeError as err:
             import sys
@@ -177,11 +178,18 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
         else:
             i = i + 1
             handling_count = 0
-
-    current_out = exp.current_best()
+    if benchmark_alg is None:
+        past_only = kwargs.get('kgcp', False)
+    else:
+        past_only = benchmark_alg in [ExpectedImprovement,
+                                      ProbabilityOfImprovement,
+                                      NoisyExpectedImprovement]
+    current_out = exp.current_best(past_only=past_only)
     full_data['final_solution'] = current_out[0]
     full_data['final_value'] = current_out[1]
-    torch.save(full_data, 'detailed_output/%s.pt' % filename)
+    torch.save(full_data, 'exp_output/%s.pt' % filename)
+    current_best_list[iterations] = current_out[0]
+    current_best_value_list[iterations] = current_out[1]
 
     print("total time: ", time() - start)
 

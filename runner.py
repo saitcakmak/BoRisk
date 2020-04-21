@@ -4,7 +4,6 @@ Modify this to fit the experiment you intend to run.
 """
 from exp_loop import exp_loop
 import torch
-import multiprocessing
 import sys
 from botorch.acquisition import (
     ExpectedImprovement,
@@ -25,7 +24,6 @@ num_fantasies = 10  # default 50
 key_list = ['tts_kgcp', 'random',
             'EI',
             'MES',
-#            'PoI',
             'qKG',
             'UCB'
             ]
@@ -34,7 +32,6 @@ bm_alg_list = [None,
                None,
                ExpectedImprovement,
                qMaxValueEntropy,
-#               ProbabilityOfImprovement,
                qKnowledgeGradient,
                UpperConfidenceBound
                ]
@@ -60,7 +57,6 @@ cuda = False
 disc = True
 red_dim = False
 beta = 0
-bm_alg = None  # specify the benchmark algorithm here
 init_samples = None
 num_x_samples = 4
 
@@ -76,7 +72,6 @@ for i, key in enumerate(key_list):
     if key not in output_dict.keys():
         output_dict[key] = dict()
     for seed in seed_list:
-        # TODO: Clean up
         seed = int(seed)
         if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
             continue
@@ -93,7 +88,10 @@ for i, key in enumerate(key_list):
             x_samples = torch.rand(num_x_samples, dim_x)
         else:
             x_samples = None
-        q = int(q_base / num_samples)
+        if bm_alg_list[i] is None:
+            q = q_base
+        else:
+            q = int(q_base / num_samples)
         output = exp_loop(function_name, seed=int(seed), dim_w=dim_w, filename=filename, iterations=iterations,
                           num_samples=num_samples, num_fantasies=num_fantasies,
                           num_restarts=num_restarts, CVaR=CVaR, alpha=alpha,

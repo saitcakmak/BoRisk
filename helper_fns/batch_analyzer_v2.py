@@ -12,8 +12,8 @@ from scipy.optimize import minimize
 directory = "../batch_output/"
 function_name = 'branin'
 prefix = 'plot_'
-# prefix = ''
-suffix = '_exp_cost'
+prefix = ''
+suffix = '_var_4samp_10fant_4start_compare'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 1
 CVaR = False
