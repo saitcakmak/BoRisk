@@ -47,7 +47,7 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
     if kwargs.get('alpha', 0.7) != 0.7 and "a=" not in filename:
         filename = filename + '_a=%s' % alpha
     if kwargs.get('q', 1) > 1 and "q=" not in filename:
-        filename = filename + "_q=%d" % kwargs.get(q)
+        filename = filename + "_q=%d" % kwargs.get('q')
     if not benchmark_alg:
         if kwargs.get('kgcp') and "kgcp" not in filename:
             filename = filename + "_kgcp"
