@@ -7,7 +7,6 @@ import torch
 import sys
 from botorch.acquisition import (
     ExpectedImprovement,
-    ProbabilityOfImprovement,
     UpperConfidenceBound,
     qMaxValueEntropy,
     qKnowledgeGradient
@@ -21,7 +20,8 @@ function_name = 'levy'
 # function_name = sys.argv[1]
 num_samples = 4
 num_fantasies = 10  # default 50
-key_list = ['tts_kgcp', 'random',
+key_list = ['tts_kgcp',
+            'random',
             'EI',
             'MES',
             'qKG',
@@ -57,7 +57,6 @@ cuda = False
 disc = True
 init_samples = None
 num_x_samples = 4
-
 
 output_path = "batch_output/%s" % output_file
 

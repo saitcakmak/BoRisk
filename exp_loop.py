@@ -62,7 +62,6 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
     if kwargs.get('weights') is not None and 'weights' not in filename:
         filename = filename + '_weights'
     try:
-        # TODO: this could read the kwargs from last_data as well!
         full_data = torch.load("exp_output/%s.pt" % filename)
         last_iteration = max((key for key in full_data.keys() if isinstance(key, int)))
         last_data = full_data[last_iteration]
@@ -103,8 +102,6 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
     #   this is fine, we can just reevaluate. Not so important
     current_best_list = torch.empty((iterations + 1, exp.q, exp.dim_x))
     current_best_value_list = torch.empty((iterations + 1, exp.q, 1))
-    kg_value_list = torch.empty((iterations, exp.q, 1))
-    candidate_list = torch.empty((iterations, exp.q, exp.dim))
 
     i = last_iteration + 1
     handling_count = 0
@@ -118,12 +115,13 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
                 iter_out = exp.one_iteration()
             current_best_list[i] = iter_out[0]
             current_best_value_list[i] = iter_out[1]
-            kg_value_list[i] = iter_out[2]
-            candidate_list[i] = iter_out[3]
 
             exp_data = vars(exp).copy()
+            # this X and Y likely include post-eval samples as well. Previously, this was the other way around.
             data = {'state_dict': exp_data.pop('model').state_dict(), 'train_Y': exp_data.pop('Y'),
-                    'train_X': exp_data.pop('X'), **exp_data}
+                    'train_X': exp_data.pop('X'), 'current_best_sol': iter_out[0],
+                    'current_best_value': iter_out[1], 'acqf_value': iter_out[2],
+                    'candidate': iter_out[3], **exp_data}
             full_data[i] = data
             torch.save(full_data, 'exp_output/%s.pt' % filename)
 
@@ -194,9 +192,7 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
     print("total time: ", time() - start)
 
     output = {'current_best': current_best_list,
-              'current_best_value': current_best_value_list,
-              'kg_value': kg_value_list,
-              'candidate': candidate_list}
+              'current_best_value': current_best_value_list}
     return output
 
 
