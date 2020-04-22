@@ -109,7 +109,7 @@ class Experiment:
             setattr(self, key, kwargs[key])
         self.dim_x = self.dim - self.dim_w
         if 'w_samples' in kwargs.keys():
-            self.w_samples = kwargs[w_samples].reshape(-1, self.dim_w)
+            self.w_samples = kwargs['w_samples'].reshape(-1, self.dim_w)
             self.num_samples = self.w_samples.size(0)
         elif 'num_samples' in kwargs.keys():
             self.num_samples = kwargs['num_samples']
