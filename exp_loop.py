@@ -146,7 +146,7 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
                         continue
                     except RuntimeError:
                         print('Refit failed, perturbing the last solution and refitting.')
-                        rand_X = torch.randn((q, d)) * 0.05
+                        rand_X = torch.randn((exp.q, exp.dim)) * 0.05
                         exp.X[-exp.q:] = exp.X[-exp.q:] + rand_X
                         exp.Y[-exp.q:] = exp.function(exp.X[-exp.q:])
                         try:

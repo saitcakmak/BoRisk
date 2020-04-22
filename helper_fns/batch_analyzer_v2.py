@@ -10,9 +10,9 @@ from math import ceil
 from scipy.optimize import minimize
 
 directory = "../batch_output/"
-function_name = 'branin'
+function_name = 'levy'
 prefix = 'plot_'
-prefix = ''
+# prefix = ''
 suffix = '_var_4samp_10fant_4start_compare'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 1

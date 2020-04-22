@@ -5,16 +5,16 @@ Just reads the current best output reported and saves it for plotting.
 import torch
 from time import time
 
-# TODO: make sure this works
 
 directory = '../exp_output/'
-function_name = 'branin'
-suffix = '_var_4samp_10fant_4start_compare'
+function_name = 'levy'
+output_key = 'UCB'
+suffix = '_var_4samp_10fant_4start_compare_%s_' % output_key
 seed_list = [6044, 8239, 4933, 3760, 8963]
-suffix2 = '.pt'
+q = 4
+suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] else '')
 
-output_file = '../batch_output/plot_%s_var' % function_name
-output_key = 'nested_s40'
+output_file = '../batch_output/plot_%s_var_4samp_10fant_4start_compare' % function_name
 
 iterations = 25
 

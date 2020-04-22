@@ -16,9 +16,9 @@ from test_functions.function_picker import function_picker
 # Modify this and make sure it does what you want!
 
 # function_name = input("function name: ")
-function_name = 'branin'
+function_name = 'levy'
 # function_name = sys.argv[1]
-num_samples = 4
+num_samples = 10
 num_fantasies = 10  # default 50
 key_list = ['tts_kgcp',
             'random',
@@ -35,7 +35,7 @@ bm_alg_list = [None,
                qKnowledgeGradient,
                UpperConfidenceBound
                ]
-output_file = "%s_%s" % (function_name, "var_4samp_10fant_4start_compare")
+output_file = "%s_%s" % (function_name, "var_10samp_10fant_4start_compare")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 # seed_list = torch.randint(10000, (5,))
 seed_list = [6044, 8239, 4933, 3760, 8963]
@@ -43,7 +43,7 @@ seed_list = [6044, 8239, 4933, 3760, 8963]
 dim_w = 1
 function = function_picker(function_name)
 dim_x = function.dim - dim_w
-q_base = 4  # q for VaRKG. For others, it is q_base / num_samples
+q_base = 10  # q for VaRKG. For others, it is q_base / num_samples
 iterations = 25
 num_restarts = 40
 raw_multiplier = 50  # default 50
@@ -70,8 +70,8 @@ for i, key in enumerate(key_list):
         output_dict[key] = dict()
     for seed in seed_list:
         seed = int(seed)
-        if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
-            continue
+        # if seed in list(output_dict[key].keys()) and output_dict[key][seed] is not None:
+        #     continue
         print('starting key %s seed %d' % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
         random = 'random' in key

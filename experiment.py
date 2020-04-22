@@ -293,7 +293,8 @@ class Experiment:
 
 class BenchmarkExp(Experiment):
     """
-    For running the benchmark algorithms
+    For running the benchmark algorithms.
+    Note: This negates the function observations to make it a minimization problem.
     """
 
     def __init__(self, **kwargs):
@@ -327,7 +328,8 @@ class BenchmarkExp(Experiment):
             values = torch.mean(vals, dim=-2)
         else:
             values = vals[:, int(self.alpha * self.num_samples), :]
-        return values
+        # Value is negated to get a minimization problem
+        return -values
 
     def initialize_benchmark_gp(self, x_samples: Tensor):
         """
@@ -358,9 +360,10 @@ class BenchmarkExp(Experiment):
                                                                  q=self.q,
                                                                  num_restarts=self.num_restarts,
                                                                  raw_samples=self.num_restarts * self.raw_multiplier)
+        # negated again to report the correct value
         if self.verbose:
-            print("Current best solution, value: ", current_best_sol, current_best_value)
-        return current_best_sol, current_best_value, inner
+            print("Current best solution, value: ", current_best_sol, -current_best_value)
+        return current_best_sol, -current_best_value, inner
 
     def one_iteration(self, acqf: AcquisitionFunction):
         """
@@ -369,17 +372,8 @@ class BenchmarkExp(Experiment):
         :return: current best solution & value, acqf value and candidate (next sample)
         """
 
-        """
-        potential args we need to pass:
-        model - for all
-        best_f: current best value - EI type
-        beta: for UCB example uses 0.2
-        X_observed: noisy EI
-        num_fantasies: MC acqf?
-        candidate_set: MES
-        
-        Note: some will be like EI where we rely on past points
-        """
+        # TODO: is this working correctly? The output is non-sense
+        #   likely cause is this is maximizing whereas we're minimizing.
         iteration_start = time()
         past_only = acqf in [ExpectedImprovement,
                              ProbabilityOfImprovement,
@@ -403,7 +397,7 @@ class BenchmarkExp(Experiment):
             elif acqf == qMaxValueEntropy:
                 args['candidate_set'] = torch.rand(1000, self.dim)
             elif acqf == qKnowledgeGradient:
-                args['current_value'] = current_best_value
+                args['current_value'] = -current_best_value
             else:
                 raise ValueError('Unexpected type / value for acqf. acqf must be a class'
                                  'reference of one of the specified acqusition functions.')
@@ -424,10 +418,6 @@ class BenchmarkExp(Experiment):
 
         candidate_point = candidate.reshape(self.q, self.dim)
 
-        if self.verbose and self.dim == 2:
-            # TODO: plotting?
-            plt.close('all')
-            plotter(self.model, candidate_point)
         observation = self.get_obj(candidate_point)
         # update the model input data for refitting
         self.X = torch.cat((self.X, candidate_point), dim=0)
