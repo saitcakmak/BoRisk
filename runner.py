@@ -16,7 +16,7 @@ from test_functions.function_picker import function_picker
 # Modify this and make sure it does what you want!
 
 # function_name = input("function name: ")
-function_name = 'levy'
+function_name = 'hartmann4'
 # function_name = sys.argv[1]
 num_samples = 10
 num_fantasies = 10  # default 50
@@ -37,12 +37,17 @@ bm_alg_list = [None,
                UpperConfidenceBound,
                None
                ]
-output_file = "%s_%s" % (function_name, "var_10samp_10fant_4start_compare")
+output_file = "%s_%s" % (function_name, "var_10samp_w2_10fant_4start_compare")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 # seed_list = torch.randint(10000, (5,))
 seed_list = [6044, 8239, 4933, 3760, 8963]
 # seed_list = [4933, 8963]
-dim_w = 1
+# TODO: consider making an arg dict here as well!
+dim_w = 2
+if dim_w > 1:
+    w_samples = torch.rand((num_samples, dim_w))
+else:
+    w_samples = None
 function = function_picker(function_name)
 dim_x = function.dim - dim_w
 q_base = 10  # q for VaRKG. For others, it is q_base / num_samples
@@ -100,7 +105,7 @@ for i, key in enumerate(key_list):
                           kgcp=kgcp, random_sampling=random, disc=disc,
                           expectation=expectation, tts_frequency=tts_frequency,
                           one_shot=one_shot, num_inner_restarts=num_inner_restarts,
-                          benchmark_alg=bm_alg_list[i])
+                          benchmark_alg=bm_alg_list[i], w_samples=w_samples)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
         torch.save(output_dict, output_path)
