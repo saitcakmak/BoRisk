@@ -16,7 +16,7 @@ from test_functions.function_picker import function_picker
 # Modify this and make sure it does what you want!
 
 # function_name = input("function name: ")
-function_name = 'levy'
+function_name = 'branin'
 # function_name = sys.argv[1]
 num_samples = 4
 num_fantasies = 10  # default 50
