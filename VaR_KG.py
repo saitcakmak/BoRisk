@@ -309,14 +309,8 @@ class AbsKG(MCAcquisitionFunction, ABC):
 
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
-        self.mini_batch_size = 100
+        self.mini_batch_size = int(100 / self.q)
         # TODO: this needs fixing - will run into memory issues with large samples otherwise
-        # if num_lookahead_repetitions is not None:
-        #     factor = num_lookahead_repetitions
-        # else:
-        #     factor = 1
-        # while self.mini_batch_size * num_fantasies * factor > 1000 and self.mini_batch_size > 1:
-        #     self.mini_batch_size = int(self.mini_batch_size / 2)
 
 
 class OneShotVaRKG(AbsKG):
