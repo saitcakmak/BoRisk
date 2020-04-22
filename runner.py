@@ -25,7 +25,8 @@ key_list = ['tts_kgcp',
             'EI',
             'MES',
             'qKG',
-            'UCB'
+            'UCB',
+            'tts_varkg'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None,
@@ -33,7 +34,8 @@ bm_alg_list = [None,
                ExpectedImprovement,
                qMaxValueEntropy,
                qKnowledgeGradient,
-               UpperConfidenceBound
+               UpperConfidenceBound,
+               None
                ]
 output_file = "%s_%s" % (function_name, "var_10samp_10fant_4start_compare")
 torch.manual_seed(0)  # to ensure the produced seed are same!
