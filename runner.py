@@ -40,8 +40,8 @@ bm_alg_list = [None,
 output_file = "%s_%s" % (function_name, "var_10samp_w2_10fant_4start_compare")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 # seed_list = torch.randint(10000, (5,))
-seed_list = [6044, 8239, 4933, 3760, 8963]
-# seed_list = [4933, 8963]
+# seed_list = [6044, 8239, 4933, 3760, 8963]
+seed_list = [6044]
 # TODO: consider making an arg dict here as well!
 dim_w = 2
 if dim_w > 1:
