@@ -442,6 +442,7 @@ class Optimizer:
                 fixed_features[j * self.dim + i] = None
 
         acqf.tts_reset()
+        # TODO: the spikes somehow happen here - is it the grad map that causes it?
         solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.outer_bounds[0],

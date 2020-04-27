@@ -371,9 +371,6 @@ class BenchmarkExp(Experiment):
         :param acqf: The acquisition function to use, just a class reference!
         :return: current best solution & value, acqf value and candidate (next sample)
         """
-
-        # TODO: is this working correctly? The output is non-sense
-        #   likely cause is this is maximizing whereas we're minimizing.
         iteration_start = time()
         past_only = acqf in [ExpectedImprovement,
                              ProbabilityOfImprovement,

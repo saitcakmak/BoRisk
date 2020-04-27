@@ -126,20 +126,22 @@ class InnerVaR(MCAcquisitionFunction):
         if X.requires_grad:
             torch.set_grad_enabled(True)
         if self.cuda:
-            z = torch.cat((X.repeat(*[1]*batch_dim, self.num_samples, 1), w), -1).cuda()
+            z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1).cuda()
         else:
-            z = torch.cat((X.repeat(*[1]*batch_dim, self.num_samples, 1), w), -1)
+            z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1)
 
         # get the samples using lookahead / sampling or mean
         if self.num_repetitions > 0 and self.lookahead_samples is not None:
             lookahead_model = self._get_lookahead_model(X, batch_shape)
-            z = z.repeat(self.num_repetitions, *[1]*z.dim())
+            z = z.repeat(self.num_repetitions, *[1] * z.dim())
             samples = lookahead_model.posterior(z).mean
             # This is a Tensor of size num_la_rep x *batch_shape x num_samples x 1 (3 + batch_dim dim)
         elif self.num_repetitions > 0:
             base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
             if batch_dim >= 3:
-                base_samples = base_samples.view(-1, *[1]*(batch_dim-2), *base_samples.shape[-4:]).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
+                base_samples = base_samples.view(-1, *[1] * (batch_dim - 2),
+                                                 *base_samples.shape[-4:]).repeat(1, *batch_shape[:-2], 1,
+                                                                                  1, 1, 1)
             # this next line is the cause of runtime warning, specifically the rsample part
             # changing base samples doesn't do anything - the reason is taking too many samples too
             # close to each other. See the issue in github.
@@ -164,7 +166,7 @@ class InnerVaR(MCAcquisitionFunction):
             summed_weights = torch.empty(weights.size())
             summed_weights[..., 0, :] = weights[..., 0, :]
             for i in range(1, weights.size(-2)):
-                summed_weights[..., i, :] = summed_weights[..., i-1, :] + weights[..., i, :]
+                summed_weights[..., i, :] = summed_weights[..., i - 1, :] + weights[..., i, :]
             if not self.expectation:
                 gr_ind = summed_weights >= self.alpha
                 var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1], dtype=torch.long) * weights.size(-2)
@@ -269,7 +271,8 @@ class AbsKG(MCAcquisitionFunction, ABC):
         :param cuda: True if using GPUs
         :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
             A 1-dim tensor of size num_samples
-        :param kwargs: throwaway arguments - ignored
+        :param mini_batch_size: the batch size for inner VaR evaluations. Helps with memory issues.
+        :param kwargs: ignored if not listed here
         """
         super().__init__(model)
         self.num_samples = num_samples
@@ -309,8 +312,20 @@ class AbsKG(MCAcquisitionFunction, ABC):
 
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
-        self.mini_batch_size = int(100 / self.q)
-        # TODO: this needs fixing - will run into memory issues with large samples otherwise
+        self.mini_batch_size = kwargs.get('mini_batch_size', 100)
+
+    def tts_reset(self):
+        """
+        This should be called between batch size changes, i.e. if you're optimizing with 100 restarts,
+        then switch to 20 restarts, then you need to call this in between. This applies to raw sample
+        evaluation and the subsequent optimization as well. To be safe, call this before calling the optimizer.
+        It will make sure that the tts does inner optimization starting in the first call, and ensure that
+        the batch sizes of tensors are adequate.
+        Only needed if tts_frequency > 1.
+        :return: None
+        """
+        self.call_count = 0
+        self.last_inner_solution = None
 
 
 class OneShotVaRKG(AbsKG):
@@ -424,7 +439,7 @@ class KGCP(AbsKG):
         :return: the KGCP value of batch_size
         """
         X = X.reshape(-1, self.q, self.dim)
-        values = torch.empty(self.past_x.size(0) + self.q, self.num_fantasies, X.size(0))
+        batch_size = X.size(0)
 
         # generate w_samples
         if self.fix_samples:
@@ -444,50 +459,58 @@ class KGCP(AbsKG):
         else:
             inner_seed = self.inner_seed
 
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
+        num_batches = ceil(batch_size / self.mini_batch_size)
+        values = torch.empty(batch_size)
+
+        if self.last_inner_solution is None:
+            self.last_inner_solution = torch.empty(self.num_fantasies, batch_size, 1, self.dim_x)
+
         sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
-        if self.cuda:
-            fantasy_model = self.model.fantasize(X.cuda(), sampler).cuda()
-        else:
-            fantasy_model = self.model.fantasize(X, sampler)
 
-        w_actual = X[..., -self.dim_w:]
+        for i in range(num_batches):
+            left_index = i * self.mini_batch_size
+            if i == num_batches - 1:
+                right_index = batch_size
+            else:
+                right_index = (i + 1) * self.mini_batch_size
 
-        inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
-                             alpha=self.alpha, dim_x=self.dim_x,
-                             num_repetitions=self.num_repetitions,
-                             lookahead_samples=self.lookahead_samples,
-                             inner_seed=inner_seed,
-                             CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
-                             w_actual=w_actual, weights=self.weights)
+            # construct the fantasy model
+            if self.cuda:
+                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(), sampler).cuda()
+            else:
+                fantasy_model = self.model.fantasize(X[left_index:right_index], sampler)
 
-        if self.call_count % self.tts_frequency == 0:
-            x_comp = X[..., :self.dim_x]
-            x_inner = torch.cat((x_comp, self.past_x.repeat(X.size(0), 1, 1)), dim=-2).repeat(self.num_fantasies, 1, 1, 1)
+            w_actual = X[left_index:right_index, :, -self.dim_w:]
 
-            for i in range(values.size(0)):
-                with settings.propagate_grads(True):
-                    values[i] = - inner_VaR(x_inner[..., i, :].unsqueeze(-2))
-            best = torch.argmin(values, dim=0)
-            values = torch.gather(values, 0, best.unsqueeze(0)).squeeze()
-            self.last_inner_solution = torch.gather(x_inner, 2, best.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, self.dim_x))
-        else:
-            values = - inner_VaR(self.last_inner_solution)
-        values = self.current_best_VaR - torch.mean(values, dim=0)
+            inner_VaR = InnerVaR(model=fantasy_model, w_samples=w_samples,
+                                 alpha=self.alpha, dim_x=self.dim_x,
+                                 num_repetitions=self.num_repetitions,
+                                 lookahead_samples=self.lookahead_samples,
+                                 inner_seed=inner_seed,
+                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                 w_actual=w_actual, weights=self.weights)
+
+            if self.call_count % self.tts_frequency == 0:
+                x_comp = X[left_index:right_index, :, :self.dim_x]
+                x_inner = torch.cat((x_comp, self.past_x.repeat(right_index - left_index, 1, 1)),
+                                    dim=-2).repeat(self.num_fantasies, 1, 1, 1)
+
+                temp_values = torch.empty(self.past_x.size(0) + self.q, self.num_fantasies, right_index - left_index)
+                for j in range(temp_values.size(0)):
+                    with settings.propagate_grads(True):
+                        temp_values[j] = - inner_VaR(x_inner[..., j, :].unsqueeze(-2))
+                best = torch.argmin(temp_values, dim=0)
+                detailed_values = torch.gather(temp_values, 0, best.unsqueeze(0)).reshape(self.num_fantasies,
+                                                                                          right_index - left_index)
+                self.last_inner_solution[:, left_index:right_index] = torch.gather(x_inner, 2,
+                                                                                   best.unsqueeze(-1).unsqueeze(
+                                                                                       -1).repeat(1, 1, 1, self.dim_x))
+            else:
+                detailed_values = - inner_VaR(self.last_inner_solution[:, left_index:right_index])
+            values[left_index:right_index] = self.current_best_VaR - torch.mean(detailed_values, dim=0)
         self.call_count += 1
         return values
-
-    def tts_reset(self):
-        """
-        This should be called between batch size changes, i.e. if you're optimizing with 100 restarts,
-        then switch to 20 restarts, then you need to call this in between. This applies to raw sample
-        evaluation and the subsequent optimization as well. To be safe, call this before calling the optimizer.
-        It will make sure that the tts does inner optimization starting in the first call, and ensure that
-        the batch sizes of tensors are adequate.
-        Only needed if tts_frequency > 1
-        :return: None
-        """
-        self.call_count = 0
-        self.last_inner_solution = None
 
 
 class VaRKG(AbsKG):
@@ -545,9 +568,8 @@ class VaRKG(AbsKG):
         # this is necessary since we are not doing batch evaluations
         old_state = torch.random.get_rng_state()
         torch.manual_seed(fantasy_seed)
-        fantasy_seeds = torch.randint(1000000, (self.num_fantasies, ))
+        fantasy_seeds = torch.randint(1000000, (self.num_fantasies,))
         torch.random.set_rng_state(old_state)
-        start = time()
 
         # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
         num_batches = ceil(batch_size / self.mini_batch_size)
@@ -589,23 +611,8 @@ class VaRKG(AbsKG):
                     value = inner_VaR(self.last_inner_solution[:, left_index:right_index])
             value = -value
             values[left_index:right_index] = self.current_best_VaR - torch.mean(value, dim=0)
-            # for debugging purposes
-            print('TtsVaRKG %d of batch_size: %d, time: %s' % (right_index, batch_size, time() - start))
         self.call_count += 1
         return values
-
-    def tts_reset(self):
-        """
-        This should be called between batch size changes, i.e. if you're optimizing with 100 restarts,
-        then switch to 20 restarts, then you need to call this in between. This applies to raw sample
-        evaluation and the subsequent optimization as well. To be safe, call this before calling the optimizer.
-        It will make sure that the tts does inner optimization starting in the first call, and ensure that
-        the batch sizes of tensors are adequate.
-        Only needed if tts_frequency > 1.
-        :return: None
-        """
-        self.call_count = 0
-        self.last_inner_solution = None
 
 
 def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Tensor,
@@ -630,7 +637,7 @@ def pick_w_confidence(model: Model, beta: float, x_point: Tensor, w_samples: Ten
         full_points = torch.cat((x_point, w_samples.unsqueeze(0)), dim=-1)
     post = model.posterior(full_points)
     mean = post.mean.reshape(-1)
-    sigma = post.variance.pow(1/2).reshape(-1)
+    sigma = post.variance.pow(1 / 2).reshape(-1)
     sorted_mean, _ = torch.sort(mean, dim=0)
     var_mean = sorted_mean[int(w_samples.size(0) * alpha)]
     ucb = mean + beta * sigma

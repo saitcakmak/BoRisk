@@ -15,6 +15,8 @@ from test_functions.function_picker import function_picker
 
 # Modify this and make sure it does what you want!
 
+# TODO: tts_kgcp runs into memory issues. Figure this out!
+
 # function_name = input("function name: ")
 function_name = 'hartmann4'
 # function_name = sys.argv[1]
