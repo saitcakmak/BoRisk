@@ -257,7 +257,7 @@ class Experiment:
                            current_best_VaR=current_best_value,
                            fantasy_seed=fantasy_seed,
                            inner_seed=inner_seed,
-                           **vars(self))
+                           **{i: vars(self)[i] for i in vars(self) if i != 'inner_optimizer'})
             if self.disc:
                 candidate, value = self.optimizer.disc_optimize_outer(var_kg, self.w_samples)
             else:

@@ -22,13 +22,13 @@ function_name = 'hartmann4'
 # function_name = sys.argv[1]
 num_samples = 10
 num_fantasies = 10  # default 50
-key_list = ['tts_kgcp',
-            'random',
-            'EI',
-            'MES',
-            'qKG',
-            'UCB',
-            'tts_varkg'
+key_list = ['tts_varkg',
+            # 'random',
+            # 'EI',
+            # 'MES',
+            # 'qKG',
+            # 'UCB',
+            # 'tts_varkg'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None,
