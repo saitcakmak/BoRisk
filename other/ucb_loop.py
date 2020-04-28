@@ -12,7 +12,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_UCB import InnerVaR, w_KG, pick_w_confidence
+from other.VaR_UCB import InnerVaR, pick_w_confidence
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan

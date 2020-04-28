@@ -564,13 +564,6 @@ class VaRKG(AbsKG):
         else:
             inner_seed = self.inner_seed
 
-        # generate separate seeds for each fantasy
-        # this is necessary since we are not doing batch evaluations
-        old_state = torch.random.get_rng_state()
-        torch.manual_seed(fantasy_seed)
-        fantasy_seeds = torch.randint(1000000, (self.num_fantasies,))
-        torch.random.set_rng_state(old_state)
-
         # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
         num_batches = ceil(batch_size / self.mini_batch_size)
         values = torch.empty(batch_size)

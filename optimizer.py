@@ -63,7 +63,7 @@ class Optimizer:
         :param periods: Run length of each period to optimize VaRKG
         """
         self.num_restarts = num_restarts
-        self.num_refine_restarts = ceil(num_restarts/5.0)
+        self.num_refine_restarts = ceil(num_restarts / 5.0)
         self.raw_samples = num_restarts * raw_multiplier
         self.num_fantasies = num_fantasies
         self.dim = dim
@@ -100,7 +100,8 @@ class Optimizer:
             random_samples = draw_sobol_samples(bounds=self.inner_bounds, n=num_remaining, q=1)
             return torch.cat((self.inner_solutions.unsqueeze(-2), random_samples), dim=0)
         else:
-            reused = self.inner_solutions[torch.randperm(n=self.inner_solutions.size(0))][:self.raw_samples].unsqueeze(-2)
+            reused = self.inner_solutions[torch.randperm(n=self.inner_solutions.size(0))][:self.raw_samples].unsqueeze(
+                -2)
             random_samples = draw_sobol_samples(bounds=self.inner_bounds,
                                                 n=int(self.raw_samples * self.random_frac), q=1)
             return torch.cat((reused, random_samples), dim=0)
@@ -427,11 +428,13 @@ class Optimizer:
         return X[idcs]
 
     def disc_optimize_outer(self, acqf: Union[VaRKG, KGCP],
-                            w_samples: Tensor) -> Tuple[Tensor, Tensor]:
+                            w_samples: Tensor, batch_size: int = 10) -> Tuple[Tensor, Tensor]:
         """
         KGCP, Nested or Tts optimizer with w component restricted to w_samples
         :param acqf: KGCP or VaRKG object
         :param w_samples: the set W to consider
+        # TODO adjust the default and specify this outside
+        :param batch_size: We will do the optimization in mini batches to save on memory
         :return: Optimal solution and value
         """
         initial_conditions = self.disc_generate_outer_restart_points(acqf, w_samples)
@@ -442,13 +445,23 @@ class Optimizer:
                 fixed_features[j * self.dim + i] = None
 
         acqf.tts_reset()
-        # TODO: the spikes somehow happen here - is it the grad map that causes it?
-        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
-                                                 acquisition_function=acqf,
-                                                 lower_bounds=self.outer_bounds[0],
-                                                 upper_bounds=self.outer_bounds[1],
-                                                 options=options,
-                                                 fixed_features=fixed_features)
+        init_size = initial_conditions.size(0)
+        num_batches = ceil(init_size / batch_size)
+        solutions = torch.empty(init_size, self.q, self.dim)
+        values = torch.empty(init_size)
+        for i in range(num_batches):
+            l_idx = i * batch_size
+            if i == num_batches - 1:
+                r_idx = init_size
+            else:
+                r_idx = (i + 1) * batch_size
+            solutions[l_idx:r_idx], values[l_idx:r_idx] = \
+                gen_candidates_scipy(initial_conditions=initial_conditions[l_idx:r_idx],
+                                     acquisition_function=acqf,
+                                     lower_bounds=self.outer_bounds[0],
+                                     upper_bounds=self.outer_bounds[1],
+                                     options=options,
+                                     fixed_features=fixed_features)
         _, idx = torch.sort(values)
         acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
@@ -519,7 +532,7 @@ class Optimizer:
             w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
             w_picked = w_samples[w_ind, :]
             for i in range(self.q):
-                X_rnd[..., i * self.dim + self.dim_x:(i+1)*self.dim] = w_picked[..., i, :].unsqueeze(-2)
+                X_rnd[..., i * self.dim + self.dim_x:(i + 1) * self.dim] = w_picked[..., i, :].unsqueeze(-2)
 
         return X_rnd
 
@@ -718,6 +731,7 @@ class InnerOptimizer:
     Make sure not to overload it as we want to detect the changes
     between iterations and not get stuck at the same point.
     """
+
     def __init__(self, num_restarts: int, raw_multiplier: int, dim_x: int,
                  random_frac: float = 0.5, new_iter_frac: float = 0.5,
                  limiter: float = 10, eta: float = 2.0, maxiter: int = 100):
@@ -765,7 +779,7 @@ class InnerOptimizer:
             num_remaining = self.raw_samples - num_reused
             random_samples = draw_sobol_samples(bounds=self.bounds, n=num_remaining * batch_size, q=1)
             random_samples = random_samples.reshape(num_remaining, *batch_shape, 1, self.dim_x)
-            reused_samples = self.previous_solutions.view(-1, *[1]*3, self.dim_x).repeat(1, *batch_shape, 1, 1)
+            reused_samples = self.previous_solutions.view(-1, *[1] * 3, self.dim_x).repeat(1, *batch_shape, 1, 1)
             samples = torch.cat((reused_samples, random_samples), dim=0)
             return samples
         else:
@@ -774,7 +788,8 @@ class InnerOptimizer:
             reused = self.previous_solutions[idx, :, :]
             random_samples = draw_sobol_samples(bounds=self.bounds,
                                                 n=int(self.raw_samples * self.random_frac * batch_size), q=1)
-            random_samples = random_samples.reshape(int(self.raw_samples * self.random_frac), *batch_shape, 1, self.dim_x)
+            random_samples = random_samples.reshape(int(self.raw_samples * self.random_frac), *batch_shape, 1,
+                                                    self.dim_x)
             samples = torch.cat((reused, random_samples), dim=0)
             return samples
 
@@ -810,7 +825,7 @@ class InnerOptimizer:
                 idcs[i, -1] = max_idx[i]
         idcs = idcs.reshape(*batch_shape, -1).permute(2, 0, 1)
         # gather the indices from X
-        return X.gather(dim=0, index=idcs.view(*idcs.shape, 1, 1).repeat(*[1]*(idcs.dim() + 1), self.dim_x))
+        return X.gather(dim=0, index=idcs.view(*idcs.shape, 1, 1).repeat(*[1] * (idcs.dim() + 1), self.dim_x))
 
     def optimize(self, acqf: MCAcquisitionFunction) -> Tuple[Tensor, Tensor]:
         """
@@ -827,7 +842,9 @@ class InnerOptimizer:
                                                      options=self.options)
         self.add_solutions(solutions.view(-1, 1, self.dim_x).detach())
         best_ind = torch.argmax(values, dim=0)
-        solution = solutions.gather(dim=0, index=best_ind.view(1, *best_ind.shape, 1, 1).repeat(*[1]*(best_ind.dim() + 2), self.dim_x))
+        solution = solutions.gather(dim=0,
+                                    index=best_ind.view(1, *best_ind.shape, 1, 1).repeat(*[1] * (best_ind.dim() + 2),
+                                                                                         self.dim_x))
         with settings.propagate_grads(True):
             value = acqf(solution)
         return solution, value.reshape(*acqf.batch_shape)

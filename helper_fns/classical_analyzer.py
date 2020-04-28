@@ -3,9 +3,7 @@ this is for analyzing batches of job runs
 """
 import torch
 import matplotlib.pyplot as plt
-from value_plotter import generate_values
-from ucb_loop import function_picker
-import numpy as np
+from other.ucb_loop import function_picker
 
 post_edit_run = True  # if the run was after the reporting edit on 02/04
 directory = "classical_output/"
