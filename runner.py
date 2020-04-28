@@ -23,11 +23,11 @@ function_name = 'hartmann4'
 num_samples = 10
 num_fantasies = 10  # default 50
 key_list = ['tts_kgcp',
-            # 'random',
-            # 'EI',
-            # 'MES',
-            # 'qKG',
-            # 'UCB',
+            'random',
+            'EI',
+            'MES',
+            'qKG',
+            'UCB',
             # 'tts_varkg'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
@@ -39,7 +39,7 @@ bm_alg_list = [None,
                UpperConfidenceBound,
                None
                ]
-output_file = "%s_%s" % (function_name, "-tttsest---var_10samp_w2_10fant_4start_compare")
+output_file = "%s_%s" % (function_name, "var_10samp_w2_10fant_4start_compare")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 # seed_list = torch.randint(10000, (5,))
 # seed_list = [6044, 8239, 4933, 3760, 8963]
@@ -53,9 +53,9 @@ else:
 function = function_picker(function_name)
 dim_x = function.dim - dim_w
 q_base = 10  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 3
+iterations = 25
 num_restarts = 40
-raw_multiplier = 2  # default 50
+raw_multiplier = 50  # default 50
 num_inner_restarts = 10
 maxiter = 1000
 periods = 1000
