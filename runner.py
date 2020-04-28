@@ -22,12 +22,12 @@ function_name = 'hartmann4'
 # function_name = sys.argv[1]
 num_samples = 10
 num_fantasies = 10  # default 50
-key_list = ['tts_kgcp',
-            'random',
-            'EI',
-            'MES',
-            'qKG',
-            'UCB',
+key_list = ['tts_kgcp_q=1',
+            # 'random',
+            # 'EI',
+            # 'MES',
+            # 'qKG',
+            # 'UCB',
             # 'tts_varkg'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
@@ -52,8 +52,8 @@ else:
     w_samples = None
 function = function_picker(function_name)
 dim_x = function.dim - dim_w
-q_base = 10  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 25
+q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
+iterations = 100
 num_restarts = 40
 raw_multiplier = 50  # default 50
 num_inner_restarts = 10
