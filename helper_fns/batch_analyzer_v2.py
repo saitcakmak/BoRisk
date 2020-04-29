@@ -10,12 +10,12 @@ from math import ceil
 from scipy.optimize import minimize
 
 directory = "../batch_output/"
-function_name = 'levy'
+function_name = 'hartmann4'
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var_4samp_10fant_4start_compare'
+suffix = '_var_10samp_w2_10fant_4start_compare'
 filename = '%s%s%s' % (prefix, function_name, suffix)
-dim_w = 1
+dim_w = 2
 CVaR = False
 alpha = 0.7
 if 'exp' in filename:
@@ -33,7 +33,20 @@ num_plot = 10  # max number of plot lines in a figure
 if dim_w == 1:
     w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)
 else:
-    w_samples = torch.rand((num_w, dim_w))
+    w_samples = None
+    # This is hartmann4
+    # w_samples = torch.tensor([[0.4963, 0.7682],
+    #                           [0.0885, 0.1320],
+    #                           [0.3074, 0.6341],
+    #                           [0.4901, 0.8964],
+    #                           [0.4556, 0.6323],
+    #                           [0.3489, 0.4017],
+    #                           [0.0223, 0.1689],
+    #                           [0.2939, 0.5185],
+    #                           [0.6977, 0.8000],
+    #                           [0.1610, 0.2823]])
+    if w_samples is None:
+        raise ValueError('Specify w_samples!')
 
 _, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, alpha=alpha, plug_in_w=w_samples, function=function,
                        dim_x=dim_x, dim_w=dim_w)
@@ -65,11 +78,12 @@ def get_obj(X: torch.Tensor):
 for key in data.keys():
     output[key] = dict()
     if "_q" in key:
-        sub = key[key.find("_q")+1:]
+        sub = key[key.find("_q") + 1:]
         next_ = sub.find("_")
-        q = int(sub[1:next_])
+        start = 2 if "=" in sub else 1
+        q = int(sub[start:next_]) if next_ > 0 else int(sub[start:])
     else:
-        q = 1
+        q = 10
     sub_data = data[key]
     inner_keys = list(sub_data.keys())
     for i in range(len(inner_keys)):
@@ -77,7 +91,7 @@ for key in data.keys():
             raise ValueError('Some of the data is None! Key: %s ' % key)
         best_list = sub_data[inner_keys[i]]['current_best']
         if 'x' not in output[key].keys():
-            output[key]['x'] = torch.linspace(0, best_list.size(0)-1, best_list.size(0)) * q
+            output[key]['x'] = torch.linspace(0, best_list.size(0) - 1, best_list.size(0)) * q
         values = get_obj(best_list)
         reshaped = values.reshape(1, -1)
         if 'y' not in output[key].keys():
@@ -124,10 +138,8 @@ for key in output.keys():
             searched_best = search_around(best_found_point, 0.01)
             best_value = min(best_found, best_value, searched_best)
 
-
 for key in output.keys():
     output[key]['y'] = output[key]['y'] - best_value
-
 
 for key in output.keys():
     try:

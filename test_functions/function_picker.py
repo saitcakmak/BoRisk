@@ -6,6 +6,7 @@ from test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
 from test_functions.standardized_function import StandardizedFunction
 from test_functions.cont_newsvendor import ContinuousNewsvendor
 from test_functions.prod_line import ProductionLine
+from test_functions.branin_williams import BraninWilliams
 from botorch.test_functions import (Ackley,
                                     Beale,
                                     Branin,
@@ -33,11 +34,12 @@ function_dict = {"simplequad": SimpleQuadratic,
                  "hartmann4": Hartmann,
                  "hartmann6": Hartmann,
                  "sixhumpcamel": SixHumpCamel,
-                 "threehumpcamel": ThreeHumpCamel}
+                 "threehumpcamel": ThreeHumpCamel,
+                 "braninwilliams": BraninWilliams}
 
 
 def function_picker(function_name: str, noise_std: float = 0.1,
-                    negate: bool = False, reduce_dim: bool = False) -> SyntheticTestFunction:
+                    negate: bool = False) -> SyntheticTestFunction:
     """
     Returns the appropriate function callable
     If adding new BoTorch test functions, run them through StandardizedFunction.
@@ -46,7 +48,6 @@ def function_picker(function_name: str, noise_std: float = 0.1,
     :param function_name: Function to be used
     :param noise_std: observation noise level
     :param negate: In most cases, should be true for maximization
-    :param reduce_dim: If True, last dimension of the input is ignored by the function
     :return: Function callable
     """
     if function_name == 'newsvendor':
@@ -56,11 +57,9 @@ def function_picker(function_name: str, noise_std: float = 0.1,
     elif function_name in function_dict.keys():
         if function_name[-1].isdigit():
             function = StandardizedFunction(function_dict[function_name](dim=int(function_name[-1]),
-                                                                         noise_std=noise_std, negate=negate),
-                                            reduce_dim=reduce_dim)
+                                                                         noise_std=noise_std, negate=negate))
         else:
-            function = StandardizedFunction(function_dict[function_name](noise_std=noise_std, negate=negate),
-                                            reduce_dim=reduce_dim)
+            function = StandardizedFunction(function_dict[function_name](noise_std=noise_std, negate=negate))
     else:
         raise ValueError("Function name was not found!")
 

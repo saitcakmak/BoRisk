@@ -7,16 +7,16 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'levy'
-output_key = 'UCB'
-suffix = '_var_4samp_10fant_4start_compare_%s_' % output_key
-seed_list = [6044, 8239, 4933, 3760, 8963]
-q = 4
+function_name = 'hartmann4'
+output_key = 'tts_kgcp_q=1'
+suffix = '_var_10samp_w2_10fant_4start_compare_%s_' % output_key
+seed_list = [6044]#, 8239, 4933, 3760, 8963]
+q = 10
 suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] else '')
 
-output_file = '../batch_output/plot_%s_var_4samp_10fant_4start_compare' % function_name
+output_file = '../batch_output/plot_%s_var_10samp_w2_10fant_4start_compare' % function_name
 
-iterations = 25
+iterations = 100
 
 
 def read_bests(seed):
