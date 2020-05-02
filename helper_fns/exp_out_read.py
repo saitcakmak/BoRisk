@@ -7,16 +7,16 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'hartmann4'
-output_key = 'tts_kgcp_q=1'
-suffix = '_var_10samp_w2_10fant_4start_compare_%s_' % output_key
-seed_list = [6044]#, 8239, 4933, 3760, 8963]
-q = 10
-suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] else '')
+function_name = 'braninwilliams'
+output_key = 'UCB'
+suffix = '_var_10fant_6start_%s_' % output_key
+seed_list = [6044, 8239, 4933, 3760, 8963]
+q = 12
+suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
-output_file = '../batch_output/plot_%s_var_10samp_w2_10fant_4start_compare' % function_name
+output_file = '../batch_output/plot_%s_var_10fant_6start' % function_name
 
-iterations = 100
+iterations = 20
 
 
 def read_bests(seed):

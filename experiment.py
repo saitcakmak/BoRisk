@@ -392,7 +392,7 @@ class BenchmarkExp(Experiment):
                 # TODO: gets negative weight while picking restart points - only sometimes
                 args['beta'] = getattr(self, 'beta', 0.2)
             elif acqf == qMaxValueEntropy:
-                args['candidate_set'] = torch.rand(1000, self.dim)
+                args['candidate_set'] = torch.rand(self.num_restarts * self.raw_multiplier, self.dim)
             elif acqf == qKnowledgeGradient:
                 args['current_value'] = -current_best_value
             else:

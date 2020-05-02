@@ -8,12 +8,13 @@ from main_loop import function_picker
 import numpy as np
 from math import ceil
 from scipy.optimize import minimize
+import warnings
 
 directory = "../batch_output/"
-function_name = 'hartmann4'
+function_name = 'braninwilliams'
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var_10samp_w2_10fant_4start_compare'
+suffix = '_var_10fant_6start'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 2
 CVaR = False
@@ -25,31 +26,35 @@ function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
 num_x = 1000000
-if dim_x == 2:
-    num_x = int(np.sqrt(num_x))
-num_w = 10
+num_w = 12
 num_plot = 10  # max number of plot lines in a figure
 
-if dim_w == 1:
-    w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)
-else:
-    w_samples = None
-    # This is hartmann4
-    # w_samples = torch.tensor([[0.4963, 0.7682],
-    #                           [0.0885, 0.1320],
-    #                           [0.3074, 0.6341],
-    #                           [0.4901, 0.8964],
-    #                           [0.4556, 0.6323],
-    #                           [0.3489, 0.4017],
-    #                           [0.0223, 0.1689],
-    #                           [0.2939, 0.5185],
-    #                           [0.6977, 0.8000],
-    #                           [0.1610, 0.2823]])
-    if w_samples is None:
-        raise ValueError('Specify w_samples!')
+w_samples = getattr(function, 'w_samples')
+# This is hartmann4
+# w_samples = torch.tensor([[0.4963, 0.7682],
+#                           [0.0885, 0.1320],
+#                           [0.3074, 0.6341],
+#                           [0.4901, 0.8964],
+#                           [0.4556, 0.6323],
+#                           [0.3489, 0.4017],
+#                           [0.0223, 0.1689],
+#                           [0.2939, 0.5185],
+#                           [0.6977, 0.8000],
+#                           [0.1610, 0.2823]])
+if w_samples is None:
+    warnings.warn('w_samples is None!')
+    if dim_w == 1:
+        w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)
+    else:
+
+        if w_samples is None:
+            raise ValueError('Specify w_samples!')
+weights = getattr(function, 'weights')
+if weights is None:
+    warnings.warn('weights is None!')
 
 _, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, alpha=alpha, plug_in_w=w_samples, function=function,
-                       dim_x=dim_x, dim_w=dim_w)
+                       dim_x=dim_x, dim_w=dim_w, weights=weights)
 best_value = torch.min(y)
 
 data = torch.load(directory + filename)
@@ -83,7 +88,10 @@ for key in data.keys():
         start = 2 if "=" in sub else 1
         q = int(sub[start:next_]) if next_ > 0 else int(sub[start:])
     else:
-        q = 10
+        if key in ['EI', 'MES', 'qKG', 'UCB', 'classical_random']:
+            q = w_samples.size(0)
+        else:
+            q = 1
     sub_data = data[key]
     inner_keys = list(sub_data.keys())
     for i in range(len(inner_keys)):

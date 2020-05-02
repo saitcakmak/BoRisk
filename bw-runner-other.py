@@ -50,8 +50,10 @@ else:
     w_samples = None
 weights = function.weights
 dim_x = function.dim - dim_w
-num_restarts = 40
+num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
+
+kwargs['num_inner_restarts'] = 5 * dim_x
 kwargs['CVaR'] = False
 kwargs['expectation'] = False
 kwargs['alpha'] = 0.7
