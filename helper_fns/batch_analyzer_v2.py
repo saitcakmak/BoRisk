@@ -45,10 +45,8 @@ if w_samples is None:
     warnings.warn('w_samples is None!')
     if dim_w == 1:
         w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)
-    else:
-
-        if w_samples is None:
-            raise ValueError('Specify w_samples!')
+    elif w_samples is None:
+        raise ValueError('Specify w_samples!')
 weights = getattr(function, 'weights')
 if weights is None:
     warnings.warn('weights is None!')
@@ -146,6 +144,7 @@ for key in output.keys():
             searched_best = search_around(best_found_point, 0.01)
             best_value = min(best_found, best_value, searched_best)
 
+# Comment out to get actual value. Uncomment to get gap
 for key in output.keys():
     output[key]['y'] = output[key]['y'] - best_value
 
@@ -154,8 +153,13 @@ for key in output.keys():
         x = output[key]['x']
         avg_log_gap = torch.mean(torch.log10(output[key]['y']), dim=0)
         std_log_gap = torch.std(torch.log10(output[key]['y']), dim=0)
-        plt.plot(x, avg_log_gap, label=key)
-        plt.fill_between(x, avg_log_gap - std_log_gap, avg_log_gap + std_log_gap, alpha=0.3)
+        avg_gap = torch.mean(output[key]['y'], dim=0)
+        std_gap = torch.std(output[key]['y'], dim=0)
+        # change these to switch between log and value
+        avg = avg_gap
+        std = std_gap
+        plt.plot(x, avg, label=key)
+        plt.fill_between(x, avg - std, avg + std, alpha=0.3)
     except KeyError:
         continue
 

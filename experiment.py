@@ -321,14 +321,36 @@ class BenchmarkExp(Experiment):
             raise ValueError('Some of the solutions are out of bounds!')
         sols = torch.cat((X.repeat(1, self.num_samples, 1), self.w_samples.repeat(X.size(0), 1, 1)), dim=-1)
         vals = self.function(sols)
-        vals, _ = torch.sort(vals, dim=-2)
-        if self.CVaR:
-            values = torch.mean(vals[:, int(self.alpha * self.num_samples):, :], dim=-2)
-        elif self.expectation:
-            values = torch.mean(vals, dim=-2)
+        vals, ind = torch.sort(vals, dim=-2)
+        if self.weights is None:
+            if self.CVaR:
+                values = torch.mean(vals[:, int(self.alpha * self.num_samples):, :], dim=-2)
+            elif self.expectation:
+                values = torch.mean(vals, dim=-2)
+            else:
+                values = vals[:, int(self.alpha * self.num_samples), :]
         else:
-            values = vals[:, int(self.alpha * self.num_samples), :]
-        # Value is negated to get a minimization problem
+            weights = self.weights.reshape(-1)[ind]
+            if self.expectation:
+                values = torch.mean(vals * weights, dim=-2)
+            else:
+                summed_weights = torch.empty(weights.size())
+                summed_weights[..., 0, :] = weights[..., 0, :]
+                for i in range(1, weights.size(-2)):
+                    summed_weights[..., i, :] = summed_weights[..., i - 1, :] + weights[..., i, :]
+                gr_ind = summed_weights >= self.alpha
+                var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1], dtype=torch.long) * weights.size(-2)
+                for i in range(weights.size(-2)):
+                    var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]], torch.tensor([i]))
+                if self.CVaR:
+                    # deletes (zeroes) the non-tail weights
+                    weights = weights * gr_ind
+                    total = (vals * weights).sum(dim=-2)
+                    weight_total = weights.sum(dim=-2)
+                    values = total / weight_total
+                else:
+                    values = torch.gather(vals, dim=-2, index=var_ind).squeeze(-2)
+        # Value is negated to get a minimization problem - the benchmarks are all maximization
         return -values
 
     def initialize_benchmark_gp(self, x_samples: Tensor):

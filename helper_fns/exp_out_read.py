@@ -8,9 +8,10 @@ from time import time
 
 directory = '../exp_output/'
 function_name = 'braninwilliams'
-output_key = 'UCB'
+output_key = 'tts_varkg_q=12'
 suffix = '_var_10fant_6start_%s_' % output_key
-seed_list = [6044, 8239, 4933, 3760, 8963]
+# seed_list = [6044, 8239, 4933, 3760, 8963]
+seed_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 q = 12
 suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
