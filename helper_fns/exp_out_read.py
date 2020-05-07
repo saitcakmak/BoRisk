@@ -8,7 +8,7 @@ from time import time
 
 directory = '../exp_output/'
 function_name = 'braninwilliams'
-output_key = 'tts_varkg_q=12'
+output_key = 'classical_random'
 suffix = '_var_10fant_6start_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
 seed_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]

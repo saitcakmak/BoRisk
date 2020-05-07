@@ -156,8 +156,8 @@ for key in output.keys():
         avg_gap = torch.mean(output[key]['y'], dim=0)
         std_gap = torch.std(output[key]['y'], dim=0)
         # change these to switch between log and value
-        avg = avg_gap
-        std = std_gap
+        avg = avg_log_gap
+        std = std_log_gap
         plt.plot(x, avg, label=key)
         plt.fill_between(x, avg - std, avg + std, alpha=0.3)
     except KeyError:

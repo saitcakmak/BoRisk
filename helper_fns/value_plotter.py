@@ -13,25 +13,24 @@ from test_functions.function_picker import function_picker
 
 # Initialize the test function
 noise_std = 0  # observation noise level - no noise allows for a more precise evaluation
-function_name = 'levy'
+function_name = 'braninwilliams'
 function = function_picker(function_name, noise_std)
 
-# TODO: outdated. Most of these are ignored
-CVaR = True  # if true, calculate CVaR instead of VaR
+CVaR = False  # if true, calculate CVaR instead of VaR
 lb = [0., 0.]
 ub = [1., 1.]
-num_x = 1000
-num_w = 10
+num_x = 100000
+num_w = 12
 d = function.dim  # dimension of train_X
-dim_w = 1  # dimension of w component
-n = 2 * d + 2  # training samples
+w_samples = function.w_samples
+weights = function.weights
+dim_w = 2  # dimension of w component
 dim_x = d - dim_w  # dimension of the x component
-alpha = 0.  # alpha of the risk function
+alpha = 0.7  # alpha of the risk function
 
 
-def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1]):
+def plot(x: Tensor, y: Tensor, lb: List[float] = lb, ub: List[float] = ub):
     """
-    TODO: outdated
     plots the appropriate plot
     :param lb: lower bound
     :param ub: upper bound
@@ -50,16 +49,17 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = [0, 0], ub: List[float] = [1, 1
     plt.xlim(lb[0], ub[0])
     if dim_x == 2:
         plt.ylim(lb[1], ub[1])
-
     if dim_x == 1:
         plt.plot(x.numpy(), y.numpy())
     else:
-        plt.contourf(x.numpy()[..., 0], x.numpy()[..., 1], y.squeeze().numpy())
+        # plt.contourf(x.numpy()[..., 0], x.numpy()[..., 1], y.squeeze().numpy())
+        # plt.colorbar()
+        plt.scatter(x.numpy()[..., 0], x.numpy()[..., 1], c=y.squeeze().numpy())
         plt.colorbar()
     plt.show()
 
 
-def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0, 0], ub: List[float] = [1, 1],
+def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = lb, ub: List[float] = ub,
                     plug_in_w: Tensor = None, function=function, dim_x=dim_x, dim_w=dim_w, alpha=alpha,
                     weights: Tensor = None):
     """
@@ -126,3 +126,8 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
         else:
             values = torch.gather(values, dim=-2, index=var_ind).squeeze(-2)
         return x, values
+
+
+if __name__ == '__main__':
+    x, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, plug_in_w=w_samples, weights=weights)
+    plot(x, y)
