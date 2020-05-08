@@ -17,9 +17,9 @@ function_name = 'braninwilliams'
 function = function_picker(function_name, noise_std)
 
 CVaR = False  # if true, calculate CVaR instead of VaR
-lb = [0., 0.]
-ub = [1., 1.]
-num_x = 100000
+lb = [0.0, 0.0]
+ub = [0.6, 0.6]
+num_x = 1000000
 num_w = 12
 d = function.dim  # dimension of train_X
 w_samples = function.w_samples
@@ -29,7 +29,7 @@ dim_x = d - dim_w  # dimension of the x component
 alpha = 0.7  # alpha of the risk function
 
 
-def plot(x: Tensor, y: Tensor, lb: List[float] = lb, ub: List[float] = ub):
+def plot(x: Tensor, y: Tensor, lb: List[float] = [0., 0.], ub: List[float] = [1., 1.]):
     """
     plots the appropriate plot
     :param lb: lower bound
@@ -59,7 +59,7 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = lb, ub: List[float] = ub):
     plt.show()
 
 
-def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = lb, ub: List[float] = ub,
+def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0., 0.], ub: List[float] = [1., 1.],
                     plug_in_w: Tensor = None, function=function, dim_x=dim_x, dim_w=dim_w, alpha=alpha,
                     weights: Tensor = None):
     """
@@ -84,6 +84,8 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
         x = x.reshape(-1, 1)
     else:
         x = torch.rand((num_x, dim_x))
+        x[..., 0] = x[..., 0] * (ub[0] - lb[0]) + lb[0]
+        x[..., 1] = x[..., 1] * (ub[1] - lb[1]) + lb[1]
 
     # generate w, i.i.d uniform(0, 1)
     if plug_in_w is None:
@@ -129,5 +131,7 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
 
 
 if __name__ == '__main__':
-    x, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, plug_in_w=w_samples, weights=weights)
-    plot(x, y)
+    x, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, plug_in_w=w_samples, weights=weights,
+                           lb=lb, ub=ub)
+    print(x[torch.argmin(y)])
+    plot(x, y, lb, ub)

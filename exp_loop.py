@@ -45,7 +45,7 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
     if kwargs.get('expectation') and "exp" not in filename:
         filename = filename + '_exp'
     if kwargs.get('alpha', 0.7) != 0.7 and "a=" not in filename:
-        filename = filename + '_a=%s' % alpha
+        filename = filename + '_a=%s' % kwargs.get('alpha')
     if kwargs.get('q', 1) > 1 and "q=" not in filename:
         filename = filename + "_q=%d" % kwargs.get('q')
     if not benchmark_alg:
@@ -82,19 +82,18 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
         if benchmark_alg is None:
             exp = Experiment(function=function_name,
                              **kwargs)
-            if 'x_samples' in kwargs.keys():
+            if "init_samples" in kwargs.keys():
+                init_samples = kwargs.get('init_samples')
+            elif 'x_samples' in kwargs.keys():
                 x_samples = kwargs.get('x_samples').reshape(-1, 1, exp.dim_x)
                 init_samples = torch.cat([x_samples.repeat(1, exp.num_samples, 1),
-                                          exp.w_samples.repeat(x_samples.size(0), 1, 1)], dim=-2)
-            else:
-                init_samples = kwargs.get('init_samples')
+                                          exp.w_samples.repeat(x_samples.size(0), 1, 1)], dim=-1)
             exp.initialize_gp(init_samples=init_samples, n=kwargs.get('n'))
-
         else:
             exp = BenchmarkExp(function=function_name,
                                **kwargs)
             # this needs to be a set of x_samples
-            exp.initialize_benchmark_gp(x_samples=kwargs.get('x_samples'))
+            exp.initialize_benchmark_gp(x_samples=kwargs.get('x_samples'), init_w_samples=kwargs.get('init_w_samples'))
             if exp.q != 1:
                 warnings.warn("q != 1 with a benchmark algorithm. Is this intentional!?!")
 

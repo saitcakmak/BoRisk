@@ -108,15 +108,13 @@ class Experiment:
         for key in kwargs.keys():
             setattr(self, key, kwargs[key])
         self.dim_x = self.dim - self.dim_w
-        if 'w_samples' in kwargs.keys():
+        if kwargs.get('w_samples') is not None:
             self.w_samples = kwargs['w_samples'].reshape(-1, self.dim_w)
             self.num_samples = self.w_samples.size(0)
         elif 'num_samples' in kwargs.keys():
             self.num_samples = kwargs['num_samples']
-            if self.dim_w == 1:
-                self.w_samples = torch.linspace(0, 1, self.num_samples).reshape(-1, 1)
-            else:
-                raise ValueError('w_samples must be specified for dim_w > 1.')
+            self.w_samples = None
+            warnings.warn("w_samples is None and will be randomized at each iteration")
         if self.expectation:
             self.num_repetitions = 0
         self.X = torch.empty(0, self.dim)
@@ -201,9 +199,14 @@ class Experiment:
         :param inner_seed: Used for sampling randomness in InnerVaR
         :return: Current best solution and value, and inner VaR for plotting
         """
+        if self.w_samples is None:
+            w_samples = torch.rand(self.num_samples, self.dim_w)
+        else:
+            w_samples = self.w_samples
         self.inner_optimizer.new_iteration()
-        inner_VaR = InnerVaR(inner_seed=inner_seed, **vars(self))
-
+        inner_VaR = InnerVaR(inner_seed=inner_seed,
+                             **{_: vars(self)[_] for _ in vars(self) if _ != 'w_samples'},
+                             w_samples=w_samples)
         if past_only:
             past_x = self.X[:, :self.dim_x]
             with torch.no_grad():
@@ -257,7 +260,7 @@ class Experiment:
                            current_best_VaR=current_best_value,
                            fantasy_seed=fantasy_seed,
                            inner_seed=inner_seed,
-                           **{i: vars(self)[i] for i in vars(self) if i != 'inner_optimizer'})
+                           **{_: vars(self)[_] for _ in vars(self) if _ != 'inner_optimizer'})
             if self.disc:
                 candidate, value = self.optimizer.disc_optimize_outer(var_kg, self.w_samples)
             else:
@@ -310,16 +313,27 @@ class BenchmarkExp(Experiment):
         else:
             self.bounds = torch.tensor([[0.], [1.]]).repeat(1, self.dim)
 
-    def get_obj(self, X: torch.Tensor):
+    def get_obj(self, X: torch.Tensor, w_samples: Tensor = None):
         """
         Returns the objective value (VaR etc) for the given x points
         :param X: Solutions, only the X component
+        :param w_samples: Optional Tensor of w_samples corresponding to X.
+            If given, a set of w_samples required for each X.
+            Size: X.size(0), num_samples, dim_w
         :return: VaR / CVaR values
         """
         X = X.reshape(-1, 1, self.dim_x)
         if (X > 1).any() or (X < 0).any():
             raise ValueError('Some of the solutions are out of bounds!')
-        sols = torch.cat((X.repeat(1, self.num_samples, 1), self.w_samples.repeat(X.size(0), 1, 1)), dim=-1)
+        if w_samples is None:
+            # If w_samples is not given, we assume continuous domain and draw a random set of w_samples
+            if self.w_samples is None:
+                w_samples = torch.rand(self.num_samples, self.dim_w)
+            else:
+                w_samples = self.w_samples
+            sols = torch.cat((X.repeat(1, self.num_samples, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
+        else:
+            sols = torch.cat((X.repeat(1, self.num_samples, 1), w_samples), dim=-1)
         vals = self.function(sols)
         vals, ind = torch.sort(vals, dim=-2)
         if self.weights is None:
@@ -353,13 +367,16 @@ class BenchmarkExp(Experiment):
         # Value is negated to get a minimization problem - the benchmarks are all maximization
         return -values
 
-    def initialize_benchmark_gp(self, x_samples: Tensor):
+    def initialize_benchmark_gp(self, x_samples: Tensor, init_w_samples: Tensor = None):
         """
         Initialize the GP by taking full C/VaR samples from the given x samples.
         :param x_samples: Tensor of x points, broadcastable to num_samples x 1 x dim_x
+        :param init_w_samples: Tensor of w samples corresponding to x_samples. There should be
+            a set of w_samples corresponding to each x_sample.
+            Size: x_samples.size(0), num_samples, dim_w
         """
         self.X = x_samples.reshape(-1, self.dim_x)
-        self.Y = self.get_obj(x_samples)
+        self.Y = self.get_obj(x_samples, init_w_samples)
         self.fit_gp()
 
     def current_best(self, past_only: bool = False, **kwargs):

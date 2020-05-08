@@ -86,7 +86,7 @@ for key in data.keys():
         start = 2 if "=" in sub else 1
         q = int(sub[start:next_]) if next_ > 0 else int(sub[start:])
     else:
-        if key in ['EI', 'MES', 'qKG', 'UCB', 'classical_random']:
+        if key in ['EI', 'MES', 'qKG', 'UCB', 'classical_random', 'EI_long', 'qKG_long']:
             q = w_samples.size(0)
         else:
             q = 1

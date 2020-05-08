@@ -8,7 +8,7 @@ from time import time
 
 directory = '../exp_output/'
 function_name = 'braninwilliams'
-output_key = 'classical_random'
+output_key = 'EI_long'
 suffix = '_var_10fant_6start_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
 seed_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
@@ -17,7 +17,7 @@ suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q >
 
 output_file = '../batch_output/plot_%s_var_10fant_6start' % function_name
 
-iterations = 20
+iterations = 100
 
 
 def read_bests(seed):
