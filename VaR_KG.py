@@ -312,7 +312,7 @@ class AbsKG(MCAcquisitionFunction, ABC):
 
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
-        self.mini_batch_size = kwargs.get('mini_batch_size', 100)
+        self.mini_batch_size = kwargs.get('mini_batch_size', 50)
 
     def tts_reset(self):
         """
@@ -542,9 +542,6 @@ class VaRKG(AbsKG):
         # make sure X has proper shape
         X = X.reshape(-1, self.q, self.dim)
         batch_size = X.size(0)
-
-        # for debugging purposes:
-        print('TtsVaRKG, call %d, batch_size %d' % (self.call_count, batch_size))
 
         # generate w_samples
         if self.fix_samples:

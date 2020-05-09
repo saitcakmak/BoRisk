@@ -243,7 +243,7 @@ class Experiment:
                         inner_seed=inner_seed,
                         **vars(self))
             if self.disc:
-                candidate, value = self.optimizer.disc_optimize_outer(kgcp, self.w_samples)
+                candidate, value = self.optimizer.optimize_outer(kgcp, self.w_samples)
             else:
                 candidate, value = self.optimizer.optimize_outer(kgcp)
         elif self.one_shot:
@@ -262,7 +262,7 @@ class Experiment:
                            inner_seed=inner_seed,
                            **{_: vars(self)[_] for _ in vars(self) if _ != 'inner_optimizer'})
             if self.disc:
-                candidate, value = self.optimizer.disc_optimize_outer(var_kg, self.w_samples)
+                candidate, value = self.optimizer.optimize_outer(var_kg, self.w_samples)
             else:
                 candidate, value = self.optimizer.optimize_outer(var_kg)
         candidate = candidate.cpu().detach()
