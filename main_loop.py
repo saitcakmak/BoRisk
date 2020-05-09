@@ -250,7 +250,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                             weights=weights)
                 opt_start = time()
                 if disc:
-                    candidate, value = optimizer.disc_optimize_outer(kgcp, w_samples)
+                    candidate, value = optimizer.optimize_outer(kgcp, w_samples)
                 else:
                     candidate, value = optimizer.optimize_outer(kgcp)
                 opt_time += time() - opt_start
@@ -267,7 +267,7 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                                    weights=weights)
                     opt_start = time()
                     if disc:
-                        candidate, value = optimizer.disc_optimize_outer(var_kg, w_samples)
+                        candidate, value = optimizer.optimize_outer(var_kg, w_samples)
                     else:
                         candidate, value = optimizer.optimize_outer(var_kg)
                     opt_time += time() - opt_start

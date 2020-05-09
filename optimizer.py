@@ -352,56 +352,8 @@ class Optimizer:
         best = torch.argmax(values)
         return solutions[best], values[best]
 
-    def generate_outer_restart_points(self, acqf: Union[VaRKG, KGCP]) -> Tensor:
-        """
-        Generates the restarts points for KGCP or VaRKG
-        :param acqf: The acquisition function being optimized
-        :return: restart points
-        """
-        X = draw_sobol_samples(bounds=self.outer_bounds, n=self.raw_samples, q=self.q)
-        with torch.no_grad():
-            Y = acqf(X).detach()
-        Y_std = Y.std()
-        max_val, max_idx = torch.max(Y, dim=0)
-        Z = (Y - Y.mean()) / Y_std
-        etaZ = self.eta * Z
-        weights = torch.exp(etaZ)
-        while torch.isinf(weights).any():
-            etaZ *= 0.5
-            weights = torch.exp(etaZ)
-        idcs = torch.multinomial(weights, self.num_restarts)
-        # make sure we get the maximum
-        if max_idx not in idcs:
-            idcs[-1] = max_idx
-        return X[idcs]
-
-    def optimize_outer(self, acqf: Union[VaRKG, KGCP]) -> Tuple[Tensor, Tensor]:
-        """
-        Optimizes the KGCP or VaRKG in a pretty standard way.
-        :param acqf: the KGCP, Nested or Tts object
-        :return: Optimal solution and value
-        """
-        initial_conditions = self.generate_outer_restart_points(acqf)
-        options = {'maxiter': self.maxiter}
-
-        acqf.tts_reset()
-        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
-                                                 acquisition_function=acqf,
-                                                 lower_bounds=self.outer_bounds[0],
-                                                 upper_bounds=self.outer_bounds[1],
-                                                 options=options)
-        _, idx = torch.sort(values)
-        acqf.tts_reset()
-        solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
-                                                 acquisition_function=acqf,
-                                                 lower_bounds=self.outer_bounds[0],
-                                                 upper_bounds=self.outer_bounds[1],
-                                                 options=options)
-        best = torch.argmax(values)
-        return solutions[best].cpu().detach(), values[best].cpu().detach()
-
-    def disc_generate_outer_restart_points(self, acqf: Union[VaRKG, KGCP],
-                                           w_samples: Tensor) -> Tensor:
+    def generate_outer_restart_points(self, acqf: Union[VaRKG, KGCP],
+                                      w_samples: Tensor = None) -> Tensor:
         """
         Generates the restarts points for KGCP or VaRKG
         :param acqf: The acquisition function being optimized
@@ -409,8 +361,9 @@ class Optimizer:
         :return: restart points
         """
         X = draw_sobol_samples(bounds=self.outer_bounds, n=self.raw_samples, q=self.q)
-        w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
-        X[..., self.dim_x:] = w_samples[w_ind, :]
+        if w_samples is not None:
+            w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
+            X[..., self.dim_x:] = w_samples[w_ind, :]
         with torch.no_grad():
             Y = acqf(X).detach()
         Y_std = Y.std()
@@ -427,22 +380,25 @@ class Optimizer:
             idcs[-1] = max_idx
         return X[idcs]
 
-    def disc_optimize_outer(self, acqf: Union[VaRKG, KGCP],
-                            w_samples: Tensor, batch_size: int = 10) -> Tuple[Tensor, Tensor]:
+    def optimize_outer(self, acqf: Union[VaRKG, KGCP],
+                       w_samples: Tensor = None, batch_size: int = 10) -> Tuple[Tensor, Tensor]:
         """
         KGCP, Nested or Tts optimizer with w component restricted to w_samples
         :param acqf: KGCP or VaRKG object
-        :param w_samples: the set W to consider
+        :param w_samples: the set W to consider. If None, assumes continuous optimization.
         # TODO adjust the default and specify this outside
         :param batch_size: We will do the optimization in mini batches to save on memory
         :return: Optimal solution and value
         """
-        initial_conditions = self.disc_generate_outer_restart_points(acqf, w_samples)
+        initial_conditions = self.generate_outer_restart_points(acqf, w_samples)
         options = {'maxiter': self.maxiter}
-        fixed_features = dict()
-        for j in range(self.q):
-            for i in range(self.dim_x, self.dim):
-                fixed_features[j * self.dim + i] = None
+        if w_samples is not None:
+            fixed_features = dict()
+            for j in range(self.q):
+                for i in range(self.dim_x, self.dim):
+                    fixed_features[j * self.dim + i] = None
+        else:
+            fixed_features = None
 
         acqf.tts_reset()
         init_size = initial_conditions.size(0)
