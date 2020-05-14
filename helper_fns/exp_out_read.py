@@ -7,15 +7,15 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'braninwilliams'
-output_key = 'EI_long'
-suffix = '_var_10fant_6start_%s_' % output_key
+function_name = 'marzat'
+output_key = 'tts_kgcp_q=1'
+suffix = '_cvar_10fant_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
 seed_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-q = 12
-suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
+q = 1
+suffix2 = '_a=0.75_cont%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
-output_file = '../batch_output/plot_%s_var_10fant_6start' % function_name
+output_file = '../batch_output/plot_%s_cvar_10fant_a=0.75' % function_name
 
 iterations = 100
 
