@@ -31,7 +31,7 @@ bm_alg_list = [ExpectedImprovement,
 q_base = 8  # q for VaRKG. For others, it is q_base / num_samples
 iterations = 25
 
-seed_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+seed_list = range(1, 31)
 
 output_file = "%s_%s" % (function_name, "cvar_10fant")
 torch.manual_seed(0)  # to ensure the produced seed are same!
