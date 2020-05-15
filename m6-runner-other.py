@@ -29,7 +29,7 @@ bm_alg_list = [ExpectedImprovement,
                UpperConfidenceBound,
                ]
 q_base = 8  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 25
+iterations = 50
 
 seed_list = range(1, 31)
 

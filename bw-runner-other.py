@@ -31,7 +31,7 @@ bm_alg_list = [ExpectedImprovement,
                qKnowledgeGradient
                ]
 q_base = 12  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 20
+iterations = 50
 
 seed_list = range(1,31)
 
