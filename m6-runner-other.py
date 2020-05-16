@@ -15,7 +15,7 @@ from test_functions.function_picker import function_picker
 # Modify this and make sure it does what you want!
 
 function_name = 'marzat'
-num_samples = 8  # TODO: this is 40 for varkg / kgcp and 8 for benchmarks
+num_samples = 8  # this is 40 for varkg / kgcp and 8 for benchmarks
 num_fantasies = 10  # default 50
 key_list = ['EI',
             'MES',

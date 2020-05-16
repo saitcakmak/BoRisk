@@ -8,7 +8,6 @@ random variables.
 """
 import torch
 from time import time
-from botorch.acquisition import AcquisitionFunction
 from experiment import Experiment, BenchmarkExp
 import warnings
 from botorch.acquisition import (

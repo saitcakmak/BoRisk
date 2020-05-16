@@ -7,17 +7,17 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'marzat'
-output_key = 'tts_kgcp_q=1'
-suffix = '_cvar_10fant_%s_' % output_key
+function_name = 'braninwilliams'
+output_key = 'classical_random'
+suffix = '_var_10fant_6start_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
-seed_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-q = 1
-suffix2 = '_a=0.75_cont%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
+seed_list = range(1, 31)
+q = 1  # only used in the next line
+suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
-output_file = '../batch_output/plot_%s_cvar_10fant_a=0.75' % function_name
+output_file = '../batch_output/plot_%s_var' % function_name
 
-iterations = 100
+iterations = 50
 
 
 def read_bests(seed):
@@ -27,15 +27,28 @@ def read_bests(seed):
     data_0 = data[0]
     current_best_list = torch.empty((iterations + 1, 1, data_0['dim_x']))
     current_best_value_list = torch.empty((iterations + 1, 1, 1))
-    for i in range(iterations):
+    # Here we check if there's more than necessary data. If so, adjustments are made
+    # to read only the necessary parts. This is also one way to get around key not found issue
+    # when trying to read partial output
+    max_iter = max((key for key in data.keys() if isinstance(key, int)))
+    final = 'final_solution' in data.keys()
+    if max_iter + final > iterations:
+        temp_iter = iterations + 1
+    elif max_iter + final == iterations and final:
+        temp_iter = iterations
+    else:
+        print('seed %d is not run to completion' % seed)
+        return None
+    for i in range(temp_iter):
         try:
             current_best_list[i] = data[i]['current_best_sol']
             current_best_value_list[i] = data[i]['current_best_value']
         except KeyError:
             print('seed %d is not run to completion' % seed)
             return None
-    current_best_list[-1] = data['final_solution']
-    current_best_value_list[-1] = data['final_value']
+    if temp_iter == iterations:
+        current_best_list[-1] = data['final_solution']
+        current_best_value_list[-1] = data['final_value']
 
     output = {'current_best': current_best_list,
               'current_best_value': current_best_value_list}
