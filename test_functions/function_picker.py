@@ -8,6 +8,7 @@ from test_functions.cont_newsvendor import ContinuousNewsvendor
 from test_functions.prod_line import ProductionLine
 from test_functions.branin_williams import BraninWilliams
 from test_functions.robust_synthetic import Marzat6
+from test_functions.cvx_portfolio_simulator import CVXPortfolioSimulator
 from botorch.test_functions import (Ackley,
                                     Beale,
                                     Branin,
@@ -37,7 +38,8 @@ function_dict = {"simplequad": SimpleQuadratic,
                  "sixhumpcamel": SixHumpCamel,
                  "threehumpcamel": ThreeHumpCamel,
                  "braninwilliams": BraninWilliams,
-                 "marzat": Marzat6}
+                 "marzat": Marzat6,
+                 "portfolio": CVXPortfolioSimulator}
 
 
 def function_picker(function_name: str, noise_std: float = 0.1,

@@ -14,7 +14,7 @@ directory = "../batch_output/"
 function_name = 'braninwilliams'
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var_10fant_6start'
+suffix = '_var'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 2
 CVaR = False
@@ -25,9 +25,11 @@ if 'exp' in filename:
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
-num_x = 1000000
+num_x = 10000
 num_w = 12
 num_plot = 10  # max number of plot lines in a figure
+w_batch_size = 12
+# this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
 
 w_samples = getattr(function, 'w_samples')
 # This is hartmann4
@@ -41,6 +43,8 @@ w_samples = getattr(function, 'w_samples')
 #                           [0.2939, 0.5185],
 #                           [0.6977, 0.8000],
 #                           [0.1610, 0.2823]])
+if function_name == 'marzat':
+    w_samples = torch.rand(num_w, dim_w)
 if w_samples is None:
     warnings.warn('w_samples is None!')
     if dim_w == 1:
@@ -87,7 +91,7 @@ for key in data.keys():
         q = int(sub[start:next_]) if next_ > 0 else int(sub[start:])
     else:
         if key in ['EI', 'MES', 'qKG', 'UCB', 'classical_random', 'EI_long', 'qKG_long']:
-            q = w_samples.size(0)
+            q = w_batch_size
         else:
             q = 1
     sub_data = data[key]
@@ -143,7 +147,10 @@ for key in output.keys():
             best_found_point = data[key][list(data[key].keys())[out_ind]]['current_best'][in_ind[out_ind]]
             searched_best = search_around(best_found_point, 0.01)
             best_value = min(best_found, best_value, searched_best)
-
+# If the key has no output, remove it.
+for key in output.keys():
+    if output[key].keys() == dict().keys():
+        output.pop(key)
 # Comment out to get actual value. Uncomment to get gap
 for key in output.keys():
     output[key]['y'] = output[key]['y'] - best_value
@@ -168,4 +175,3 @@ plt.title(filename + ' avg log gap')
 plt.grid(True)
 plt.legend()
 plt.show()
-pass
