@@ -381,7 +381,7 @@ class Optimizer:
         return X[idcs]
 
     def optimize_outer(self, acqf: Union[VaRKG, KGCP],
-                       w_samples: Tensor = None, batch_size: int = 10) -> Tuple[Tensor, Tensor]:
+                       w_samples: Tensor = None, batch_size: int = 2) -> Tuple[Tensor, Tensor]:
         """
         KGCP, Nested or Tts optimizer with w component restricted to w_samples
         :param acqf: KGCP or VaRKG object

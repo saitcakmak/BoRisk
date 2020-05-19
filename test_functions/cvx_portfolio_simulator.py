@@ -48,6 +48,7 @@ class CVXPortfolioSimulator(SyntheticTestFunction):
     def _evaluate_with_unscaled_input(self, gamma_risk, gamma_tcost, gamma_holding, bid_ask_spread, borrow_cost):
 
         # Set up requirements for portfolio simulation
+        self.experiment_id = str(int(torch.randint(1, 100000, torch.Size([1]))))
         sigmas = pd.read_csv(self.datadir + 'sigmas.csv.gz', index_col=0, parse_dates=[0]).iloc[:, :-1]
         returns = pd.read_csv(self.datadir + 'returns.csv.gz', index_col=0, parse_dates=[0])
         volumes = pd.read_csv(self.datadir + 'volumes.csv.gz', index_col=0, parse_dates=[0]).iloc[:, :-1]
@@ -97,4 +98,5 @@ class CVXPortfolioSimulator(SyntheticTestFunction):
         for k in results.keys():
             returns = results[k].excess_returns.to_numpy()
         returns = returns[:-1]
+        subprocess.call(['bash', self.script_dir + '/delete_copy_of_risk_model.sh', self.datadir + copy_of_risk_model_name])
         return np.mean(returns) * 100 * 250
