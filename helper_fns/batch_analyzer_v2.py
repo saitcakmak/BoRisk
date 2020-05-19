@@ -11,14 +11,14 @@ from scipy.optimize import minimize
 import warnings
 
 directory = "../batch_output/"
-function_name = 'braninwilliams'
+function_name = 'portfolio'
 prefix = 'plot_'
 # prefix = ''
 suffix = '_var'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 2
 CVaR = False
-alpha = 0.7
+alpha = 0.8
 if 'exp' in filename:
     CVaR = True
     alpha = 0.
@@ -26,9 +26,9 @@ function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
 num_x = 10000
-num_w = 12
+num_w = 10000
 num_plot = 10  # max number of plot lines in a figure
-w_batch_size = 12
+w_batch_size = 10
 # this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
 
 w_samples = getattr(function, 'w_samples')
@@ -43,7 +43,7 @@ w_samples = getattr(function, 'w_samples')
 #                           [0.2939, 0.5185],
 #                           [0.6977, 0.8000],
 #                           [0.1610, 0.2823]])
-if function_name == 'marzat':
+if function_name in ['marzat', 'portfolio']:
     w_samples = torch.rand(num_w, dim_w)
 if w_samples is None:
     warnings.warn('w_samples is None!')

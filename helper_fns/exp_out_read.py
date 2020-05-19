@@ -7,24 +7,27 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'braninwilliams'
-output_key = 'classical_random'
-suffix = '_var_10fant_6start_%s_' % output_key
+function_name = 'portfolio'
+output_key = 'random'
+suffix = '_var_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
-seed_list = range(1, 31)
+seed_list = range(1, 11)
 q = 1  # only used in the next line
-suffix2 = '%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
+suffix2 = '_a=0.8_cont%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
 output_file = '../batch_output/plot_%s_var' % function_name
 
-iterations = 50
+iterations = 100
 
 
 def read_bests(seed):
     start = time()
     filename = directory + function_name + suffix + str(seed) + suffix2
     data = torch.load(filename)
-    data_0 = data[0]
+    try:
+        data_0 = data[0]
+    except KeyError:
+        return None
     current_best_list = torch.empty((iterations + 1, 1, data_0['dim_x']))
     current_best_value_list = torch.empty((iterations + 1, 1, 1))
     # Here we check if there's more than necessary data. If so, adjustments are made

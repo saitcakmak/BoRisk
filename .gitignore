@@ -133,3 +133,9 @@ dmypy.json
 
 # Pyre type checker
 .pyre/
+
+
+/exp_output/branin/
+/exp_output/bw-mistake/
+/exp_output/levy/
+/exp_output/hartmann4/
