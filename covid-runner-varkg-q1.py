@@ -12,50 +12,40 @@ from botorch.acquisition import (
 )
 from test_functions.function_picker import function_picker
 
-torch.multinomial()
-
 # Modify this and make sure it does what you want!
 
-function_name = 'portfolio'
-num_samples = 40  # this is 40 for varkg / kgcp and 10 for benchmarks
+function_name = 'covid'
+num_samples = 27  # 10 for benchmarks and starting
+# TODO: the partial sampling from discrete W needs to be worked out for benchmarks
+#   do this without resampling to avoid numerical issues
+#   torch.multinomial? - done here, do this for benchmarks too!
 num_fantasies = 10  # default 50
-key_list = ['tts_kgcp_q=1']
+key_list = ['tts_varkg_q=1'
+            ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 100
+iterations = 40
 
-import sys
-seed_list = [int(sys.argv[1])]
-#seed_list = range(1, 11)
+seed_list = range(1, 11)
 
-output_file = "%s_%s" % (function_name, "var")
+output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
-dim_w = 2
-kwargs['noise_std'] = 0.1
-kwargs['negate'] = True  # True if the function is written for maximization, e.g. portfolio
+dim_w = 3
+kwargs['noise_std'] = None  # noise is built in to the simulator
 function = function_picker(function_name)
-kwargs['fix_sampless'] = True  # This should be true. We will just pass None for w_samples to get random samples
-if dim_w > 1:
-    w_samples = None
-    # w_samples = function.w_samples
-    # bypass this. W_samples will be drawn randomly within the algorithm
-    # if w_samples is None:
-    #     raise ValueError('Specify w_samples!')
-else:
-    w_samples = None
+w_samples = function.w_samples
 weights = function.weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
 
 kwargs['num_inner_restarts'] = 5 * dim_x
-kwargs['CVaR'] = False
-kwargs['expectation'] = False
-kwargs['alpha'] = 0.8
-kwargs['disc'] = False
-num_x_samples = 8
+kwargs['CVaR'] = True
+kwargs['alpha'] = 0.9
+kwargs['disc'] = True
+num_x_samples = 6000
 num_init_w = 10
 
 output_path = "batch_output/%s" % output_file
@@ -82,7 +72,13 @@ for i, key in enumerate(key_list):
             old_state = torch.random.get_rng_state()
             torch.manual_seed(seed)
             x_samples = torch.rand(num_x_samples, dim_x)
-            init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
+            if w_samples is None:
+                init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
+            elif w_samples.size(0) >= num_init_w and weights is not None:
+                idx = torch.multinomial(weights.repeat(num_x_samples, 1), num_init_w)
+                init_w_samples = w_samples[idx]
+            else:
+                raise NotImplementedError
             kwargs['x_samples'] = x_samples
             kwargs['init_w_samples'] = init_w_samples
             kwargs['init_samples'] = torch.cat((x_samples.unsqueeze(-2).repeat(1, num_init_w, 1),

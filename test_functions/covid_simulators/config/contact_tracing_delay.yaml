@@ -1,0 +1,4 @@
+ntrajectories: 250
+time_horizon: 112
+param_to_vary: contact_tracing_delay
+parameter_values: [0,1,2,3,4,5,6,7]

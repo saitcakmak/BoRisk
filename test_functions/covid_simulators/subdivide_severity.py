@@ -31,17 +31,17 @@ def subdivide_severity(prob_severity_given_age, prob_infection, prob_age):
 if __name__ == '__main__':
 
 	# Example usage below. We have 5 age groups and 4 severity levels
-	age_group_1_severity_dist = [0.25, 0.6, 0.1, 0.05]
-	age_group_2_severity_dist = [0.15, 0.65, 0.15, 0.05]
-	age_group_3_severity_dist = [0.1, 0.5, 0.3, 0.1]
-	age_group_4_severity_dist = [0, 0.45, 0.4, 0.15]
-	age_group_5_severity_dist = [0, 0.3, 0.5, 0.2]
+	age_group_1_severity_dist = [0.1, 0.88, 0.02, 0]
+	age_group_2_severity_dist = [0.1, 0.7, 0.15, 0.05]
+	age_group_3_severity_dist = [0.05, 0.7, 0.15, 0.1]
+	age_group_4_severity_dist = [0.05, 0.6, 0.2, 0.15]
+	age_group_5_severity_dist = [0, 0.4, 0.3, 0.3]
 
 	prob_severity_given_age = np.array([age_group_1_severity_dist,age_group_2_severity_dist,age_group_3_severity_dist,age_group_4_severity_dist,age_group_5_severity_dist])
 
 	# Probability of infection from close contact by age group
-	prob_infection = np.array([0.01, 0.02, 0.03, 0.04, 0.05])
+	prob_infection = np.array([0.018, 0.022, 0.029, 0.042, 0.042])
 
 	# Distribution of age groups
-	prob_age = np.array([0.05, 0.2, 0.25, 0.25, 0.25])
+	prob_age = np.array([0, 0.6589, 0.3171, 0.0207, 0.033])
 	print(subdivide_severity(prob_severity_given_age, prob_infection, prob_age))

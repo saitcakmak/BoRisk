@@ -1,0 +1,4 @@
+ntrajectories: 250
+time_horizon: 112
+param_to_vary: expected_contacts_per_day
+parameter_values: [7,8,9,10,11,12,13,14,15,16,17,18,19,20,30,40,50]

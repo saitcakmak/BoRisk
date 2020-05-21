@@ -3,8 +3,25 @@ import matplotlib.pyplot as plt
 plt.rcParams['font.size'] = 12
 import numpy as np
 from scipy.stats import geom, poisson
+import pandas as pd
+import os
 
 import functools
+
+# load the dataframes saved to disk by the run_sims.py script
+def load_sim_dir(sim_dir, verbose=True):
+    subfolders = [f.path for f in os.scandir(sim_dir) if f.is_dir()]
+    sim_dfs = {}
+    for folder in subfolders:
+        folder_name = folder.split('/')[-1]
+        sim_dfs[folder_name] = []
+        for f in os.scandir(folder):
+            if f.path.split('.')[-1] == 'csv':
+                sim_dfs[folder_name].append(pd.read_csv(f.path, index_col=0))
+        if verbose:
+            print("done loading {}".format(folder_name))
+    return sim_dfs
+
 
 #@functools.lru_cache(maxsize=128)
 def poisson_pmf(max_time, mean_time):

@@ -11,14 +11,14 @@ from scipy.optimize import minimize
 import warnings
 
 directory = "../batch_output/"
-function_name = 'portfolio'
+function_name = 'marzat'
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var'
+suffix = '_cvar'
 filename = '%s%s%s' % (prefix, function_name, suffix)
-dim_w = 2
-CVaR = False
-alpha = 0.8
+dim_w = 3
+CVaR = True
+alpha = 0.75
 if 'exp' in filename:
     CVaR = True
     alpha = 0.
@@ -26,9 +26,9 @@ function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
 num_x = 10000
-num_w = 10000
+num_w = 1000
 num_plot = 10  # max number of plot lines in a figure
-w_batch_size = 10
+w_batch_size = 8
 # this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
 
 w_samples = getattr(function, 'w_samples')

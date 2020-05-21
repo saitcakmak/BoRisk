@@ -3,7 +3,6 @@ from torch import Tensor
 from botorch.test_functions.synthetic import SyntheticTestFunction
 
 
-# noinspection PyArgumentList
 class StandardizedFunction:
     """
     the SyntheticTestFunctions of BoTorch have various bounded domains.
@@ -56,9 +55,7 @@ class StandardizedFunction:
         :param X: Solutions from the relative scale of [0, 1]
         :return: function value
         """
-        if self.reduce_dim:
-            X = X[..., :-1]
         shape = list(X.size())
         shape[-1] = 1
         X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
-        return self.function.evaluate_true(X).unsqueeze(-1)
+        return self.function.evaluate_true(X).reshape(shape)

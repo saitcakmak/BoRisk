@@ -1,0 +1,11 @@
+base_params_to_update:
+    initial_E_count: 0
+    initial_pre_ID_count: 0
+    initial_ID_count: 0
+    initial_SyID_mild_count: 0
+    initial_SyID_severe_count: 0
+
+ntrajectories: 250
+time_horizon: 112
+param_to_vary: initial_ID_prevalence
+parameter_values: [0.0001,0.0005,0.001,0.005,0.01,0.05]
