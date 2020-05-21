@@ -13,7 +13,7 @@ from botorch.acquisition import (
 from test_functions.function_picker import function_picker
 
 # Modify this and make sure it does what you want!
-
+# TODO: not ready
 function_name = 'covid'
 num_samples = 27  # 10 for benchmarks and starting
 # TODO: the partial sampling from discrete W needs to be worked out for benchmarks
@@ -25,7 +25,7 @@ key_list = ['tts_varkg_q=1'
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 40
+iterations = 60
 
 seed_list = range(1, 11)
 
@@ -38,14 +38,14 @@ function = function_picker(function_name)
 w_samples = function.w_samples
 weights = function.weights
 dim_x = function.dim - dim_w
-num_restarts = 10 * function.dim
-raw_multiplier = 50  # default 50
+num_restarts = 1 * function.dim
+raw_multiplier = 5  # default 50
 
 kwargs['num_inner_restarts'] = 5 * dim_x
 kwargs['CVaR'] = True
 kwargs['alpha'] = 0.9
 kwargs['disc'] = True
-num_x_samples = 6000
+num_x_samples = 6
 num_init_w = 10
 
 output_path = "batch_output/%s" % output_file
@@ -69,9 +69,22 @@ for i, key in enumerate(key_list):
         else:
             tts_frequency = 1
         if num_x_samples:
+            # constrained initialization - only uses the first constraint if exists
             old_state = torch.random.get_rng_state()
             torch.manual_seed(seed)
             x_samples = torch.rand(num_x_samples, dim_x)
+            if function.inequality_constraints is not None:
+                ineq = function.inequality_constraints[0]
+                ineq_ind = ineq[0]
+                ineq_coef = ineq[1]
+                ineq_rhs = ineq[2]
+                while True:
+                    num_violated = torch.sum(torch.sum(x_samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs)
+                    if num_violated == 0:
+                        break
+                    violated_ind = torch.sum(x_samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs
+                    x_samples[violated_ind.nonzero(), ..., ineq_ind] = torch.rand(sum(violated_ind), len(ineq_ind))
+
             if w_samples is None:
                 init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
             elif w_samples.size(0) >= num_init_w and weights is not None:

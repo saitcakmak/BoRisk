@@ -1,4 +1,4 @@
-from typing import Tuple, Optional, Union
+from typing import Tuple, Optional, Union, List
 import torch
 from botorch import settings
 from botorch.acquisition import MCAcquisitionFunction
@@ -7,6 +7,41 @@ from botorch.utils import draw_sobol_samples, standardize
 from torch import Tensor
 from VaR_KG import OneShotVaRKG, InnerVaR, VaRKG, KGCP
 from math import ceil
+
+
+def draw_constrained_sobol(bounds: Tensor, n: int, q: int, seed: Optional[int] = None,
+                           inequality_constraints: List[Tuple] = None):
+    """
+    Draws sobol samples, taking into account ONLY the first constraint, if one is given
+    :param bounds: for these, see botorch.draw_sobol
+    :param n:
+    :param q:
+    :param seed:
+    :param inequality_constraints: inequality constraints for optimization, only first one used
+    :return:
+    """
+    samples = draw_sobol_samples(bounds=bounds, n=n, q=q, seed=seed)
+    if inequality_constraints is None:
+        return samples
+    if len(inequality_constraints) > 1:
+        raise NotImplementedError('Multiple inequality constraints is not handled!')
+    if q > 1:
+        raise NotImplementedError
+    ineq = inequality_constraints[0]
+    ineq_ind = ineq[0]
+    ineq_coef = ineq[1]
+    ineq_rhs = ineq[2]
+    while True:
+        if seed is not None:
+            seed = seed + 1
+        num_violated = torch.sum(torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs)
+        if num_violated == 0:
+            break
+        violated_ind = torch.sum(torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1), dim=-1) < ineq_rhs
+        samples[:-num_violated] = samples[~violated_ind]
+        samples[-num_violated:] = draw_sobol_samples(bounds=bounds,
+                                                    n=int(num_violated), q=q, seed=seed)
+    return samples
 
 
 class Optimizer:
@@ -42,6 +77,7 @@ class Optimizer:
 
     def __init__(self, num_restarts: int, raw_multiplier: int,
                  num_fantasies: int, dim: int, dim_x: int, q: int = 1,
+                 inequality_constraints: List[Tuple] = None,
                  random_frac: float = 0.4,
                  limiter: float = 10, eta: float = 2.0,
                  maxiter: int = 100, periods: int = 20):
@@ -53,6 +89,7 @@ class Optimizer:
         :param dim: Dimension of the full problem
         :param dim_x: Dimension of the inner problem
         :param q: Number of parallel evaluations
+        :param inequality_constraints: Passed to the solver
         :param random_frac: Minimum fraction of random raw samples
         :param limiter: A maximum of limiter * raw_samples old solutions is
                         preserved. Whenever this is exceeded, the excess
@@ -86,6 +123,7 @@ class Optimizer:
         self.maxiter = maxiter
         self.periods = periods
         self.current_best = None
+        self.inequality_constraints = inequality_constraints
 
     def generate_inner_raw_samples(self) -> Tensor:
         """
@@ -93,17 +131,20 @@ class Optimizer:
         :return: raw samples
         """
         if self.inner_solutions is None:
-            return draw_sobol_samples(bounds=self.inner_bounds, n=self.raw_samples, q=1)
+            return draw_constrained_sobol(bounds=self.inner_bounds, n=self.raw_samples, q=1,
+                                          inequality_constraints=self.inequality_constraints)
         elif self.inner_solutions.size(0) < (1 - self.random_frac) * self.raw_samples:
             num_reused = self.inner_solutions.size(0)
             num_remaining = self.raw_samples - num_reused
-            random_samples = draw_sobol_samples(bounds=self.inner_bounds, n=num_remaining, q=1)
+            random_samples = draw_constrained_sobol(bounds=self.inner_bounds, n=num_remaining, q=1,
+                                                    inequality_constraints=self.inequality_constraints)
             return torch.cat((self.inner_solutions.unsqueeze(-2), random_samples), dim=0)
         else:
             reused = self.inner_solutions[torch.randperm(n=self.inner_solutions.size(0))][:self.raw_samples].unsqueeze(
                 -2)
-            random_samples = draw_sobol_samples(bounds=self.inner_bounds,
-                                                n=int(self.raw_samples * self.random_frac), q=1)
+            random_samples = draw_constrained_sobol(bounds=self.inner_bounds,
+                                                    n=int(self.raw_samples * self.random_frac), q=1,
+                                                    inequality_constraints=self.inequality_constraints)
             return torch.cat((reused, random_samples), dim=0)
 
     def generate_inner_restart_points(self, acqf: InnerVaR) -> Tensor:
@@ -140,7 +181,8 @@ class Optimizer:
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.inner_bounds[0],
                                                  upper_bounds=self.inner_bounds[1],
-                                                 options={'maxiter': self.maxiter})
+                                                 options={'maxiter': self.maxiter},
+                                                 inequality_constraints=self.inequality_constraints)
         solutions = solutions.cpu().detach()
         values = values.cpu().detach()
         self.add_inner_solutions(solutions.detach(), values.detach())
@@ -188,7 +230,8 @@ class Optimizer:
                                                      acquisition_function=acqf,
                                                      lower_bounds=self.full_bounds[0],
                                                      upper_bounds=self.full_bounds[1],
-                                                     options=options)
+                                                     options=options,
+                                                     inequality_constraints=self.inequality_constraints)
             self.add_full_solutions(solutions, values)
         # add the resulting solutions to be used for next iteration. Normalizing in the end to get - VaR value
         self.add_inner_solutions(solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
@@ -200,7 +243,8 @@ class Optimizer:
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.full_bounds[0],
                                                  upper_bounds=self.full_bounds[1],
-                                                 options=options)
+                                                 options=options,
+                                                 inequality_constraints=self.inequality_constraints)
         # add the resulting solutions to be used for next iteration. Normalizing in the end to get - VaR value
         self.add_inner_solutions(solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
                                  values.reshape(-1) - self.current_best)
@@ -216,6 +260,8 @@ class Optimizer:
         :param X_outer: The outer solution to evaluate. This should convert to 1 x (q x d)
         :return: Value at the given outer solution
         """
+        if self.inequality_constraints is not None:
+            raise NotImplementedError("one-shot is not implemented with constraints")
         X_outer = X_outer.reshape(1, self.q * self.dim)
         # generate the restart points
         X = draw_sobol_samples(bounds=self.full_bounds, n=self.raw_samples, q=self.q)
@@ -289,6 +335,8 @@ class Optimizer:
         :param acqf: the VaRKG object
         :return: Optimal solution and value
         """
+        if self.inequality_constraints is not None:
+            raise NotImplementedError("one-shot is not implemented with constraints")
         initial_conditions = self.generate_simple_OSVaRKG_restart_points(acqf)
         options = {'maxiter': self.maxiter}
 
@@ -313,6 +361,8 @@ class Optimizer:
         :param w_samples: w_samples to optimize over
         :return: Optimal solution and value
         """
+        if self.inequality_constraints is not None:
+            raise NotImplementedError("one-shot is not implemented with constraints")
         # make sure the cache of solutions is cleared
         if self.fant_sols is not None:
             self.new_iteration()
@@ -360,7 +410,8 @@ class Optimizer:
         :param w_samples: the list of w samples to use
         :return: restart points
         """
-        X = draw_sobol_samples(bounds=self.outer_bounds, n=self.raw_samples, q=self.q)
+        X = draw_constrained_sobol(bounds=self.outer_bounds, n=self.raw_samples, q=self.q,
+                                   inequality_constraints=self.inequality_constraints)
         if w_samples is not None:
             w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
             X[..., self.dim_x:] = w_samples[w_ind, :]
@@ -381,7 +432,7 @@ class Optimizer:
         return X[idcs]
 
     def optimize_outer(self, acqf: Union[VaRKG, KGCP],
-                       w_samples: Tensor = None, batch_size: int = 2) -> Tuple[Tensor, Tensor]:
+                       w_samples: Tensor = None, batch_size: int = 10) -> Tuple[Tensor, Tensor]:
         """
         KGCP, Nested or Tts optimizer with w component restricted to w_samples
         :param acqf: KGCP or VaRKG object
@@ -417,7 +468,8 @@ class Optimizer:
                                      lower_bounds=self.outer_bounds[0],
                                      upper_bounds=self.outer_bounds[1],
                                      options=options,
-                                     fixed_features=fixed_features)
+                                     fixed_features=fixed_features,
+                                     inequality_constraints=self.inequality_constraints)
         _, idx = torch.sort(values)
         acqf.tts_reset()
         solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
@@ -425,7 +477,8 @@ class Optimizer:
                                                  lower_bounds=self.outer_bounds[0],
                                                  upper_bounds=self.outer_bounds[1],
                                                  options=options,
-                                                 fixed_features=fixed_features)
+                                                 fixed_features=fixed_features,
+                                                 inequality_constraints=self.inequality_constraints)
         best = torch.argmax(values)
         return solutions[best].cpu().detach(), values[best].cpu().detach()
 
@@ -457,7 +510,8 @@ class Optimizer:
         idx[-1] = torch.argmax(outer_values)
         solutions = outer_sols[idx].unsqueeze(-2)
 
-        random_outer = draw_sobol_samples(self.one_shot_outer_bounds, self.num_restarts, q=1)
+        random_outer = draw_constrained_sobol(self.one_shot_outer_bounds, self.num_restarts, q=1,
+                                              inequality_constraints=self.inequality_constraints)
         solutions = torch.cat((random_outer, solutions), dim=0)
 
         picked_solutions = torch.cat((solutions, picked_fantasies), dim=-1)
@@ -471,6 +525,8 @@ class Optimizer:
         :param w_samples: If specified, the w component of the samples is restricted to this set
         :return: Raw samples
         """
+        if self.inequality_constraints is not None:
+            raise NotImplementedError("one-shot is not implemented with constraints")
         X_rnd = draw_sobol_samples(bounds=self.full_bounds, n=self.raw_samples, q=1)
 
         # sampling from the optimizers
@@ -550,6 +606,8 @@ class Optimizer:
         :param num_random_outer: Number of which to have random outer solutions
         :return: Picked solutions, n x 1 x full_dim
         """
+        if self.inequality_constraints is not None:
+            raise NotImplementedError("one-shot is not implemented with constraints")
         random_outer = draw_sobol_samples(self.one_shot_outer_bounds, num_random_outer, 1)
         fantasy_sols = self.pick_fantasy_solutions(n).reshape(n, 1, -1)
         picked_outer = self.pick_outer_solutions(n - num_random_outer)
@@ -572,6 +630,8 @@ class Optimizer:
         :param sol_no_eval: Solutions that need to be evaluated
         :return: Initial conditions, num_restarts x 1 x full_dim
         """
+        if self.inequality_constraints is not None:
+            raise NotImplementedError("one-shot is not implemented with constraints")
         if sol_no_eval is None:
             weights = torch.exp(self.eta * standardize(val_eval.reshape(-1)))
             idx = torch.multinomial(weights, self.num_restarts, replacement=False)
@@ -689,6 +749,7 @@ class InnerOptimizer:
     """
 
     def __init__(self, num_restarts: int, raw_multiplier: int, dim_x: int,
+                 inequality_constraints: Optional[List[Tuple]] = None,
                  random_frac: float = 0.5, new_iter_frac: float = 0.5,
                  limiter: float = 10, eta: float = 2.0, maxiter: int = 100):
         """
@@ -696,6 +757,7 @@ class InnerOptimizer:
         :param num_restarts: number of restart points for optimization
         :param raw_multiplier: raw_samples = num_restarts * raw_multiplier
         :param dim_x: Dimension of the inner problem
+        :param inequality_constraints: Inequality constraints to be passed on to optimizer.
         :param random_frac: Minimum fraction of random raw samples
         :param new_iter_frac: Fraction of raw samples to be preserved from
                                 previous iteration. A total of
@@ -719,6 +781,7 @@ class InnerOptimizer:
         self.previous_solutions = None
         self.eta = eta
         self.options = {'maxiter': maxiter}
+        self.inequality_constraints = inequality_constraints
 
     def generate_raw_samples(self, batch_shape: torch.Size) -> Tensor:
         """
@@ -728,12 +791,14 @@ class InnerOptimizer:
         """
         batch_size = int(torch.prod(torch.tensor(batch_shape)))
         if self.previous_solutions is None:
-            samples = draw_sobol_samples(bounds=self.bounds, n=self.raw_samples * batch_size, q=1)
+            samples = draw_constrained_sobol(bounds=self.bounds, n=self.raw_samples * batch_size, q=1,
+                                             inequality_constraints=self.inequality_constraints)
             return samples.reshape(self.raw_samples, *batch_shape, 1, self.dim_x)
         elif self.previous_solutions.size(0) < (1 - self.random_frac) * self.raw_samples:
             num_reused = self.previous_solutions.size(0)
             num_remaining = self.raw_samples - num_reused
-            random_samples = draw_sobol_samples(bounds=self.bounds, n=num_remaining * batch_size, q=1)
+            random_samples = draw_constrained_sobol(bounds=self.bounds, n=num_remaining * batch_size, q=1,
+                                                    inequality_constraints=self.inequality_constraints)
             random_samples = random_samples.reshape(num_remaining, *batch_shape, 1, self.dim_x)
             reused_samples = self.previous_solutions.view(-1, *[1] * 3, self.dim_x).repeat(1, *batch_shape, 1, 1)
             samples = torch.cat((reused_samples, random_samples), dim=0)
@@ -742,8 +807,9 @@ class InnerOptimizer:
             idx = torch.randint(self.previous_solutions.size(0),
                                 (int(self.raw_samples * (1 - self.random_frac)), *batch_shape))
             reused = self.previous_solutions[idx, :, :]
-            random_samples = draw_sobol_samples(bounds=self.bounds,
-                                                n=int(self.raw_samples * self.random_frac * batch_size), q=1)
+            random_samples = draw_constrained_sobol(bounds=self.bounds,
+                                                    n=int(self.raw_samples * self.random_frac * batch_size), q=1,
+                                                    inequality_constraints=self.inequality_constraints)
             random_samples = random_samples.reshape(int(self.raw_samples * self.random_frac), *batch_shape, 1,
                                                     self.dim_x)
             samples = torch.cat((reused, random_samples), dim=0)
@@ -795,7 +861,8 @@ class InnerOptimizer:
                                                      acquisition_function=acqf,
                                                      lower_bounds=self.bounds[0],
                                                      upper_bounds=self.bounds[1],
-                                                     options=self.options)
+                                                     options=self.options,
+                                                     inequality_constraints=self.inequality_constraints)
         self.add_solutions(solutions.view(-1, 1, self.dim_x).detach())
         best_ind = torch.argmax(values, dim=0)
         solution = solutions.gather(dim=0,

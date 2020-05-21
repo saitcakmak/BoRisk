@@ -92,6 +92,7 @@ class CovidSim(SyntheticTestFunction):
                  negate: bool = False
                  ):
         """
+        If you change problem dimension, change w_samples etc as well!!
         Initialize the problem with given number of populations.
         The decision variables (x) will be num_pop - 1 dimensional
         Here the context is taken as the initial_prevalence
@@ -116,6 +117,7 @@ class CovidSim(SyntheticTestFunction):
         if sim_params is not None:
             for key, value in sim_params.items():
                 self.common_params[key] = value
+        self.inequality_constraints = [(torch.tensor([0, 1]), torch.tensor([-1., -1.]), -1.)]
 
     def forward(self, X: Tensor, noise: bool = True) -> Tensor:
         """

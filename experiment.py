@@ -118,11 +118,11 @@ class Experiment:
         self.X = torch.empty(0, self.dim)
         self.Y = torch.empty(0, 1)
         self.model = None
-
         self.inner_optimizer = InnerOptimizer(num_restarts=self.num_inner_restarts,
                                               raw_multiplier=self.inner_raw_multiplier,
                                               dim_x=self.dim_x,
-                                              maxiter=self.maxiter)
+                                              maxiter=self.maxiter,
+                                              inequality_constraints=self.function.inequality_constraints)
 
         self.optimizer = Optimizer(num_restarts=self.num_restarts,
                                    raw_multiplier=self.raw_multiplier,
@@ -130,7 +130,8 @@ class Experiment:
                                    dim=self.dim,
                                    dim_x=self.dim_x,
                                    q=self.q,
-                                   maxiter=self.maxiter)
+                                   maxiter=self.maxiter,
+                                   inequality_constraints=self.function.inequality_constraints)
 
         if self.fix_samples:
             self.fixed_samples = self.w_samples
@@ -138,6 +139,31 @@ class Experiment:
             self.fixed_samples = None
 
         self.passed = False  # error handling
+
+    def constrained_rand(self, *args, **kwargs):
+        """
+        Draws torch.rand and enforces function.inequality_constraints
+        :param args: args to be passed to torch.rand
+        :param kwargs: passsed to torch.rand
+        :return: random samples
+        """
+        if self.function.inequality_constraints is None:
+            return torch.rand(*args, **kwargs)
+        if len(self.function.inequality_constraints) > 1:
+            raise NotImplementedError('Multiple inequality constraints is not handled!')
+        samples = torch.rand(*args, **kwargs)
+        ineq = self.function.inequality_constraints[0]
+        ineq_ind = ineq[0]
+        ineq_coef = ineq[1]
+        ineq_rhs = ineq[2]
+        while True:
+            num_violated = torch.sum(torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs)
+            if num_violated == 0:
+                break
+            violated_ind = torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs
+            samples[violated_ind.nonzero(), ..., ineq_ind] = torch.rand(sum(violated_ind), *args[1:-1], len(ineq_ind),
+                                                                        **kwargs)
+        return samples
 
     def initialize_gp(self, init_samples: Tensor = None, n: int = None):
         """
@@ -149,9 +175,9 @@ class Experiment:
         if init_samples is not None:
             self.X = init_samples.reshape(-1, self.dim)
         elif n is not None:
-            self.X = torch.rand((n, self.dim))
+            self.X = self.constrained_rand((n, self.dim))
         else:
-            self.X = torch.rand((2 * self.dim + 2, self.dim))
+            self.X = self.constrained_rand((2 * self.dim + 2, self.dim))
         self.Y = self.function(self.X)
         self.fit_gp()
 
@@ -232,7 +258,9 @@ class Experiment:
         fantasy_seed = int(torch.randint(100000, (1,)))
 
         if self.random_sampling:
-            candidate = torch.rand((1, self.q * self.dim))
+            if self.function.inequality_constraints is not None and self.q > 1:
+                raise NotImplementedError
+            candidate = self.constrained_rand((1, self.q * self.dim))
             value = torch.tensor([0])
         elif self.kgcp:
             kgcp = KGCP(current_best_VaR=current_best_value,
@@ -415,6 +443,8 @@ class BenchmarkExp(Experiment):
         current_best_sol, current_best_value, inner = self.current_best(past_only=past_only)
 
         if self.random_sampling:
+            if self.function.inequality_constraints is not None and self.q > 1:
+                raise NotImplementedError
             candidate = torch.rand((1, self.q * self.dim))
             value = torch.tensor([0])
         else:
@@ -429,7 +459,7 @@ class BenchmarkExp(Experiment):
                 # TODO: gets negative weight while picking restart points - only sometimes
                 args['beta'] = getattr(self, 'beta', 0.2)
             elif acqf == qMaxValueEntropy:
-                args['candidate_set'] = torch.rand(self.num_restarts * self.raw_multiplier, self.dim)
+                args['candidate_set'] = self.constrained_rand(self.num_restarts * self.raw_multiplier, self.dim)
             elif acqf == qKnowledgeGradient:
                 args['current_value'] = -current_best_value
             else:

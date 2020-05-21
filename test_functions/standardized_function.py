@@ -24,6 +24,7 @@ class StandardizedFunction:
             self.l_bounds = self.bounds[0]
             self.w_samples = getattr(self.function, 'w_samples', None)
             self.weights = getattr(self.function, 'weights', None)
+            self.inequality_constraints = getattr(self.function, 'inequality_constraints', None)
         except AttributeError:
             # in case a Class is given instead of an object
             # construct the object with noise_std = 0.1
