@@ -331,9 +331,13 @@ class BenchmarkExp(Experiment):
         Init as usual, just with tiny benchmark specific tweaks.
         See Experiment.__init__()
         :param kwargs:
+        :param kwargs['num_samples']: If given, this overwrites the definition in Experiment.
+            We use this many sub-samples of w_samples for estimating the objective
         """
         super().__init__(**kwargs)
         self.dim = self.dim_x
+        if kwargs.get('num_samples', None) is not None:
+            self.num_samples = kwargs['num_samples']
         if self.cuda:
             self.bounds = torch.tensor([[0.], [1.]]).repeat(1, self.dim).cuda()
         else:
@@ -355,9 +359,20 @@ class BenchmarkExp(Experiment):
             # If w_samples is not given, we assume continuous domain and draw a random set of w_samples
             if self.w_samples is None:
                 w_samples = torch.rand(self.num_samples, self.dim_w)
-            else:
+                sols = torch.cat((X.repeat(1, self.num_samples, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
+            elif self.w_samples.size(0) == self.num_samples:
                 w_samples = self.w_samples
-            sols = torch.cat((X.repeat(1, self.num_samples, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
+                sols = torch.cat((X.repeat(1, self.num_samples, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
+            elif self.w_samples.size(0) > self.num_samples:
+                if self.weights is not None:
+                    weights = self.weights
+                else:
+                    weights = torch.ones(self.num_samples) / self.num_samples
+                idx = torch.multinomial(weights.repeat(X.size(0), 1), self.num_samples)
+                w_samples = self.w_samples[idx]
+                sols = torch.cat((X.repeat(1, self.num_samples, 1), w_samples), dim=-1)
+            else:
+                raise ValueError('This should never happen. Make sure num_samples <= w_samples.size(0)!')
         else:
             sols = torch.cat((X.repeat(1, self.num_samples, 1), w_samples), dim=-1)
         vals = self.function(sols)
@@ -371,6 +386,9 @@ class BenchmarkExp(Experiment):
                 values = vals[:, int(self.alpha * self.num_samples), :]
         else:
             weights = self.weights.reshape(-1)[ind]
+            if self.w_samples.size(0) != self.num_samples:
+                weights = weights / torch.sum(weights, dim=-2, keepdim=True).repeat(*[1] * (weights.dim() - 2),
+                                                                                    self.num_samples, 1)
             if self.expectation:
                 values = torch.mean(vals * weights, dim=-2)
             else:
@@ -415,7 +433,7 @@ class BenchmarkExp(Experiment):
         inner = PosteriorMean(self.model)
         if past_only:
             with torch.no_grad():
-                values = self.get_obj(self.X)
+                values = inner(self.X.reshape(-1, 1, self.dim_x))
             best = torch.argmax(values)
             current_best_sol = self.X[best]
             current_best_value = - values[best]

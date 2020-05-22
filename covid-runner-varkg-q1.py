@@ -16,9 +16,6 @@ from test_functions.function_picker import function_picker
 
 function_name = 'covid'
 num_samples = 27  # 10 for benchmarks and starting
-# TODO: the partial sampling from discrete W needs to be worked out for benchmarks
-#   do this without resampling to avoid numerical issues
-#   torch.multinomial? - done here, do this for benchmarks too!
 num_fantasies = 10  # default 50
 key_list = ['tts_varkg_q=1'
             ]
@@ -37,6 +34,7 @@ kwargs['noise_std'] = None  # noise is built in to the simulator
 function = function_picker(function_name)
 w_samples = function.w_samples
 weights = function.weights
+kwargs['weights'] = weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50

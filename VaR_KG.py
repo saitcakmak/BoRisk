@@ -84,6 +84,11 @@ class InnerVaR(MCAcquisitionFunction):
                 raise ValueError("Weights must sum up to 1.")
             weights = weights.reshape(-1)
         self.weights = weights
+        if self.weights is not None:
+            if self.weights.size(0) != self.w_samples.size(0):
+                raise NotImplementedError("Weights must be of the same size(0) as w_samples")
+            if torch.sum(self.weights) != 1:
+                raise ValueError("Weights must be normalized")
 
     def forward(self, X: Tensor) -> Tensor:
         r"""

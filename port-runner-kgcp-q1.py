@@ -37,15 +37,9 @@ kwargs['noise_std'] = 0.1
 kwargs['negate'] = True  # True if the function is written for maximization, e.g. portfolio
 function = function_picker(function_name)
 kwargs['fix_sampless'] = True  # This should be true. We will just pass None for w_samples to get random samples
-if dim_w > 1:
-    w_samples = None
-    # w_samples = function.w_samples
-    # bypass this. W_samples will be drawn randomly within the algorithm
-    # if w_samples is None:
-    #     raise ValueError('Specify w_samples!')
-else:
-    w_samples = None
+w_samples = function.w_samples
 weights = function.weights
+kwargs['weights'] = weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50

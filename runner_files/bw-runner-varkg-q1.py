@@ -40,6 +40,7 @@ if dim_w > 1:
 else:
     w_samples = None
 weights = function.weights
+kwargs['weights'] = weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50

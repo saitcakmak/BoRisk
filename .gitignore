@@ -142,3 +142,4 @@ dmypy.json
 /classical_output/
 /detailed_output/
 /other_output/
+/exp_output/bw_no_weight/
