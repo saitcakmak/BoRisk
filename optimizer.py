@@ -856,6 +856,10 @@ class InnerOptimizer:
         :return: Best solution and value
         """
         initial_conditions = self.generate_restart_points(acqf)
+        # shape = num_restarts x *acqf.batch_shape x 1 x dim_X
+        if self.inequality_constraints is not None:
+            org_shape = initial_conditions.shape
+            initial_conditions = initial_conditions.reshape(self.num_restarts, -1, self.dim_x)
         with settings.propagate_grads(True):
             solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                      acquisition_function=acqf,
@@ -865,6 +869,8 @@ class InnerOptimizer:
                                                      inequality_constraints=self.inequality_constraints)
         self.add_solutions(solutions.view(-1, 1, self.dim_x).detach())
         best_ind = torch.argmax(values, dim=0)
+        if self.inequality_constraints is not None:
+            solutions = solutions.reshape(org_shape)
         solution = solutions.gather(dim=0,
                                     index=best_ind.view(1, *best_ind.shape, 1, 1).repeat(*[1] * (best_ind.dim() + 2),
                                                                                          self.dim_x))

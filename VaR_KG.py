@@ -92,6 +92,11 @@ class InnerVaR(MCAcquisitionFunction):
             Shape: num_fantasies x num_starting_sols x 1 x dim_x (see below)
         :return: -VaR(mu(X, w)). Shape: batch_shape (squeezed if self.batch_shape is 1 dim)
         """
+        # this is a brute force fix to an error I can't make sense of.
+        # Sometimes repeat and reshape breaks grad. That doesn't make sense.
+        # This enforces grad in such cases
+        if X.requires_grad:
+            torch.set_grad_enabled(True)
         # make sure X has proper shape, 4 dimensional to match the batch shape of VaRKG
         assert X.size(-1) == self.dim_x
         if X.dim() <= 4:
@@ -103,7 +108,12 @@ class InnerVaR(MCAcquisitionFunction):
                 # or is this what happens if you give a 2 dim fantasy point and ask for multiple fantasies?
                 # This doesn't matter unless we use lookaheads. Might not matter there either - not sure
             elif len(self.batch_shape) == 2:
-                X = X.reshape(*self.batch_shape, 1, self.dim_x)
+                try:
+                    X = X.reshape(*self.batch_shape, 1, self.dim_x)
+                except RuntimeError:
+                    # This is an attempt at handling the issues we observe when doing constrained
+                    #   optimization of VaRKG
+                    X = X.reshape(-1, *self.batch_shape, 1, self.dim_x)
             else:
                 raise ValueError("InnerVaR supports only up to 2 dimensional batch models")
         else:
@@ -121,10 +131,6 @@ class InnerVaR(MCAcquisitionFunction):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
-        # this is a brute force fix to an error I can't make sense of.
-        # When batch_dim = 3, repeat below breaks grad. That doesn't make sense.
-        if X.requires_grad:
-            torch.set_grad_enabled(True)
         if self.cuda:
             z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1).cuda()
         else:

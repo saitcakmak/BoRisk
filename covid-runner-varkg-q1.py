@@ -13,7 +13,7 @@ from botorch.acquisition import (
 from test_functions.function_picker import function_picker
 
 # Modify this and make sure it does what you want!
-# TODO: not ready
+
 function_name = 'covid'
 num_samples = 27  # 10 for benchmarks and starting
 # TODO: the partial sampling from discrete W needs to be worked out for benchmarks
@@ -38,8 +38,8 @@ function = function_picker(function_name)
 w_samples = function.w_samples
 weights = function.weights
 dim_x = function.dim - dim_w
-num_restarts = 1 * function.dim
-raw_multiplier = 5  # default 50
+num_restarts = 10 * function.dim
+raw_multiplier = 50  # default 50
 
 kwargs['num_inner_restarts'] = 5 * dim_x
 kwargs['CVaR'] = True
