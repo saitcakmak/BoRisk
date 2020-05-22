@@ -21,19 +21,17 @@ key_list = ['EI',
             'MES',
             'qKG',
             'UCB',
-            'classical_random'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [ExpectedImprovement,
                qMaxValueEntropy,
                qKnowledgeGradient,
                UpperConfidenceBound,
-               qKnowledgeGradient
                ]
 q_base = 12  # q for VaRKG. For others, it is q_base / num_samples
 iterations = 50
 
-seed_list = range(1,31)
+seed_list = range(1, 31)
 
 output_file = "%s_%s" % (function_name, "var_10fant_6start")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -41,13 +39,9 @@ kwargs = dict()
 dim_w = 2
 kwargs['noise_std'] = 10
 function = function_picker(function_name)
-if dim_w > 1:
-    w_samples = None
-    w_samples = function.w_samples
-    if w_samples is None:
-        raise ValueError('Specify w_samples!')
-else:
-    w_samples = None
+w_samples = function.w_samples
+weights = function.weights
+kwargs['weights'] = weights
 weights = function.weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
