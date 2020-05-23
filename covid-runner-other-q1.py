@@ -29,9 +29,9 @@ bm_alg_list = [ExpectedImprovement,
                UpperConfidenceBound,
                ]
 q_base = 10  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 100
+iterations = 30
 
-seed_list = range(1, 11)
+seed_list = range(1, 31)
 
 output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
