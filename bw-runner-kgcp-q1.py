@@ -24,7 +24,9 @@ bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
 iterations = 120
 
-seed_list = [6044, 8239, 4933, 3760, 8963]
+import sys
+seed_list = [int(sys.argv[1])]
+#seed_list = [6044, 8239, 4933, 3760, 8963]
 
 output_file = "%s_%s" % (function_name, "var_10fant_6start")
 torch.manual_seed(0)  # to ensure the produced seed are same!
