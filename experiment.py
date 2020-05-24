@@ -19,7 +19,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import InnerVaR, VaRKG, KGCP, OneShotVaRKG
+from VaR_KG import InnerVaR, VaRKG, KGCP
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -52,7 +52,6 @@ class Experiment:
                  'cuda': False,
                  'kgcp': False,
                  'disc': True,
-                 'one_shot': False,
                  'tts_frequency': 1,
                  'num_inner_restarts': 10,
                  'inner_raw_multiplier': 5,
@@ -83,7 +82,6 @@ class Experiment:
         :param cuda: True if using GPUs
         :param kgcp: If True, the KGCP adaptation is used.
         :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
-        :param one_shot: if True, one_shot VaRKG is used
         :param tts_frequency: The frequency of two-time-scale optimization.
             If 1, we do normal nested optimization. Default is 1.
         :param num_inner_restarts: Inner restarts for nested optimization
@@ -262,35 +260,23 @@ class Experiment:
                 raise NotImplementedError
             candidate = self.constrained_rand((1, self.q * self.dim))
             value = torch.tensor([0])
-        elif self.kgcp:
-            kgcp = KGCP(current_best_VaR=current_best_value,
-                        fantasy_seed=fantasy_seed,
-                        past_x=self.X[:, :self.dim_x],
-                        inner_seed=inner_seed,
-                        **vars(self))
-            if self.disc:
-                candidate, value = self.optimizer.optimize_outer(kgcp, self.w_samples)
-            else:
-                candidate, value = self.optimizer.optimize_outer(kgcp)
-        elif self.one_shot:
-            var_kg = OneShotVaRKG(current_best_VaR=current_best_value,
-                                  fantasy_seed=fantasy_seed,
-                                  inner_seed=inner_seed,
-                                  **vars(self))
-            if self.disc:
-                candidate, value = self.optimizer.disc_optimize_OSVaRKG(var_kg, self.w_samples)
-            else:
-                candidate, value = self.optimizer.optimize_OSVaRKG(var_kg)
         else:
-            var_kg = VaRKG(inner_optimizer=self.inner_optimizer.optimize,
-                           current_best_VaR=current_best_value,
-                           fantasy_seed=fantasy_seed,
-                           inner_seed=inner_seed,
-                           **{_: vars(self)[_] for _ in vars(self) if _ != 'inner_optimizer'})
-            if self.disc:
-                candidate, value = self.optimizer.optimize_outer(var_kg, self.w_samples)
+            if self.kgcp:
+                acqf = KGCP(current_best_VaR=current_best_value,
+                            fantasy_seed=fantasy_seed,
+                            past_x=self.X[:, :self.dim_x],
+                            inner_seed=inner_seed,
+                            **vars(self))
             else:
-                candidate, value = self.optimizer.optimize_outer(var_kg)
+                acqf = VaRKG(inner_optimizer=self.inner_optimizer.optimize,
+                             current_best_VaR=current_best_value,
+                             fantasy_seed=fantasy_seed,
+                             inner_seed=inner_seed,
+                             **{_: vars(self)[_] for _ in vars(self) if _ != 'inner_optimizer'})
+            if self.disc:
+                candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples)
+            else:
+                candidate, value = self.optimizer.optimize_outer(acqf)
         candidate = candidate.cpu().detach()
         value = value.cpu().detach()
 

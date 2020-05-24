@@ -144,3 +144,6 @@ dmypy.json
 /other_output/
 /exp_output/bw_no_weight/
 /batch_output/old/
+/detailed_output/
+/exp_output/covid_error/
+/exp_output/braninwilliams_error/

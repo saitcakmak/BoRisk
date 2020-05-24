@@ -81,7 +81,6 @@ optimizer = Optimizer(num_restarts=num_restarts,
                       dim_x=dim_x,
                       q=q,
                       maxiter=maxiter,
-                      periods=periods
                       )
 
 fix_samples = True

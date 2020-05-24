@@ -169,7 +169,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
                           dim_x=dim_x,
                           q=q,
                           maxiter=maxiter,
-                          periods=periods
                           )
 
     # construct and fit the GP
@@ -205,7 +204,6 @@ def full_loop(function_name: str, seed: int, dim_w: int, filename: str, iteratio
 
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                                  num_repetitions=reporting_rep,
-                                 lookahead_samples=reporting_la_samples,
                                  inner_seed=inner_seed, CVaR=CVaR, expectation=expectation, cuda=cuda,
                                  weights=weights)
 

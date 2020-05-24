@@ -4,10 +4,7 @@ this is for analyzing batches of job runs
 import torch
 import matplotlib.pyplot as plt
 from helper_fns.value_plotter import generate_values
-from main_loop import function_picker
-import numpy as np
-from math import ceil
-from scipy.optimize import minimize
+from other.main_loop import function_picker
 import warnings
 
 directory = "../batch_output/"

@@ -11,7 +11,7 @@ from gpytorch.constraints import GreaterThan
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.priors import GammaPrior
 from VaR_KG import InnerVaR
-from main_loop import function_picker
+from other.main_loop import function_picker
 from optimizer import Optimizer
 
 directory = "../batch_output/"

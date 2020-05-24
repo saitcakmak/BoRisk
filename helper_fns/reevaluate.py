@@ -100,7 +100,6 @@ def reeval(seed, kgcp: bool = False):
             gp.load_state_dict(iteration_data['state_dict'])
             inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                                  num_repetitions=rep,
-                                 lookahead_samples=None,
                                  inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
             train_X = iteration_data['train_X']
             train_Y = iteration_data['train_Y']
@@ -135,7 +134,6 @@ def reeval(seed, kgcp: bool = False):
 
     inner_VaR = InnerVaR(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
                          num_repetitions=rep,
-                         lookahead_samples=None,
                          inner_seed=inner_seed, CVaR=CVaR, expectation=expectation)
 
     if kgcp:
