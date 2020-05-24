@@ -13,7 +13,7 @@ from test_functions.covid_simulators.analysis_helpers import run_multiple_trajec
 from test_functions.covid_simulators.modified_params import base_params
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from typing import List, Optional
-
+from multiprocessing import Pool
 
 class CovidSim(SyntheticTestFunction):
     """
@@ -130,6 +130,8 @@ class CovidSim(SyntheticTestFunction):
         assert X.size(-1) == self.dim
         out_size = X.size()[:-1] + (1,)
         X = X.reshape(-1, 1, self.dim)
+        if X.size(0) > 1:
+            return self.parallelize(X)
         out = torch.empty(X.size()[:-1] + (1,))
         for i in range(X.size(0)):
             # Normalizing the solution so that they correspond to fraction of tests allocated to each population.
@@ -170,10 +172,22 @@ class CovidSim(SyntheticTestFunction):
     def evaluate_true(self, X: Tensor) -> Tensor:
         raise NotImplementedError
 
+    def parallelize(self, X: Tensor) -> Tensor:
+        """
+        Parallelizes the forward pass.
+        :param X: Solutions to be evaluated
+        :return: Result
+        """
+        arg_list = [X[i].reshape(1, 1, -1) for i in range(X.size(0))]
+        with Pool() as pool:
+            out = pool.map(self, arg_list)
+        out = torch.cat(out, dim=0)
+        return out
+
 
 if __name__ == "__main__":
     sim = CovidSim()
     # print(sim.weights)
     # X = torch.tensor([0.6, 0.8, 0.002, 0.004, 0.003]).reshape(1, 1, -1)
-    X = torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]]).reshape(1, 1, -1)
+    X = torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]]).reshape(1, 1, -1).repeat(50, 1, 1)
     print(sim(X))
