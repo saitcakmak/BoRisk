@@ -17,8 +17,8 @@ function_name = 'braninwilliams'
 function = function_picker(function_name, noise_std)
 
 CVaR = False  # if true, calculate CVaR instead of VaR
-lb = [0.0, 0.0]
-ub = [0.6, 0.6]
+lb = [0.15, 0.2]
+ub = [0.25, 0.3]
 num_x = 1000000
 num_w = 12
 d = function.dim  # dimension of train_X
@@ -40,10 +40,10 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = [0., 0.], ub: List[float] = [1.
     if dim_x > 2:
         raise ValueError("dim_x of the function must be <= 2 for it to be plotted.")
     plt.figure(figsize=(8, 6))
-    plt.title("C/VaR")
+    plt.title("Branin Williams VaR Objective Value")
     plt.xlabel("$x_1$")
     if dim_x == 2:
-        plt.ylabel("$x_2$")
+        plt.ylabel("$x_4$")
     else:
         plt.ylabel("C/VaR")
     plt.xlim(lb[0], ub[0])

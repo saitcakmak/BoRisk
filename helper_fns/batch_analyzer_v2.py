@@ -4,42 +4,30 @@ this is for analyzing batches of job runs
 import torch
 import matplotlib.pyplot as plt
 from helper_fns.value_plotter import generate_values
-from other.main_loop import function_picker
+from test_functions.function_picker import function_picker
 import warnings
 
 directory = "../batch_output/"
-function_name = 'marzat'
+function_name = 'covid'
+plot_gap = False  # if true, we plot the optimality gap
+plot_log = False  # if true, the plot is on log scale
 prefix = 'plot_'
 # prefix = ''
 suffix = '_cvar'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 3
 CVaR = True
-alpha = 0.75
-if 'exp' in filename:
-    CVaR = True
-    alpha = 0.
+alpha = 0.9
 function = function_picker(function_name, noise_std=0)
 dim = function.dim
 dim_x = dim - dim_w
 num_x = 10000
-num_w = 1000
+num_w = 27
 num_plot = 10  # max number of plot lines in a figure
-w_batch_size = 8
+w_batch_size = 10
 # this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
 
 w_samples = getattr(function, 'w_samples')
-# This is hartmann4
-# w_samples = torch.tensor([[0.4963, 0.7682],
-#                           [0.0885, 0.1320],
-#                           [0.3074, 0.6341],
-#                           [0.4901, 0.8964],
-#                           [0.4556, 0.6323],
-#                           [0.3489, 0.4017],
-#                           [0.0223, 0.1689],
-#                           [0.2939, 0.5185],
-#                           [0.6977, 0.8000],
-#                           [0.1610, 0.2823]])
 if function_name in ['marzat', 'portfolio']:
     w_samples = torch.rand(num_w, dim_w)
 if w_samples is None:
@@ -52,9 +40,10 @@ weights = getattr(function, 'weights')
 if weights is None:
     warnings.warn('weights is None!')
 
-_, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, alpha=alpha, plug_in_w=w_samples, function=function,
-                       dim_x=dim_x, dim_w=dim_w, weights=weights)
-best_value = torch.min(y)
+if plot_gap:
+    _, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, alpha=alpha, plug_in_w=w_samples, function=function,
+                           dim_x=dim_x, dim_w=dim_w, weights=weights)
+    best_value = torch.min(y)
 
 data = torch.load(directory + filename)
 output = dict()
@@ -126,31 +115,23 @@ def search_around(point: torch.Tensor, radius: float):
     return best
 
 
-def optimize_from(point: torch.Tensor, radius: float):
-    """
-    Optimizes the solution starting from a given point
-    :param point: starting point
-    :param radius: to constrain the optimization loop
-    :return: Optimized version
-    """
-    raise NotImplementedError
-
-
-for key in output.keys():
-    if 'y' in output[key].keys():
-        best_found, in_ind = torch.min(output[key]['y'], dim=-1)
-        best_found, out_ind = torch.min(best_found, dim=-1)
-        if best_found < best_value:
-            best_found_point = data[key][list(data[key].keys())[out_ind]]['current_best'][in_ind[out_ind]]
-            searched_best = search_around(best_found_point, 0.01)
-            best_value = min(best_found, best_value, searched_best)
+if plot_gap:
+    for key in output.keys():
+        if 'y' in output[key].keys():
+            best_found, in_ind = torch.min(output[key]['y'], dim=-1)
+            best_found, out_ind = torch.min(best_found, dim=-1)
+            if best_found < best_value:
+                best_found_point = data[key][list(data[key].keys())[out_ind]]['current_best'][in_ind[out_ind]]
+                searched_best = search_around(best_found_point, 0.01)
+                best_value = min(best_found, best_value, searched_best)
 # If the key has no output, remove it.
 for key in output.keys():
     if output[key].keys() == dict().keys():
         output.pop(key)
 # Comment out to get actual value. Uncomment to get gap
-for key in output.keys():
-    output[key]['y'] = output[key]['y'] - best_value
+if plot_gap:
+    for key in output.keys():
+        output[key]['y'] = output[key]['y'] - best_value
 
 for key in output.keys():
     try:
@@ -160,15 +141,20 @@ for key in output.keys():
         avg_gap = torch.mean(output[key]['y'], dim=0)
         std_gap = torch.std(output[key]['y'], dim=0)
         # change these to switch between log and value
-        avg = avg_log_gap
-        std = std_log_gap
+        if plot_log:
+            avg = avg_log_gap
+            std = std_log_gap
+        else:
+            avg = avg_gap
+            std = std_gap
         plt.plot(x, avg, label=key)
         plt.fill_between(x, avg - std, avg + std, alpha=0.3)
     except KeyError:
         continue
 
 # plt.yscale("log")
-plt.title(filename + ' avg log gap')
+plt.title(filename + ' avg %s %s' % ('log' if plot_log else '', 'gap' if plot_gap else ''))
 plt.grid(True)
 plt.legend()
+plt.savefig('covid_plot_1.png')
 plt.show()

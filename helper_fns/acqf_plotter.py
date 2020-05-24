@@ -7,7 +7,7 @@ from torch import Tensor
 from botorch.models import SingleTaskGP
 from botorch.fit import fit_gpytorch_model
 from gpytorch.mlls import ExactMarginalLogLikelihood
-from VaR_KG import OneShotVaRKG, InnerVaR, VaRKG, KGCP
+from VaR_KG import InnerVaR, VaRKG, KGCP
 from time import time
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan
@@ -167,8 +167,6 @@ for i in range(num_samples):
             res[i, j] = kgcp_acqf(X_outer)
         elif nested:
             res[i, j] = var_kg(X_outer)
-        else:
-            _, res[i, j] = optimizer.simple_evaluate_OSVaRKG(os_var_kg, X_outer)
         print("sol %d, %d complete, time: %s " % (i, j, time() - start))
     torch.save(res, filename)
 
