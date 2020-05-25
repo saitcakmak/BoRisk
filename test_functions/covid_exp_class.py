@@ -8,7 +8,7 @@ potentially with multiple populations.
 """
 import torch
 from torch import Tensor
-
+import numpy as np
 from test_functions.covid_simulators.analysis_helpers import run_multiple_trajectories
 from test_functions.covid_simulators.modified_params import base_params
 from botorch.test_functions.synthetic import SyntheticTestFunction
@@ -119,11 +119,15 @@ class CovidSim(SyntheticTestFunction):
                 self.common_params[key] = value
         self.inequality_constraints = [(torch.tensor([0, 1]), torch.tensor([-1., -1.]), -1.)]
 
-    def forward(self, X: Tensor, noise: bool = True) -> Tensor:
+    def forward(self, X: Tensor, noise: bool = True, run_seed: int = None) -> Tensor:
         """
-
+        Calls the simulator and returns the total number of infections.
+        Parallelized if there are multiple runs
         :param X: Solutions
         :param noise: always True
+        :param run_seed: Seed for evaluation - typically None and randomized.
+            If evaluating multiple X with seed specified, they will share it.
+            If None, they will have randomly drawn seeds each.
         :return:
         """
         assert X.dim() <= 3
@@ -131,7 +135,16 @@ class CovidSim(SyntheticTestFunction):
         out_size = X.size()[:-1] + (1,)
         X = X.reshape(-1, 1, self.dim)
         if X.size(0) > 1:
-            return self.parallelize(X)
+            return self.parallelize(X, run_seed)
+
+        if run_seed is None:
+            run_seed = int(torch.randint(low=1, high=11, size=(1,)))
+        # TODO: how do we handle the case of full set of seeds? - This is for evaluating solutions.
+        np_random_state = np.random.get_state()
+        torch_state = torch.random.get_rng_state()
+        np.random.seed(run_seed)
+        torch.random.manual_seed(run_seed)
+
         out = torch.empty(X.size()[:-1] + (1,))
         for i in range(X.size(0)):
             # Normalizing the solution so that they correspond to fraction of tests allocated to each population.
@@ -167,20 +180,29 @@ class CovidSim(SyntheticTestFunction):
             out[i, 0, 0] = num_infected / self.replications
         if self.negate:
             out = -out
+        # recover the old random state
+        np.random.set_state(np_random_state)
+        torch.random.set_rng_state(torch_state)
         return out.reshape(out_size)
 
     def evaluate_true(self, X: Tensor) -> Tensor:
         raise NotImplementedError
 
-    def parallelize(self, X: Tensor) -> Tensor:
+    def parallelize(self, X: Tensor, run_seed: int = None) -> Tensor:
         """
         Parallelizes the forward pass.
         :param X: Solutions to be evaluated
+        :param run_seed: If given, the seed is passed in for evaluation.
+            Otherwise, random seeds are drawn and passed in
         :return: Result
         """
-        arg_list = [X[i].reshape(1, 1, -1) for i in range(X.size(0))]
+        if run_seed is None:
+            arg_list = [(X[i].reshape(1, 1, -1), True, int(torch.randint(low=1, high=11, size=(1,))))
+                        for i in range(X.size(0))]
+        else:
+            arg_list = [(X[i].reshape(1, 1, -1), True, run_seed) for i in range(X.size(0))]
         with Pool() as pool:
-            out = pool.map(self, arg_list)
+            out = pool.starmap(self, arg_list)
         out = torch.cat(out, dim=0)
         return out
 
@@ -189,5 +211,5 @@ if __name__ == "__main__":
     sim = CovidSim()
     # print(sim.weights)
     # X = torch.tensor([0.6, 0.8, 0.002, 0.004, 0.003]).reshape(1, 1, -1)
-    X = torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]]).reshape(1, 1, -1).repeat(50, 1, 1)
+    X = torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]]).reshape(1, 1, -1).repeat(40, 1, 1)
     print(sim(X))

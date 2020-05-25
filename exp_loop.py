@@ -74,7 +74,6 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
         exp.Y = last_data['train_Y']
         exp.fit_gp()
     except FileNotFoundError:
-        # fix the seed for testing - this only fixes the initial samples. The optimization still has randomness.
         torch.manual_seed(seed=seed)
         last_iteration = -1
         full_data = dict()

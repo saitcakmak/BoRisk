@@ -7,6 +7,11 @@ from helper_fns.value_plotter import generate_values
 from test_functions.function_picker import function_picker
 import warnings
 
+
+# TODO: before using this with seeds, make appropriate adjustments:
+#       save the evaluations periodically
+#       save the final output
+#       make sure you're actually using the full set of 10 seeds
 directory = "../batch_output/"
 function_name = 'covid'
 plot_gap = False  # if true, we plot the optimality gap
@@ -156,4 +161,5 @@ for key in output.keys():
 plt.title(filename + ' avg %s %s' % ('log' if plot_log else '', 'gap' if plot_gap else ''))
 plt.grid(True)
 plt.legend()
+plt.savefig('covid_plot_1.png')
 plt.show()
