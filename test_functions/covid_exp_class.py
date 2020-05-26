@@ -15,6 +15,7 @@ from botorch.test_functions.synthetic import SyntheticTestFunction
 from typing import List, Optional
 from multiprocessing import Pool
 
+
 class CovidSim(SyntheticTestFunction):
     """
     Single population covid sim based on tutorial notebook
@@ -215,9 +216,12 @@ class CovidEval(CovidSim):
         Anything but X is ignored. Calls CovidSim with all 10 seeds and averages the results.
         :param X:
         :param noise:
-        :param run_seed:
+        :param run_seed: Never pass this in yourself!
         :return: Averaged results
         """
+        if run_seed is not None:
+            # This should never be done manually. Only for call to self() from super().parallelize().
+            return super().forward(X, run_seed=run_seed)
         out = torch.empty(10, *X.shape[:-1], 1)
         for i in range(10):
             out[i] = super().forward(X, run_seed=i+1).reshape(*X.shape[:-1], 1)
