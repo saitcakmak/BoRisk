@@ -28,11 +28,9 @@ num_samples = 10
 num_restarts = 40
 raw_multiplier = 50
 maxiter = 1000
-periods = 1000
 num_fantasies = 10
 q = 1
 kgcp = False
-nested = False
 num_inner_restarts = 10
 inner_raw_multiplier = 5
 tts_frequency = 1  # increase if TTS is desired
@@ -86,9 +84,9 @@ optimizer = Optimizer(num_restarts=num_restarts,
 fix_samples = True
 fixed_samples = w_samples
 alpha = 0.7
-CVaR = False
-expectation = True
-num_repetitions = 0
+CVaR = True
+expectation = False
+num_repetitions = 40
 fantasy_seed = int(torch.randint(10000, (1,)))
 inner_seed = int(torch.randint(10000, (1,)))
 
@@ -128,26 +126,15 @@ var_kg = VaRKG(model=gp, num_samples=num_samples, alpha=alpha,
                inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
                weights=weights)
 
-os_var_kg = OneShotVaRKG(model=gp, num_samples=num_samples, alpha=alpha,
-                         current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                         fantasy_seed=fantasy_seed,
-                         dim=d, dim_x=dim_x, q=q,
-                         fix_samples=fix_samples, fixed_samples=fixed_samples,
-                         num_repetitions=num_repetitions,
-                         inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
-                         weights=weights)
-
 k = 40  # number of points in x
 
 if kgcp:
-    name = 'kgcp'
-elif nested:
-    name = 'nested'
+    name = 'KGCP'
 else:
-    name = 'varkg'
+    name = 'VaRKG'
 if tts_frequency > 1:
     name = 'tts_' + name
-filename = 'other_output/acqf_val_%s_seed_%d_%s.pt' % (function_name, seed, name)
+filename = '../other_output/acqf_val_%s_cvar_%s_seed_%d.pt' % (function_name, name, seed)
 try:
     res = torch.load(filename)
 except FileNotFoundError:
@@ -165,14 +152,16 @@ for i in range(num_samples):
         X_outer = xy[i, j]
         if kgcp:
             res[i, j] = kgcp_acqf(X_outer)
-        elif nested:
+        else:
             res[i, j] = var_kg(X_outer)
         print("sol %d, %d complete, time: %s " % (i, j, time() - start))
     torch.save(res, filename)
 
 contour_plotter(gp, inner_var=inner_VaR)
 plt.figure()
-plt.title('acqf values %s' % name)
-c = plt.contourf(xx, yy, res.detach().squeeze(), alpha=0.8)
+plt.xlabel('x')
+plt.ylabel('w')
+plt.title('%s Acquisition Function Value' % name)
+c = plt.contourf(xx, yy, res.detach().squeeze(), levels=25)
 plt.colorbar(c)
 plt.show()

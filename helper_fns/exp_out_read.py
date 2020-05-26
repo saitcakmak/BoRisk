@@ -6,9 +6,9 @@ import torch
 from time import time
 
 
-directory = '../exp_output/'
+directory = '../exp_output/covid_benchmarks/'
 function_name = 'covid'
-output_key = 'tts_kgcp_q=1'
+output_key = 'UCB'
 suffix = '_cvar_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
 seed_list = range(1, 11)
@@ -17,7 +17,7 @@ suffix2 = '_a=0.9_weights%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_
 
 output_file = '../batch_output/plot_%s_cvar' % function_name
 
-iterations = 100
+iterations = 30
 
 
 def read_bests(seed):

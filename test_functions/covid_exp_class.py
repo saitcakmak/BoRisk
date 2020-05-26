@@ -139,7 +139,6 @@ class CovidSim(SyntheticTestFunction):
 
         if run_seed is None:
             run_seed = int(torch.randint(low=1, high=11, size=(1,)))
-        # TODO: how do we handle the case of full set of seeds? - This is for evaluating solutions.
         np_random_state = np.random.get_state()
         torch_state = torch.random.get_rng_state()
         np.random.seed(run_seed)
@@ -149,7 +148,7 @@ class CovidSim(SyntheticTestFunction):
         for i in range(X.size(0)):
             # Normalizing the solution so that they correspond to fraction of tests allocated to each population.
             # If the given solutions sum up to >= 1, then they're normalized to sum to one and the last population
-            # gets no testing.
+            # gets no testing. The algorithms should never cross into there though.
             if torch.sum(X[i][0, :-self.dim_w]) < 1:
                 x = torch.zeros(self.num_pop)
                 x[:-1] = X[i][0, :-self.dim_w]
@@ -207,9 +206,28 @@ class CovidSim(SyntheticTestFunction):
         return out
 
 
+class CovidEval(CovidSim):
+    """
+    This is purely for evaluating covid solutions. It will call CovidSim with all 10 seeds and average over.
+    """
+    def forward(self, X: Tensor, noise: bool = True, run_seed: int = None) -> Tensor:
+        """
+        Anything but X is ignored. Calls CovidSim with all 10 seeds and averages the results.
+        :param X:
+        :param noise:
+        :param run_seed:
+        :return: Averaged results
+        """
+        out = torch.empty(10, *X.shape)
+        for i in range(10):
+            out[i] = super().forward(X, run_seed=i+1)
+        out = torch.mean(out, dim=0)
+        return out
+
+
 if __name__ == "__main__":
-    sim = CovidSim()
+    sim = CovidEval()
     # print(sim.weights)
     # X = torch.tensor([0.6, 0.8, 0.002, 0.004, 0.003]).reshape(1, 1, -1)
-    X = torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]]).reshape(1, 1, -1).repeat(40, 1, 1)
+    X = torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]]).reshape(1, 1, -1).repeat(4, 1, 1)
     print(sim(X))
