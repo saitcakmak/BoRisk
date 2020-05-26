@@ -218,9 +218,9 @@ class CovidEval(CovidSim):
         :param run_seed:
         :return: Averaged results
         """
-        out = torch.empty(10, *X.shape)
+        out = torch.empty(10, *X.shape[:-1], 1)
         for i in range(10):
-            out[i] = super().forward(X, run_seed=i+1)
+            out[i] = super().forward(X, run_seed=i+1).reshape(*X.shape[:-1], 1)
         out = torch.mean(out, dim=0)
         return out
 

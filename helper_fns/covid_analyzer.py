@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from helper_fns.value_plotter import generate_values
 from test_functions.function_picker import function_picker
 import warnings
+from time import time
 
 
 directory = "../batch_output/"
@@ -38,6 +39,7 @@ weights = getattr(function, 'weights')
 
 data = torch.load(directory + filename)
 output = dict()
+start = time()
 
 
 def get_obj(X: torch.Tensor, key, inner_key):
@@ -62,7 +64,9 @@ def get_obj(X: torch.Tensor, key, inner_key):
     if key not in out.keys():
         out[key] = dict()
     out[key][inner_key] = values
-    torch.save(out,out_store)
+    print("key %s, inner_key %s done! Time: %s" % (key, inner_key, time()-start))
+    torch.save(out, out_store)
+
     return values
 
 
