@@ -5,7 +5,7 @@ import sys
 from math import ceil
 from time import time
 
-out_dir = "../port_evals/"
+out_dir = "port_evals/"
 n = int(sys.argv[1])  # number of samples
 seed = int(sys.argv[2])  # seed for samples
 out_file = out_dir + "port_n=%d_seed=%d" % (n, seed)
