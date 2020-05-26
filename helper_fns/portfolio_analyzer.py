@@ -11,7 +11,7 @@ from gpytorch.constraints import GreaterThan
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.priors import GammaPrior
 from VaR_KG import InnerVaR
-from other.main_loop import function_picker
+from test_functions.function_picker import function_picker
 from optimizer import Optimizer
 
 directory = "../batch_output/"
@@ -37,7 +37,7 @@ w_samples = torch.rand(num_w, dim_w)
 
 # read the data
 data_list = list()
-for i in range(1, 11):
+for i in range(1, 31):
     data_file = "../port_evals/port_n=100_seed=%d" % i
     data_list.append(torch.load(data_file))
 

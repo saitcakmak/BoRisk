@@ -16,7 +16,7 @@ torch.multinomial()
 
 # Modify this and make sure it does what you want!
 
-function_name = 'portfolio'
+function_name = 'portfolio_surrogate'
 num_samples = 40  # this is 40 for varkg / kgcp and 10 for benchmarks
 num_fantasies = 10  # default 50
 key_list = ['tts_kgcp_q=1']

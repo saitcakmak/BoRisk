@@ -9,6 +9,7 @@ from test_functions.prod_line import ProductionLine
 from test_functions.branin_williams import BraninWilliams
 from test_functions.robust_synthetic import Marzat6
 from test_functions.cvx_portfolio_simulator import CVXPortfolioSimulator
+from test_functions.portfolio_surrogate import PortfolioSurrogate
 from test_functions.covid_exp_class import CovidSim, CovidEval
 from botorch.test_functions import (Ackley,
                                     Beale,
@@ -41,6 +42,7 @@ function_dict = {"simplequad": SimpleQuadratic,
                  "braninwilliams": BraninWilliams,
                  "marzat": Marzat6,
                  "portfolio": CVXPortfolioSimulator,
+                 "portfolio_surrogate": PortfolioSurrogate,
                  "covid": CovidSim,
                  "covid_eval": CovidEval  # Only to be used for evaluating the results
                  }
