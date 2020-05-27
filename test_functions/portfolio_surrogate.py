@@ -4,6 +4,7 @@ This is a surrogate of the portfolio simulator, based on 5k samples found in por
 import math
 from typing import Optional
 import torch
+import gpytorch
 from botorch import fit_gpytorch_model
 from botorch.models import SingleTaskGP
 from botorch.models.transforms import Standardize
@@ -34,10 +35,9 @@ class PortfolioSurrogate(SyntheticTestFunction):
         self.model = None
 
     def evaluate_true(self, X: Tensor) -> Tensor:
-        out_shape = list(X.shape)
-        out_shape[-1] = 1
         if self.model is not None:
-            return self.model.posterior(X.reshape(-1, 1, self.dim)).mean.reshape(out_shape)
+            with torch.no_grad(), gpytorch.settings.max_cg_iterations(10000):
+                return self.model.posterior(X).mean
         self.fit_model()
         return self.evaluate_true(X)
 

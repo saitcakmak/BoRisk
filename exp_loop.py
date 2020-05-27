@@ -114,7 +114,11 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
             current_best_value_list[i] = iter_out[1]
 
             exp_data = vars(exp).copy()
-            # this X and Y likely include post-eval samples as well. Previously, this was the other way around.
+            # this X and Y include post-eval samples as well. Previously, this was the other way around.
+            if hasattr(exp_data['function'].function, 'model'):
+                # This avoids pickler error due to function having a GP model
+                # We never read the function from output anyway, so this was redundant in the first place.
+                exp_data.pop('function')
             data = {'state_dict': exp_data.pop('model').state_dict(), 'train_Y': exp_data.pop('Y'),
                     'train_X': exp_data.pop('X'), 'current_best_sol': iter_out[0],
                     'current_best_value': iter_out[1], 'acqf_value': iter_out[2],
