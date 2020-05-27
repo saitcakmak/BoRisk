@@ -152,3 +152,4 @@ dmypy.json
 /plots/
 /exp_output/portfolio_old/
 /exp_output/covid_pre_seed/
+/graphite_output/
