@@ -6,6 +6,8 @@ workspace.xml
 *.iml
 *.dat
 *.cmd
+*.sh
+*.sub
 
 
 # Byte-compiled / optimized / DLL files
@@ -148,3 +150,4 @@ dmypy.json
 /exp_output/covid_error/
 /exp_output/braninwilliams_error/
 /plots/
+/exp_output/portfolio_old/
