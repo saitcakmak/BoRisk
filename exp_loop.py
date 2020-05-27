@@ -119,6 +119,8 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
                 # This avoids pickler error due to function having a GP model
                 # We never read the function from output anyway, so this was redundant in the first place.
                 exp_data.pop('function')
+            exp_data.pop('inner_optimizer')
+            exp_data.pop('optimizer')
             data = {'state_dict': exp_data.pop('model').state_dict(), 'train_Y': exp_data.pop('Y'),
                     'train_X': exp_data.pop('X'), 'current_best_sol': iter_out[0],
                     'current_best_value': iter_out[1], 'acqf_value': iter_out[2],
