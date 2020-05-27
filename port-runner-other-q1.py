@@ -12,8 +12,6 @@ from botorch.acquisition import (
 )
 from test_functions.function_picker import function_picker
 
-torch.multinomial()
-
 # Modify this and make sure it does what you want!
 
 function_name = 'portfolio_surrogate'
