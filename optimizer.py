@@ -371,7 +371,7 @@ class InnerOptimizer:
                                 (int(self.raw_samples * (1 - self.random_frac)), *batch_shape))
             reused = self.previous_solutions[idx, :, :]
             random_samples = draw_constrained_sobol(bounds=self.bounds,
-                                                    n=int(self.raw_samples * self.random_frac * batch_size), q=1,
+                                                    n=int(self.raw_samples * self.random_frac) * batch_size, q=1,
                                                     inequality_constraints=self.inequality_constraints)
             random_samples = random_samples.reshape(int(self.raw_samples * self.random_frac), *batch_shape, 1,
                                                     self.dim_x)
