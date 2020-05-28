@@ -206,11 +206,15 @@ class Experiment:
             fit_gpytorch_model(mll)
 
         # dummy computation to be safe with gp fit
-        if self.cuda:
-            dummy = torch.rand((1, self.q, self.dim)).cuda()
-        else:
-            dummy = torch.rand((1, self.q, self.dim))
-        _ = self.model.posterior(dummy).mean
+        try:
+            if self.cuda:
+                dummy = torch.rand((1, self.q, self.dim)).cuda()
+            else:
+                dummy = torch.rand((1, self.q, self.dim))
+            _ = self.model.posterior(dummy).mean
+        except RuntimeError:
+            self.Y = self.Y + torch.randn(self.Y.size()) * 0.001
+            self.fit_gp()
 
         self.passed = False
 
