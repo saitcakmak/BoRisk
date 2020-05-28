@@ -178,7 +178,6 @@ class Experiment:
             self.X = self.constrained_rand((2 * self.dim + 2, self.dim))
         self.Y = self.function(self.X)
         self.fit_gp()
-        print('initialized!')
 
     def fit_gp(self):
         """

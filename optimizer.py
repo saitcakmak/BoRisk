@@ -368,7 +368,7 @@ class InnerOptimizer:
             return samples
         else:
             idx = torch.randint(self.previous_solutions.size(0),
-                                (int(self.raw_samples * (1 - self.random_frac)), *batch_shape))
+                                (self.raw_samples - int(self.raw_samples * self.random_frac), *batch_shape))
             reused = self.previous_solutions[idx, :, :]
             random_samples = draw_constrained_sobol(bounds=self.bounds,
                                                     n=int(self.raw_samples * self.random_frac) * batch_size, q=1,
