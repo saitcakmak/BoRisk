@@ -106,12 +106,14 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int, benc
     while i < iterations:
         try:
             print('Starting iteration %d' % i)
+            sss = time()
             if benchmark_alg:
                 iter_out = exp.one_iteration(acqf=benchmark_alg)
             else:
                 iter_out = exp.one_iteration()
             current_best_list[i] = iter_out[0]
             current_best_value_list[i] = iter_out[1]
+            print("iter time: %s " % (time()-sss))
 
             exp_data = vars(exp).copy()
             # this X and Y include post-eval samples as well. Previously, this was the other way around.

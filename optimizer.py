@@ -343,7 +343,7 @@ class InnerOptimizer:
         self.limit = self.raw_samples * limiter
         self.previous_solutions = None
         self.eta = eta
-        self.options = {'maxiter': maxiter}
+        self.maxiter = maxiter
         self.inequality_constraints = inequality_constraints
 
     def generate_raw_samples(self, batch_shape: torch.Size) -> Tensor:
@@ -423,12 +423,14 @@ class InnerOptimizer:
         if self.inequality_constraints is not None:
             org_shape = initial_conditions.shape
             initial_conditions = initial_conditions.reshape(self.num_restarts, -1, self.dim_x)
+        options = {'maxiter': self.maxiter}
+        # options = {'maxiter': 1000}
         with settings.propagate_grads(True):
             solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                      acquisition_function=acqf,
                                                      lower_bounds=self.bounds[0],
                                                      upper_bounds=self.bounds[1],
-                                                     options=self.options,
+                                                     options=options,
                                                      inequality_constraints=self.inequality_constraints)
         self.add_solutions(solutions.view(-1, 1, self.dim_x).detach())
         best_ind = torch.argmax(values, dim=0)
