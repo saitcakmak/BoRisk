@@ -93,7 +93,7 @@ class Experiment:
         """
         if 'seed' in kwargs.keys():
             warnings.warn('Seed should be set outside. It will be ignored!')
-        self.function = function_picker(function, noise_std=kwargs['noise_std'],
+        self.function = function_picker(function, noise_std=kwargs.get('noise_std'),
                                         negate=getattr(kwargs, "negate", False))
         self.dim = self.function.dim
         # read the attributes with default values
