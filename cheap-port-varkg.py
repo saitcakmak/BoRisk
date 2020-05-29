@@ -16,7 +16,7 @@ from test_functions.function_picker import function_picker
 
 function_name = 'portfolio_surrogate'
 num_samples = 10  # this is 40 for varkg / kgcp and 10 for benchmarks
-num_fantasies = 10  # default 50
+num_fantasies = 4  # default 50
 key_list = ['tts_varkg_cheap_q=1']
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]

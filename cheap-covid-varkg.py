@@ -16,7 +16,7 @@ from test_functions.function_picker import function_picker
 
 function_name = 'covid'
 num_samples = 27  # 10 for benchmarks and starting
-num_fantasies = 10  # default 50
+num_fantasies = 4  # default 50
 key_list = ['tts_varkg_cheap_q=1'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
