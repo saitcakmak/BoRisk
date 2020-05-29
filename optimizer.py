@@ -40,7 +40,7 @@ def draw_constrained_sobol(bounds: Tensor, n: int, q: int, seed: Optional[int] =
         violated_ind = torch.sum(torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1), dim=-1) < ineq_rhs
         samples[:-num_violated] = samples[~violated_ind]
         samples[-num_violated:] = draw_sobol_samples(bounds=bounds,
-                                                    n=int(num_violated), q=q, seed=seed)
+                                                     n=int(num_violated), q=q, seed=seed)
     return samples
 
 
@@ -99,7 +99,7 @@ class Optimizer:
         :param maxiter: maximum iterations of L-BFGS-B to Run
         """
         self.num_restarts = num_restarts
-        self.num_refine_restarts = ceil(num_restarts / 5.0)
+        self.num_refine_restarts = max(1, ceil(num_restarts / 10.0))
         self.raw_samples = num_restarts * raw_multiplier
         self.num_fantasies = num_fantasies
         self.dim = dim
@@ -223,7 +223,6 @@ class Optimizer:
         :return: Optimal solution and value
         """
         initial_conditions = self.generate_outer_restart_points(acqf, w_samples)
-        options = {'maxiter': self.maxiter}
         if w_samples is not None:
             fixed_features = dict()
             for j in range(self.q):
@@ -237,6 +236,7 @@ class Optimizer:
         num_batches = ceil(init_size / batch_size)
         solutions = torch.empty(init_size, self.q, self.dim)
         values = torch.empty(init_size)
+        options = {'maxiter': int(self.maxiter/25)}
         for i in range(num_batches):
             l_idx = i * batch_size
             if i == num_batches - 1:
@@ -253,6 +253,7 @@ class Optimizer:
                                      inequality_constraints=self.inequality_constraints)
         _, idx = torch.sort(values)
         acqf.tts_reset()
+        options = {'maxiter': self.maxiter}
         solutions, values = gen_candidates_scipy(initial_conditions=solutions[idx[:self.num_refine_restarts]],
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.outer_bounds[0],
@@ -423,8 +424,7 @@ class InnerOptimizer:
         if self.inequality_constraints is not None:
             org_shape = initial_conditions.shape
             initial_conditions = initial_conditions.reshape(self.num_restarts, -1, self.dim_x)
-        options = {'maxiter': self.maxiter}
-        # options = {'maxiter': 1000}
+        options = {'maxiter': int(self.maxiter / 25)}
         with settings.propagate_grads(True):
             solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                      acquisition_function=acqf,
@@ -439,8 +439,21 @@ class InnerOptimizer:
         solution = solutions.gather(dim=0,
                                     index=best_ind.view(1, *best_ind.shape, 1, 1).repeat(*[1] * (best_ind.dim() + 2),
                                                                                          self.dim_x))
+        if self.inequality_constraints is not None:
+            org_shape = solution.shape
+            solution = solution.reshape(1, -1, self.dim_x)
+        options = {'maxiter': self.maxiter}
         with settings.propagate_grads(True):
+            solution, value = gen_candidates_scipy(initial_conditions=solution,
+                                                   acquisition_function=acqf,
+                                                   lower_bounds=self.bounds[0],
+                                                   upper_bounds=self.bounds[1],
+                                                   options=options,
+                                                   inequality_constraints=self.inequality_constraints)
+            # This is needed due to nested optimization
             value = acqf(solution)
+        if self.inequality_constraints is not None:
+            solution = solution.reshape(org_shape)
         return solution, value.reshape(*acqf.batch_shape)
 
     def new_iteration(self):
