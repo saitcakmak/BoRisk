@@ -16,7 +16,7 @@ from test_functions.function_picker import function_picker
 
 function_name = 'covid'
 num_samples = 27  # 10 for benchmarks and starting
-num_fantasies = 10  # default 50
+num_fantasies = 5  # default 50
 key_list = ['tts_varkg_q=1'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
@@ -29,7 +29,7 @@ import sys
 # seed_list = range(1, 11)
 seed_list = [1]
 
-output_file = "%s_%s" % (function_name, "testcvar")
+output_file = "zzzzz%s_%s" % (function_name, torch.rand(1))
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
 dim_w = 3
