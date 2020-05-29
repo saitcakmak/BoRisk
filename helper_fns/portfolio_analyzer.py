@@ -15,7 +15,7 @@ from test_functions.function_picker import function_picker
 from optimizer import Optimizer
 
 directory = "../batch_output/"
-function_name = 'portfolio'
+function_name = 'portfolio_surrogate'
 prefix = 'plot_'
 # prefix = ''
 suffix = '_var'
