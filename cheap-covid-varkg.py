@@ -16,20 +16,19 @@ from test_functions.function_picker import function_picker
 
 function_name = 'covid'
 num_samples = 27  # 10 for benchmarks and starting
-num_fantasies = 5  # default 50
-key_list = ['tts_varkg_q=1'
+num_fantasies = 10  # default 50
+key_list = ['tts_varkg_cheap_q=1'
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 1
+iterations = 30
 
 import sys
-# seed_list = [int(sys.argv[1])]
-# seed_list = range(1, 11)
-seed_list = [1]
+seed_list = [int(sys.argv[1])]
+#seed_list = range(1, 11)
 
-output_file = "zzzzz%s_%s" % (function_name, torch.rand(1))
+output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
 dim_w = 3
@@ -39,10 +38,10 @@ w_samples = function.w_samples
 weights = function.weights
 kwargs['weights'] = weights
 dim_x = function.dim - dim_w
-num_restarts = 1 * function.dim
-raw_multiplier = 1  # default 50
+num_restarts = 5 * function.dim
+raw_multiplier = 20  # default 50
 
-kwargs['num_inner_restarts'] = 5 * dim_x
+kwargs['num_inner_restarts'] = 3 * dim_x
 kwargs['CVaR'] = True
 kwargs['alpha'] = 0.9
 kwargs['disc'] = True
