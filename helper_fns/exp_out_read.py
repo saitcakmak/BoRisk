@@ -7,17 +7,17 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'marzat'
-output_key = 'tts_kgcp_q=1'
-suffix = '_cvar_10fant_%s_' % output_key
+function_name = 'portfolio_surrogate'
+output_key = 'classical_random'
+suffix = '_var_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
-seed_list = range(1, 11)
+seed_list = range(1, 31)
 q = 1  # only used in the next line
-suffix2 = '_a=0.75_cont%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
+suffix2 = '_a=0.8%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
-output_file = '../batch_output/plot_%s_cvar' % function_name
+output_file = '../batch_output/plot_%s_var' % function_name
 
-iterations = 100
+iterations = 30
 
 
 def read_bests(seed):
