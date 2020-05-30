@@ -14,11 +14,10 @@ from test_functions.function_picker import function_picker
 
 # Modify this and make sure it does what you want!
 
-function_name = 'covid'
-num_samples = 27  # 10 for benchmarks and starting
-num_fantasies = 4  # default 50
-key_list = ['tts_varkg_cheap_q=1'
-            ]
+function_name = 'portfolio_surrogate'
+num_samples = 10  # this is 40 for varkg / kgcp and 10 for benchmarks
+num_fantasies = 10  # default 50
+key_list = ['tts_varkg_cheap_q=1']
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
@@ -26,26 +25,29 @@ iterations = 30
 
 import sys
 seed_list = [int(sys.argv[1])]
-#seed_list = range(1, 11)
+# seed_list = range(1, 11)
 
-output_file = "%s_%s" % (function_name, "cvar")
+output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
-dim_w = 3
-kwargs['noise_std'] = None  # noise is built in to the simulator
+dim_w = 2
+kwargs['noise_std'] = 0.1
+kwargs['negate'] = True  # True if the function is written for maximization, e.g. portfolio
 function = function_picker(function_name)
+kwargs['fix_sampless'] = True  # This should be true. We will just pass None for w_samples to get random samples
 w_samples = function.w_samples
 weights = function.weights
 kwargs['weights'] = weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
-raw_multiplier = 25  # default 50
+raw_multiplier = 50  # default 50
 
 kwargs['num_inner_restarts'] = 5 * dim_x
-kwargs['CVaR'] = True
-kwargs['alpha'] = 0.9
-kwargs['disc'] = True
-num_x_samples = 6
+kwargs['CVaR'] = False
+kwargs['expectation'] = False
+kwargs['alpha'] = 0.8
+kwargs['disc'] = False
+num_x_samples = 8
 num_init_w = 10
 
 output_path = "batch_output/%s" % output_file
@@ -69,29 +71,10 @@ for i, key in enumerate(key_list):
         else:
             tts_frequency = 1
         if num_x_samples:
-            # constrained initialization - only uses the first constraint if exists
             old_state = torch.random.get_rng_state()
             torch.manual_seed(seed)
             x_samples = torch.rand(num_x_samples, dim_x)
-            if function.inequality_constraints is not None:
-                ineq = function.inequality_constraints[0]
-                ineq_ind = ineq[0]
-                ineq_coef = ineq[1]
-                ineq_rhs = ineq[2]
-                while True:
-                    num_violated = torch.sum(torch.sum(x_samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs)
-                    if num_violated == 0:
-                        break
-                    violated_ind = torch.sum(x_samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs
-                    x_samples[violated_ind.nonzero(), ..., ineq_ind] = torch.rand(sum(violated_ind), len(ineq_ind))
-
-            if w_samples is None:
-                init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
-            elif w_samples.size(0) >= num_init_w and weights is not None:
-                idx = torch.multinomial(weights.repeat(num_x_samples, 1), num_init_w)
-                init_w_samples = w_samples[idx]
-            else:
-                raise NotImplementedError
+            init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
             kwargs['x_samples'] = x_samples
             kwargs['init_w_samples'] = init_w_samples
             kwargs['init_samples'] = torch.cat((x_samples.unsqueeze(-2).repeat(1, num_init_w, 1),
