@@ -157,18 +157,18 @@ for key in output.keys():
 if plot_gap:
     for key in output.keys():
         output[key]['y'] = output[key]['y'] - best_value
-else:
+# else:
     # negating it to get the actual performance
-    for key in output.keys():
-        output[key]['y'] = - output[key]['y']
+    # for key in output.keys():
+    #     output[key]['y'] = - output[key]['y']
 
 for key in output.keys():
     try:
         x = output[key]['x']
         avg_log_gap = torch.mean(torch.log10(output[key]['y']), dim=0)
-        std_log_gap = torch.std(torch.log10(output[key]['y']), dim=0)
+        std_log_gap = torch.std(torch.log10(output[key]['y']), dim=0) / torch.sqrt(torch.tensor(output[key]['y'].size(0), dtype=torch.float))
         avg_gap = torch.mean(output[key]['y'], dim=0)
-        std_gap = torch.std(output[key]['y'], dim=0)
+        std_gap = torch.std(output[key]['y'], dim=0) / torch.sqrt(torch.tensor(output[key]['y'].size(0), dtype=torch.float))
         # change these to switch between log and value
         if plot_log:
             avg = avg_log_gap
@@ -177,12 +177,13 @@ for key in output.keys():
             avg = avg_gap
             std = std_gap
         plt.plot(x, avg, label=key)
-        plt.fill_between(x, avg - std, avg + std, alpha=0.3)
+        plt.fill_between(x, avg - 1.96 * std, avg + 1.96 * std, alpha=0.3)
     except KeyError:
         continue
 
-# plt.yscale("log")
-plt.title(filename + ' avg %s %s' % ('log' if plot_log else '', 'gap' if plot_gap else ''))
+plt.xlabel("# of samples")
+plt.ylabel("returns")
+plt.title("Portfolio Returns")
 plt.grid(True)
 plt.legend()
 plt.show()
