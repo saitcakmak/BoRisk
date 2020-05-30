@@ -22,7 +22,7 @@ key_list = ['random'
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 300
+iterations = 100
 
 import sys
 # seed_list = [int(sys.argv[1])]
