@@ -142,7 +142,7 @@ for key in output.keys():
     except KeyError:
         continue
 
-plt.xlabel("# of samples")
+plt.xlabel("# of evaluations")
 plt.ylabel("log gap")
 plt.title("Marzat Log Optimality Gap")
 plt.grid(True)

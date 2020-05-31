@@ -453,7 +453,7 @@ class BenchmarkExp(Experiment):
         if self.random_sampling:
             if self.function.inequality_constraints is not None and self.q > 1:
                 raise NotImplementedError
-            candidate = torch.rand((1, self.q * self.dim))
+            candidate = self.constrained_rand((1, self.q * self.dim))
             value = torch.tensor([0])
         else:
             args = {'model': self.model}

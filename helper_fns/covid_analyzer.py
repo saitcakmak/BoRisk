@@ -122,7 +122,8 @@ for key in output.keys():
     except KeyError:
         continue
 
-plt.xlabel("# of samples")
+plt.xlabel("# of evaluations")
+plt.ylim(12250, 13500)
 plt.ylabel("infections")
 plt.title("Covid-19 Cumulative Infections ")
 plt.grid(True)

@@ -136,7 +136,7 @@ def search_around(point: torch.Tensor, radius: float):
     search_points = point.repeat(perturbations.size(0), 1) + perturbations
     search_points = search_points.clamp(min=0, max=1).reshape(-1, 1, dim_x)
     values = get_obj(search_points)
-    best = torch.min(values)
+    best = torch.max(values)
     return best
 
 
@@ -145,10 +145,10 @@ if plot_gap:
         if 'y' in output[key].keys():
             best_found, in_ind = torch.min(output[key]['y'], dim=-1)
             best_found, out_ind = torch.min(best_found, dim=-1)
-            if best_found < best_value:
+            if best_found > best_value:
                 best_found_point = data[key][list(data[key].keys())[out_ind]]['current_best'][in_ind[out_ind]]
                 searched_best = search_around(best_found_point, 0.01)
-                best_value = min(best_found, best_value, searched_best)
+                best_value = max(best_found, best_value, searched_best)
 # If the key has no output, remove it.
 for key in output.keys():
     if output[key].keys() == dict().keys():
@@ -156,11 +156,7 @@ for key in output.keys():
 # Comment out to get actual value. Uncomment to get gap - use plot_gap for this
 if plot_gap:
     for key in output.keys():
-        output[key]['y'] = output[key]['y'] - best_value
-# else:
-    # negating it to get the actual performance
-    # for key in output.keys():
-    #     output[key]['y'] = - output[key]['y']
+        output[key]['y'] = best_value - output[key]['y']
 
 for key in output.keys():
     try:
@@ -181,7 +177,8 @@ for key in output.keys():
     except KeyError:
         continue
 
-plt.xlabel("# of samples")
+# plt.ylim(5, 14)
+plt.xlabel("# of evaluations")
 plt.ylabel("returns")
 plt.title("Portfolio Returns")
 plt.grid(True)
