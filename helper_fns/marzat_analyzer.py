@@ -144,7 +144,7 @@ for key in output.keys():
 
 plt.xlabel("# of evaluations")
 plt.ylabel("log gap")
-plt.title("Marzat Log Optimality Gap")
+plt.title("$f_6(x_c, x_e)$ Log Optimality Gap")
 plt.grid(True)
 plt.legend()
 plt.show()
