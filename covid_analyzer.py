@@ -7,7 +7,7 @@ from test_functions.function_picker import function_picker
 from time import time
 
 
-directory = "../batch_output/"
+directory = "batch_output/"
 function_name = 'covid'
 plot_log = False  # if true, the plot is on log scale
 prefix = 'plot_'
@@ -25,7 +25,7 @@ num_plot = 10  # max number of plot lines in a figure
 w_batch_size = 10
 # this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
 
-out_store = "covid_eval_data.pt"
+out_store = "helper_fns/covid_eval_data.pt"
 try:
     out = torch.load(out_store)
 except FileNotFoundError:
