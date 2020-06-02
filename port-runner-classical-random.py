@@ -28,7 +28,7 @@ iterations = 30
 
 import sys
 # seed_list = [int(sys.argv[1])]
-seed_list = range(1, 31)
+seed_list = range(31, 31)
 
 output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!
