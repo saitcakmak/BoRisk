@@ -23,9 +23,9 @@ key_list = ['classical_random',
 bm_alg_list = [qKnowledgeGradient,
                ]
 q_base = 10  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 30
+iterations = 10
 
-seed_list = range(1, 31)
+seed_list = range(1, 101)
 
 output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
