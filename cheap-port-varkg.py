@@ -21,11 +21,11 @@ key_list = ['tts_varkg_cheap_q=1']
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 30
+iterations = 50
 
 import sys
-seed_list = [int(sys.argv[1])]
-# seed_list = range(1, 11)
+# seed_list = [int(sys.argv[1])]
+seed_list = range(1, 6)
 
 output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!

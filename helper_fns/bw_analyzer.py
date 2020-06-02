@@ -9,11 +9,11 @@ import warnings
 
 directory = "../batch_output/"
 function_name = 'braninwilliams'
-plot_gap = True  # if true, we plot the optimality gap
-plot_log = True  # if true, the plot is on log scale
+plot_gap = False  # if true, we plot the optimality gap
+plot_log = False  # if true, the plot is on log scale
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var'
+suffix = '_var-pre'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 2
 CVaR = False
@@ -133,6 +133,7 @@ if plot_gap:
     for key in output.keys():
         output[key]['y'] = output[key]['y'] - best_value
 
+plt.figure(figsize=(16, 12))
 for key in output.keys():
     try:
         x = output[key]['x']
@@ -148,7 +149,7 @@ for key in output.keys():
             avg = avg_gap
             std = std_gap
         plt.plot(x, avg, label=key)
-        plt.fill_between(x, avg - 1.96 * std, avg + 1.96 * std, alpha=0.3)
+        plt.fill_between(x, avg - 1.96 * std, avg + 1.96 * std, alpha=0.2)
     except KeyError:
         continue
 
@@ -156,5 +157,5 @@ plt.xlabel("# of evaluations")
 plt.ylabel("log gap")
 plt.title("Branin Willams Log Optimality Gap")
 plt.grid(True)
-plt.legend()
+plt.legend(ncol=2)
 plt.show()

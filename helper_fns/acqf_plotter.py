@@ -30,7 +30,7 @@ raw_multiplier = 50
 maxiter = 1000
 num_fantasies = 10
 q = 1
-kgcp = False
+kgcp = True
 num_inner_restarts = 10
 inner_raw_multiplier = 5
 tts_frequency = 1  # increase if TTS is desired
@@ -161,7 +161,11 @@ contour_plotter(gp, inner_var=inner_VaR)
 plt.figure()
 plt.xlabel('x')
 plt.ylabel('w')
-plt.title('%s Acquisition Function Value' % name)
+if kgcp:
+    plot_name = "$\\rho$KG$^{apx}$"
+else:
+    plot_name = "$\\rho$KG"
+plt.title('%s Acquisition Function Value' % plot_name)
 c = plt.contourf(xx, yy, res.detach().squeeze(), levels=25)
 plt.colorbar(c)
 plt.show()

@@ -18,7 +18,7 @@ directory = "../batch_output/"
 function_name = 'portfolio_surrogate'
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var'
+suffix = '_var-vkg'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 plot_gap = False  # if true, we plot the optimality gap
 plot_log = False  # if true, the plot is on log scale
@@ -173,7 +173,7 @@ for key in output.keys():
             avg = avg_gap
             std = std_gap
         plt.plot(x, avg, label=key)
-        plt.fill_between(x, avg - 1.96 * std, avg + 1.96 * std, alpha=0.3)
+        plt.fill_between(x, avg - 1.96 * std, avg + 1.96 * std, alpha=0.2)
     except KeyError:
         continue
 
