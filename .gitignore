@@ -153,3 +153,7 @@ dmypy.json
 /exp_output/portfolio_old/
 /exp_output/covid_pre_seed/
 /graphite_output/
+/exp_output/bw_benchmarks/
+/exp_output/covid_benchmarks/
+/exp_output/marzat_benchmarks/
+/exp_output/port_benchmarks/
