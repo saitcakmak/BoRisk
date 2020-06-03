@@ -13,17 +13,17 @@ from botorch.utils import draw_sobol_normal_samples
 from torch import Tensor
 import warnings
 from time import time
-from VaR_KG import AbsKG
+from VaR_KG import AbsKG, InnerVaR
 
 
-class InnerVaR(MCAcquisitionFunction):
+class OldInnerVaR(MCAcquisitionFunction):
     r"""
     This is a copy of InnerVaR with lookahead still implemented.
     Code is being cleaned up and lookaheads removed for good.
     This is the inner optimization problem of VaR-KG
     """
 
-    def __init__(self, model: Model, w_samples: Tensor,
+    def old__init__(self, model: Model, w_samples: Tensor,
                  alpha: Union[Tensor, float], dim_x: int,
                  num_repetitions: int = 0,
                  lookahead_samples: Tensor = None,

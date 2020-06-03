@@ -30,6 +30,8 @@ from optimizer import Optimizer, InnerOptimizer
 from helper_fns.plotter import contour_plotter as plotter
 import matplotlib.pyplot as plt
 import warnings
+from other.deprecated_varkg import OneShotVaRKG
+from other.deprecated_optimizer import DeprOptimizer
 
 
 class Experiment:
@@ -56,7 +58,8 @@ class Experiment:
                  'num_inner_restarts': 10,
                  'inner_raw_multiplier': 5,
                  'weights': None,
-                 'fix_samples': True
+                 'fix_samples': True,
+                 'one_shot': False
                  }
 
     def __init__(self, function: str, **kwargs):
@@ -90,6 +93,7 @@ class Experiment:
             A 1-dim tensor of size num_samples
         :param fix_samples: In continuous case of W, whether the samples are redrawn at every iteration
             or fixed to w_samples.
+        :param one_shot: Uses one-shot optimization. DO NOT USE unless you know what you're doing.
         """
         if 'seed' in kwargs.keys():
             warnings.warn('Seed should be set outside. It will be ignored!')
@@ -122,14 +126,24 @@ class Experiment:
                                               maxiter=self.maxiter,
                                               inequality_constraints=self.function.inequality_constraints)
 
-        self.optimizer = Optimizer(num_restarts=self.num_restarts,
-                                   raw_multiplier=self.raw_multiplier,
-                                   num_fantasies=self.num_fantasies,
-                                   dim=self.dim,
-                                   dim_x=self.dim_x,
-                                   q=self.q,
-                                   maxiter=self.maxiter,
-                                   inequality_constraints=self.function.inequality_constraints)
+        if self.one_shot:
+            self.optimizer = DeprOptimizer(num_restarts=self.num_restarts,
+                                           raw_multiplier=self.raw_multiplier,
+                                           num_fantasies=self.num_fantasies,
+                                           dim=self.dim,
+                                           dim_x=self.dim_x,
+                                           q=self.q,
+                                           maxiter=self.maxiter,
+                                           inequality_constraints=self.function.inequality_constraints)
+        else:
+            self.optimizer = Optimizer(num_restarts=self.num_restarts,
+                                       raw_multiplier=self.raw_multiplier,
+                                       num_fantasies=self.num_fantasies,
+                                       dim=self.dim,
+                                       dim_x=self.dim_x,
+                                       q=self.q,
+                                       maxiter=self.maxiter,
+                                       inequality_constraints=self.function.inequality_constraints)
 
         if self.fix_samples:
             self.fixed_samples = self.w_samples
@@ -271,16 +285,24 @@ class Experiment:
                             past_x=self.X[:, :self.dim_x],
                             inner_seed=inner_seed,
                             **vars(self))
+            elif self.one_shot:
+                acqf = OneShotVaRKG(current_best_VaR=current_best_value,
+                                    fantasy_seed=fantasy_seed,
+                                    past_x=self.X[:, :self.dim_x],
+                                    inner_seed=inner_seed,
+                                    **vars(self))
+                candidate, value = self.optimizer.simple_optimize_OSVaRKG(acqf)
             else:
                 acqf = VaRKG(inner_optimizer=self.inner_optimizer.optimize,
                              current_best_VaR=current_best_value,
                              fantasy_seed=fantasy_seed,
                              inner_seed=inner_seed,
                              **{_: vars(self)[_] for _ in vars(self) if _ != 'inner_optimizer'})
-            if self.disc:
-                candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples)
-            else:
-                candidate, value = self.optimizer.optimize_outer(acqf)
+            if not self.one_shot:
+                if self.disc:
+                    candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples)
+                else:
+                    candidate, value = self.optimizer.optimize_outer(acqf)
         candidate = candidate.cpu().detach()
         value = value.cpu().detach()
 
