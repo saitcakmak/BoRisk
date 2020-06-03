@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 from helper_fns.value_plotter import generate_values
 from test_functions.function_picker import function_picker
 import warnings
+from helper_fns.analyzer_plots import plot_out
 
 directory = "../batch_output/"
 function_name = 'marzat'
@@ -123,28 +124,4 @@ if plot_gap:
     for key in output.keys():
         output[key]['y'] = output[key]['y'] - best_value
 
-for key in output.keys():
-    try:
-        x = output[key]['x']
-        avg_log_gap = torch.mean(torch.log10(output[key]['y']), dim=0)
-        std_log_gap = torch.std(torch.log10(output[key]['y']), dim=0) / torch.sqrt(torch.tensor(output[key]['y'].size(0), dtype=torch.float))
-        avg_gap = torch.mean(output[key]['y'], dim=0)
-        std_gap = torch.std(output[key]['y'], dim=0) / torch.sqrt(torch.tensor(output[key]['y'].size(0), dtype=torch.float))
-        # change these to switch between log and value
-        if plot_log:
-            avg = avg_log_gap
-            std = std_log_gap
-        else:
-            avg = avg_gap
-            std = std_gap
-        plt.plot(x, avg, label=key)
-        plt.fill_between(x, avg - 1.96 * std, avg + 1.96 * std, alpha=0.3)
-    except KeyError:
-        continue
-
-plt.xlabel("# of evaluations")
-plt.ylabel("log gap")
-plt.title("$f_6(x_c, x_e)$ Log Optimality Gap")
-plt.grid(True)
-plt.legend()
-plt.show()
+plot_out(output=output, title="$f_6(x_c, x_e)$ Log Optimality Gap", ylabel="log gap", plot_log=plot_log)

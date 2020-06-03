@@ -133,32 +133,5 @@ for key in output.keys():
     if output[key].keys() == dict().keys():
         output.pop(key)
 
-for key in output.keys():
-    try:
-        x = output[key]['x']
-        avg_log_gap = torch.mean(torch.log10(output[key]['y']), dim=0)
-        std_log_gap = torch.std(torch.log10(output[key]['y']), dim=0) / torch.sqrt(
-            torch.tensor(output[key]['y'].size(0), dtype=torch.float))
-        avg_gap = torch.mean(output[key]['y'], dim=0)
-        std_gap = torch.std(output[key]['y'], dim=0) / torch.sqrt(
-            torch.tensor(output[key]['y'].size(0), dtype=torch.float))
-        # change these to switch between log and value
-        if plot_log:
-            avg = avg_log_gap
-            std = std_log_gap
-        else:
-            avg = avg_gap
-            std = std_gap
-        plt.plot(x, avg, label=key)
-        plt.fill_between(x, avg - 1.96 * std, avg + 1.96 * std, alpha=0.3)
-    except KeyError:
-        continue
+plot_out(output=output, title="Covid-19 Cumulative Infections ", ylabel="infections", plot_log=plot_log)
 
-plt.xlabel("# of evaluations")
-plt.ylim(12250, 13500)
-plt.ylabel("infections")
-plt.title("Covid-19 Cumulative Infections ")
-plt.grid(True)
-plt.legend()
-# plt.savefig('covid_plot_1.png')
-plt.show()

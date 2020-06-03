@@ -14,33 +14,27 @@ from test_functions.function_picker import function_picker
 
 # Modify this and make sure it does what you want!
 
-function_name = 'braninwilliams'
-num_samples = 12
+function_name = 'marzat'
+num_samples = 40  # this is 40 for varkg / kgcp and 8 for benchmarks
 num_fantasies = 10  # default 50
-key_list = ['random'
-            ]
+key_list = ['random']
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
-iterations = 240
+iterations = 200
 
 import sys
 # seed_list = [int(sys.argv[1])]
-seed_list = range(1, 51)
+seed_list = range(1, 101)
 
-output_file = "%s_%s" % (function_name, "var_10fant_6start")
+output_file = "%s_%s" % (function_name, "cvar_10fant")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
-dim_w = 2
-kwargs['noise_std'] = 10
+dim_w = 3
+kwargs['noise_std'] = 1
 function = function_picker(function_name)
-if dim_w > 1:
-    w_samples = None
-    w_samples = function.w_samples
-    if w_samples is None:
-        raise ValueError('Specify w_samples!')
-else:
-    w_samples = None
+kwargs['fix_sampless'] = True  # This should be true. We will just pass None for w_samples to get random samples
+w_samples = function.w_samples
 weights = function.weights
 kwargs['weights'] = weights
 dim_x = function.dim - dim_w
@@ -48,11 +42,12 @@ num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
 
 kwargs['num_inner_restarts'] = 5 * dim_x
-kwargs['CVaR'] = False
+kwargs['CVaR'] = True
 kwargs['expectation'] = False
-kwargs['alpha'] = 0.7
-kwargs['disc'] = True
-num_x_samples = 6
+kwargs['alpha'] = 0.75
+kwargs['disc'] = False
+num_x_samples = 10
+num_init_w = 8
 
 output_path = "batch_output/%s" % output_file
 
@@ -78,16 +73,21 @@ for i, key in enumerate(key_list):
             old_state = torch.random.get_rng_state()
             torch.manual_seed(seed)
             x_samples = torch.rand(num_x_samples, dim_x)
+            init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
+            kwargs['x_samples'] = x_samples
+            kwargs['init_w_samples'] = init_w_samples
+            kwargs['init_samples'] = torch.cat((x_samples.unsqueeze(-2).repeat(1, num_init_w, 1),
+                                                init_w_samples), dim=-1)
             torch.random.set_rng_state(old_state)
         else:
-            x_samples = None
+            kwargs['x_samples'] = None
         if bm_alg_list[i] is None:
             q = q_base
         else:
             q = int(q_base / num_samples)
         output = exp_loop(function_name, seed=int(seed), dim_w=dim_w, filename=filename, iterations=iterations,
                           num_samples=num_samples, num_fantasies=num_fantasies,
-                          num_restarts=num_restarts, x_samples=x_samples,
+                          num_restarts=num_restarts,
                           raw_multiplier=raw_multiplier, q=q,
                           kgcp=kgcp, random_sampling=random,
                           tts_frequency=tts_frequency,

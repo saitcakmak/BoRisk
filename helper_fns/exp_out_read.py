@@ -7,17 +7,17 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'covid'
+function_name = 'marzat'
 output_key = 'tts_varkg_q=1'
-suffix = '_cvar_%s_' % output_key
+suffix = '_cvar_10fant_%s_' % output_key
 # seed_list = [6044, 8239, 4933, 3760, 8963]
-seed_list = range(1, 31)
+seed_list = range(1, 11)
 q = 1  # only used in the next line
-suffix2 = '_a=0.9_weights%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
+suffix2 = '_a=0.75_cont%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
 output_file = '../batch_output/plot_%s_cvar' % function_name
 
-iterations = 80
+iterations = 50
 
 
 def read_bests(seed):
@@ -40,14 +40,14 @@ def read_bests(seed):
     elif max_iter + final == iterations and final:
         temp_iter = iterations
     else:
-        print('seed %d is not run to completion' % seed)
+        print('seed %d is not run to completion, maxiter: %d' % (seed, max_iter))
         return None
     for i in range(temp_iter):
         try:
             current_best_list[i] = data[i]['current_best_sol']
             current_best_value_list[i] = data[i]['current_best_value']
         except KeyError:
-            print('seed %d is not run to completion' % seed)
+            print('seed %d is not run to completion - missing entry' % seed)
             return None
     if temp_iter == iterations:
         current_best_list[-1] = data['final_solution']
