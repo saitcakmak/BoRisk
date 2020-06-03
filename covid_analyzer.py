@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 from test_functions.function_picker import function_picker
 from time import time
-
+import sys
 
 directory = "batch_output/"
 function_name = 'covid'
@@ -25,6 +25,7 @@ num_plot = 10  # max number of plot lines in a figure
 w_batch_size = 10
 # this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
 
+
 out_store = "helper_fns/covid_eval_data.pt"
 try:
     out = torch.load(out_store)
@@ -34,10 +35,32 @@ except FileNotFoundError:
 w_samples = getattr(function, 'w_samples')
 weights = getattr(function, 'weights')
 
-
 data = torch.load(directory + filename)
 output = dict()
 start = time()
+
+if len(sys.argv) > 1:
+    if len(sys.argv) > 2:
+        raise NotImplementedError
+    key_list = [sys.argv[1]]
+    out_store = out_store[:-3] + key_list[0] + ".pt"
+    try:
+        extra_out = torch.load(out_store)
+    except FileNotFoundError:
+        extra_out = dict()
+    # removing output of other seeds to avoid duplicates
+    for key in out.keys():
+        if key not in key_list:
+            out.pop(key)
+    # making sure we get all the inputs
+    for key in key_list:
+        if key not in out.keys():
+            out[key] = dict()
+        for inner_key in extra_out[key].keys():
+            if inner_key not in out[key].keys():
+                out[key][inner_key] = extra_out[key][inner_key]
+else:
+    key_list = list(data.keys())
 
 
 def get_obj(X: torch.Tensor, key, inner_key):
@@ -71,13 +94,13 @@ def get_obj(X: torch.Tensor, key, inner_key):
         out[key] = dict()
     values = torch.cat([partial_out, values], dim=0)
     out[key][inner_key] = values
-    print("key %s, inner_key %s done! Time: %s" % (key, inner_key, time()-start))
+    print("key %s, inner_key %s done! Time: %s" % (key, inner_key, time() - start))
     torch.save(out, out_store)
 
     return values
 
 
-for key in data.keys():
+for key in key_list:
     output[key] = dict()
     if "_q" in key:
         sub = key[key.find("_q") + 1:]
@@ -104,7 +127,6 @@ for key in data.keys():
         else:
             output[key]['y'] = torch.cat([output[key]['y'], reshaped], dim=0)
 
-
 # If the key has no output, remove it.
 for key in output.keys():
     if output[key].keys() == dict().keys():
@@ -114,9 +136,11 @@ for key in output.keys():
     try:
         x = output[key]['x']
         avg_log_gap = torch.mean(torch.log10(output[key]['y']), dim=0)
-        std_log_gap = torch.std(torch.log10(output[key]['y']), dim=0) / torch.sqrt(torch.tensor(output[key]['y'].size(0), dtype=torch.float))
+        std_log_gap = torch.std(torch.log10(output[key]['y']), dim=0) / torch.sqrt(
+            torch.tensor(output[key]['y'].size(0), dtype=torch.float))
         avg_gap = torch.mean(output[key]['y'], dim=0)
-        std_gap = torch.std(output[key]['y'], dim=0) / torch.sqrt(torch.tensor(output[key]['y'].size(0), dtype=torch.float))
+        std_gap = torch.std(output[key]['y'], dim=0) / torch.sqrt(
+            torch.tensor(output[key]['y'].size(0), dtype=torch.float))
         # change these to switch between log and value
         if plot_log:
             avg = avg_log_gap
