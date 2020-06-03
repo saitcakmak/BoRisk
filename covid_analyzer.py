@@ -47,14 +47,19 @@ def get_obj(X: torch.Tensor, key, inner_key):
     :return: VaR / CVaR values
     """
     X = X.reshape(-1, 1, dim_x)
+    partial_out = torch.empty(0)
     if key in out.keys():
         if inner_key in out[key].keys():
             if out[key][inner_key].size(0) >= X.size(0):
                 print("returning existing result for %s %s" % (key, inner_key))
                 return out[key][inner_key][:X.size(0)]
-    # TODO: add functionality to reuse partially evaluated results
+            else:
+                print("reusing the partial output for %s %s" % (key, inner_key))
+                partial_out = out[key][inner_key]
+    partial_size = partial_out.size(0)
     if (X > 1).any() or (X < 0).any():
         raise ValueError('Some of the solutions is out of bounds. Make sure to reevaluate')
+    X = X[partial_size:]
     sols = torch.cat((X.repeat(1, num_w, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
     vals = function(sols)
     vals, _ = torch.sort(vals, dim=-2)
@@ -64,6 +69,7 @@ def get_obj(X: torch.Tensor, key, inner_key):
         values = vals[:, int(alpha * num_w), :]
     if key not in out.keys():
         out[key] = dict()
+    values = torch.cat([partial_out, values], dim=0)
     out[key][inner_key] = values
     print("key %s, inner_key %s done! Time: %s" % (key, inner_key, time()-start))
     torch.save(out, out_store)
