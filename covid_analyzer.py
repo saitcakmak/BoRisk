@@ -49,16 +49,17 @@ if len(sys.argv) > 1:
     except FileNotFoundError:
         extra_out = dict()
     # removing output of other seeds to avoid duplicates
-    for key in out.keys():
+    for key in list(out.keys()):
         if key not in key_list:
             out.pop(key)
     # making sure we get all the inputs
     for key in key_list:
         if key not in out.keys():
             out[key] = dict()
-        for inner_key in extra_out[key].keys():
-            if inner_key not in out[key].keys():
-                out[key][inner_key] = extra_out[key][inner_key]
+        if key in extra_out.keys():
+            for inner_key in extra_out[key].keys():
+                if inner_key not in out[key].keys():
+                    out[key][inner_key] = extra_out[key][inner_key]
 else:
     key_list = list(data.keys())
 
