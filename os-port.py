@@ -16,8 +16,8 @@ from test_functions.function_picker import function_picker
 
 function_name = 'portfolio_surrogate'
 num_samples = 10  # this is 40 for varkg / kgcp and 10 for benchmarks
-num_fantasies = 4  # default 50
-key_list = ['one_shot']
+num_fantasies = 10  # default 50
+key_list = ['one_shot-ex']
 # this should be a list of bm algorithms corresponding to the keys. None if VaRKG
 bm_alg_list = [None]
 q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
@@ -39,8 +39,8 @@ w_samples = function.w_samples
 weights = function.weights
 kwargs['weights'] = weights
 dim_x = function.dim - dim_w
-num_restarts = 10 * function.dim
-raw_multiplier = 25  # default 50
+num_restarts = 25 * function.dim
+raw_multiplier = 100  # default 50
 
 kwargs['one_shot'] = True
 kwargs['num_inner_restarts'] = 5 * dim_x
