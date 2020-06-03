@@ -156,6 +156,9 @@ class DeprOptimizer(Optimizer):
         initial_conditions = self.generate_simple_OSVaRKG_restart_points(acqf)
         options = {'maxiter': self.maxiter}
 
+        # TODO: need to multiply this for each one
+        inequality_constraints = self.inequality_constraints
+
         solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
                                                  acquisition_function=acqf,
                                                  lower_bounds=self.full_bounds[0],
