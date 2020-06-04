@@ -13,12 +13,13 @@ from gpytorch.priors import GammaPrior
 from VaR_KG import InnerVaR
 from test_functions.function_picker import function_picker
 from optimizer import Optimizer
+from helper_fns.analyzer_plots import plot_out
 
 directory = "../batch_output/"
 function_name = 'portfolio_surrogate'
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var-vkg'
+suffix = '_var'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 plot_gap = False  # if true, we plot the optimality gap
 plot_log = False  # if true, the plot is on log scale

@@ -62,6 +62,9 @@ Things to add here:
 # This is the multiplier for the confidence intervals
 beta = 1.
 
+# Moving average window
+ma_window = 1
+
 
 def plot_out(output, title, ylabel, plot_log):
     """
@@ -88,9 +91,20 @@ def plot_out(output, title, ylabel, plot_log):
             else:
                 avg = avg_gap
                 std = std_gap
+
+            if ma_window > 1 and key in ['random', 'tts_kgcp_q=1', 'tts_varkg_q=1']:
+                temp_avg = torch.empty(avg.size())
+                temp_std = torch.empty(std.size())
+                for i in range(avg.size(0)):
+                    l_ind = max(0, i - ma_window)
+                    temp_avg[i] = torch.mean(avg[l_ind:i+1], dim=0)
+                    temp_std[i] = torch.mean(std[l_ind:i+1], dim=0)
+                avg = temp_avg
+                std = temp_std
             # plt.plot(x, avg, **params_dict[key])
             # plt.fill_between(x, avg - beta * std, avg + beta * std, alpha=0.2)
-            plt.errorbar(x, avg, yerr=beta*std, **params_dict[key], ms=5)
+            markers, caps, bars = plt.errorbar(x, avg, yerr=beta*std, **params_dict[key], ms=5)
+            [bar.set_alpha(0.5) for bar in bars]
         except KeyError:
             continue
 

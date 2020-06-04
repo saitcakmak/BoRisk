@@ -10,11 +10,11 @@ from helper_fns.analyzer_plots import plot_out
 
 directory = "../batch_output/"
 function_name = 'braninwilliams'
-plot_gap = False  # if true, we plot the optimality gap
-plot_log = False  # if true, the plot is on log scale
+plot_gap = True  # if true, we plot the optimality gap
+plot_log = True  # if true, the plot is on log scale
 prefix = 'plot_'
 # prefix = ''
-suffix = '_var-pre'
+suffix = '_var'
 filename = '%s%s%s' % (prefix, function_name, suffix)
 dim_w = 2
 CVaR = False
