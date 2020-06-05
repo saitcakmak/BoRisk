@@ -5,6 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 from test_functions.function_picker import function_picker
 from time import time
+from helper_fns.analyzer_plots import plot_out
 import sys
 
 directory = "batch_output/"
