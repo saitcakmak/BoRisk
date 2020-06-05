@@ -29,7 +29,7 @@ alpha = 0.8
 function = function_picker(function_name, noise_std=0, negate=True)
 dim = function.dim
 dim_x = dim - dim_w
-num_w = 100
+num_w = 400
 num_plot = 10  # max number of plot lines in a figure
 w_batch_size = 10
 # this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
