@@ -7,17 +7,34 @@ from time import time
 
 
 directory = '../exp_output/'
-function_name = 'braninwilliams'
+
 output_key = 'tts_kgcp_q=1'
-suffix = '_var_10fant_6start_%s_' % output_key
-# seed_list = [6044, 8239, 4933, 3760, 8963]
+iterations = 100
 seed_list = range(1, 31)
-q = 1  # only used in the next line
-suffix2 = '_weights%s.pt' % ('_q=%d' % q if output_key in ['random', 'tts_kgcp'] and q > 1 else '')
 
-output_file = '../batch_output/plot_%s_cvar' % function_name
+# function_name = 'braninwilliams'
+# suffix = '_var_10fant_6start_%s_' % output_key
+# suffix2 = '_weights.pt'
+# rho = 'var'
 
-iterations = 120
+function_name = 'marzat'
+suffix = '_cvar_10fant_%s_' % output_key
+# suffix2 = '_a=0.75.pt'
+suffix2 = '_a=0.75_cont.pt'
+rho = 'cvar'
+
+# function_name = 'covid'
+# suffix = '_cvar_%s_' % output_key
+# suffix2 = '_a=0.9_weights.pt'
+# rho = 'cvar'
+
+# function_name = 'portfolio_surrogate'
+# suffix = '_var_%s_' % output_key
+# # suffix2 = '_a=0.8.pt'
+# suffix2 = '_a=0.8_cont.pt'
+# rho = 'var'
+
+output_file = '../batch_output/plot_%s_%s' % (function_name, rho)
 
 
 def read_bests(seed):
@@ -47,7 +64,7 @@ def read_bests(seed):
             current_best_list[i] = data[i]['current_best_sol']
             current_best_value_list[i] = data[i]['current_best_value']
         except KeyError:
-            print('seed %d is not run to completion - missing entry' % seed)
+            print('seed %d is not run to completion - missing entry at %d' % (seed, i))
             return None
     if temp_iter == iterations:
         current_best_list[-1] = data['final_solution']

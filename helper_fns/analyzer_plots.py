@@ -63,7 +63,7 @@ Things to add here:
 beta = 1.
 
 # Moving average window
-ma_window = 1
+ma_window = 3
 
 
 def plot_out(output, title, ylabel, plot_log):
@@ -92,7 +92,7 @@ def plot_out(output, title, ylabel, plot_log):
                 avg = avg_gap
                 std = std_gap
 
-            if ma_window > 1 and key in ['random', 'tts_kgcp_q=1', 'tts_varkg_q=1']:
+            if ma_window > 1:
                 temp_avg = torch.empty(avg.size())
                 temp_std = torch.empty(std.size())
                 for i in range(avg.size(0)):
