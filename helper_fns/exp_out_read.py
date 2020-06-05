@@ -9,7 +9,7 @@ from time import time
 directory = '../exp_output/'
 
 output_key = 'tts_kgcp_q=1'
-iterations = 100
+iterations = 80
 seed_list = range(1, 31)
 
 # function_name = 'braninwilliams'
@@ -17,16 +17,16 @@ seed_list = range(1, 31)
 # suffix2 = '_weights.pt'
 # rho = 'var'
 
-function_name = 'marzat'
-suffix = '_cvar_10fant_%s_' % output_key
-# suffix2 = '_a=0.75.pt'
-suffix2 = '_a=0.75_cont.pt'
-rho = 'cvar'
-
-# function_name = 'covid'
-# suffix = '_cvar_%s_' % output_key
-# suffix2 = '_a=0.9_weights.pt'
+# function_name = 'marzat'
+# suffix = '_cvar_10fant_%s_' % output_key
+# # suffix2 = '_a=0.75.pt'
+# suffix2 = '_a=0.75_cont.pt'
 # rho = 'cvar'
+
+function_name = 'covid'
+suffix = '_cvar_%s_' % output_key
+suffix2 = '_a=0.9_weights.pt'
+rho = 'cvar'
 
 # function_name = 'portfolio_surrogate'
 # suffix = '_var_%s_' % output_key
