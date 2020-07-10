@@ -3,6 +3,8 @@ This is to make the plotting of the analyzer outputs uniform
 """
 import torch
 import matplotlib.pyplot as plt
+from matplotlib import ticker
+import numpy as np
 
 params_dict = {
     'EI': {
@@ -63,7 +65,7 @@ Things to add here:
 beta = 1.
 
 # Moving average window
-ma_window = 3
+ma_window = 1
 
 
 def plot_out(output, title, ylabel, plot_log):
@@ -74,7 +76,8 @@ def plot_out(output, title, ylabel, plot_log):
     :param ylabel: y label
     :return: None
     """
-    plt.figure(figsize=(8, 6))
+    fig = plt.figure(figsize=(6, 4.5))
+    ax = fig.add_subplot(111)
     for key in params_dict.keys():
         try:
             x = output[key]['x']
@@ -112,5 +115,11 @@ def plot_out(output, title, ylabel, plot_log):
     plt.ylabel(ylabel)
     plt.title(title)
     plt.grid(True)
-    plt.legend(ncol=2)
+    ticks = plt.yticks()
+    if "f_6" in title:
+        new_ticks = (-0.25, 0.0, 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75)
+        plt.yticks(ticks=new_ticks)
+    if 'Covid' in title:
+        plt.ticklabel_format(axis='y', style='sci', scilimits=(0, 0))
+    # plt.legend(ncol=2)
     plt.show()

@@ -8,9 +8,9 @@ from time import time
 
 directory = '../exp_output/'
 
-output_key = 'tts_kgcp_q=1'
-iterations = 80
-seed_list = range(1, 31)
+output_key = 'tts_varkg_q=1'
+iterations = 40
+seed_list = range(1, 11)
 
 # function_name = 'braninwilliams'
 # suffix = '_var_10fant_6start_%s_' % output_key
@@ -23,16 +23,16 @@ seed_list = range(1, 31)
 # suffix2 = '_a=0.75_cont.pt'
 # rho = 'cvar'
 
-function_name = 'covid'
-suffix = '_cvar_%s_' % output_key
-suffix2 = '_a=0.9_weights.pt'
-rho = 'cvar'
+# function_name = 'covid'
+# suffix = '_cvar_%s_' % output_key
+# suffix2 = '_a=0.9_weights.pt'
+# rho = 'cvar'
 
-# function_name = 'portfolio_surrogate'
-# suffix = '_var_%s_' % output_key
-# # suffix2 = '_a=0.8.pt'
-# suffix2 = '_a=0.8_cont.pt'
-# rho = 'var'
+function_name = 'portfolio_surrogate'
+suffix = '_var_%s_' % output_key
+# suffix2 = '_a=0.8.pt'
+suffix2 = '_a=0.8_cont.pt'
+rho = 'var'
 
 output_file = '../batch_output/plot_%s_%s' % (function_name, rho)
 
