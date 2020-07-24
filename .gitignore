@@ -146,7 +146,6 @@ dmypy.json
 /other_output/
 /exp_output/bw_no_weight/
 /batch_output/old/
-/detailed_output/
 /exp_output/covid_error/
 /exp_output/braninwilliams_error/
 /plots/
@@ -157,3 +156,5 @@ dmypy.json
 /exp_output/covid_benchmarks/
 /exp_output/marzat_benchmarks/
 /exp_output/port_benchmarks/
+/other/
+/runner_files/test.py

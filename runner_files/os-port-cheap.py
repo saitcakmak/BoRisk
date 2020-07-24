@@ -2,28 +2,21 @@
 This is the main file to be run on the cluster.
 Modify this to fit the experiment you intend to run.
 """
-from exp_loop import exp_loop
+from BoRisk.exp_loop import exp_loop
 import torch
-from botorch.acquisition import (
-    ExpectedImprovement,
-    UpperConfidenceBound,
-    qMaxValueEntropy,
-    qKnowledgeGradient
-)
-from test_functions.function_picker import function_picker
+from BoRisk.test_functions import function_picker
 
 # Modify this and make sure it does what you want!
 
 function_name = 'portfolio_surrogate'
-num_samples = 10  # this is 40 for varkg / kgcp and 10 for benchmarks
+num_samples = 10  # this is 40 for rhoKG / apx and 10 for benchmarks
 num_fantasies = 4  # default 50
 key_list = ['one_shot']
-# this should be a list of bm algorithms corresponding to the keys. None if VaRKG
+# this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
-q_base = 1  # q for VaRKG. For others, it is q_base / num_samples
+q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
 iterations = 50
 
-import sys
 # seed_list = [int(sys.argv[1])]
 seed_list = range(1, 6)
 
@@ -50,12 +43,7 @@ kwargs['disc'] = False
 num_x_samples = 8
 num_init_w = 10
 
-output_path = "batch_output/%s" % output_file
-
-try:
-    output_dict = torch.load(output_path)
-except FileNotFoundError:
-    output_dict = dict()
+output_dict = dict()
 
 for i, key in enumerate(key_list):
     if key not in output_dict.keys():
@@ -65,7 +53,7 @@ for i, key in enumerate(key_list):
         print('starting key %s seed %d' % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
         random = 'random' in key
-        kgcp = 'kgcp' in key
+        apx = 'apx' in key
         if 'tts' in key:
             tts_frequency = 10
         else:
@@ -90,11 +78,10 @@ for i, key in enumerate(key_list):
                           num_samples=num_samples, num_fantasies=num_fantasies,
                           num_restarts=num_restarts,
                           raw_multiplier=raw_multiplier, q=q,
-                          kgcp=kgcp, random_sampling=random,
+                          apx=apx, random_sampling=random,
                           tts_frequency=tts_frequency,
                           benchmark_alg=bm_alg_list[i], w_samples=w_samples,
                           **kwargs)
         output_dict[key][seed] = output
         print("%s, seed %s completed" % (key, seed))
-        # torch.save(output_dict, output_path)
 print("Successfully completed!")

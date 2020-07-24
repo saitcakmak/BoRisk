@@ -53,13 +53,6 @@ params_dict = {
         'errorevery': 5
     }
 }
-"""
-Things to add here:
-    ylim if needed
-    plot style
-    markers
-    
-"""
 
 # This is the multiplier for the confidence intervals
 beta = 1.
