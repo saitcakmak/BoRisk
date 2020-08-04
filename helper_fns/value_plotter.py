@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 from botorch.test_functions import Powell, Branin
 from typing import List
-from test_functions.function_picker import function_picker
+from BoRisk.test_functions import function_picker
 
 
 # Initialize the test function

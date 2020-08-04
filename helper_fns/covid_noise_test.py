@@ -2,7 +2,7 @@
 We want to understand the behavior of the noise in covid simulator.
 """
 import torch
-from test_functions.function_picker import function_picker
+from BoRisk.test_functions import function_picker
 from time import time
 
 start = time()

@@ -10,12 +10,14 @@ from gpytorch import ExactMarginalLogLikelihood
 from gpytorch.constraints import GreaterThan
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.priors import GammaPrior
-from VaR_KG import InnerVaR
-from test_functions.function_picker import function_picker
-from optimizer import Optimizer
-from helper_fns.analyzer_plots import plot_out
+from BoRisk.acquisition import InnerRho
+from BoRisk.test_functions import function_picker
+from BoRisk.optimizer import Optimizer
+from analyzer_plots import plot_out
+import os
 
-directory = "../batch_output/"
+directory = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), "batch_output")
 function_name = 'portfolio_surrogate'
 prefix = 'plot_'
 # prefix = ''
@@ -32,14 +34,17 @@ dim_x = dim - dim_w
 num_w = 400
 num_plot = 10  # max number of plot lines in a figure
 w_batch_size = 10
-# this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
+# this is the number of w used to approximate the objective for benchmarks.
+# Needed for proper plotting.
 
 w_samples = torch.rand(num_w, dim_w)
 
 # read the data
 data_list = list()
 for i in range(1, 31):
-    data_file = "../port_evals/port_n=100_seed=%d" % i
+    data_file = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), "BoRisk", "test_functions",
+    "port_evals", "port_n=100_seed=%d" % i)
     data_list.append(torch.load(data_file))
 
 # join the data together
@@ -64,7 +69,7 @@ mll = ExactMarginalLogLikelihood(model.likelihood, model)
 fit_gpytorch_model(mll)
 
 # Construct inner objective and get the best value
-inner_VaR = InnerVaR(model=model, w_samples=w_samples,
+inner_rho = InnerRho(model=model, w_samples=w_samples,
                      alpha=alpha, dim_x=dim_x, num_repetitions=40,
                      CVaR=CVaR)
 
@@ -78,7 +83,7 @@ if plot_gap:
                           maxiter=1000,
                           inequality_constraints=None)
 
-    best_sol, best_value = optimizer.optimize_inner(inner_VaR)
+    best_sol, best_value = optimizer.optimize_inner(inner_rho)
     best_value = best_value.detach()
 
 
@@ -89,10 +94,10 @@ def get_obj(X: torch.Tensor):
     :return: VaR / CVaR values
     """
     X = X.reshape(-1, 1, dim_x)
-    return inner_VaR(X).detach()
+    return inner_rho(X).detach()
 
 
-data = torch.load(directory + filename)
+data = torch.load(os.path.join(directory, filename))
 output = dict()
 for key in data.keys():
     output[key] = dict()

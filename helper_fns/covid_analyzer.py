@@ -3,12 +3,14 @@ this is for analyzing batches of job runs
 """
 import torch
 import matplotlib.pyplot as plt
-from test_functions.function_picker import function_picker
+from BoRisk.test_functions import function_picker
 from time import time
-from helper_fns.analyzer_plots import plot_out
+from analyzer_plots import plot_out
 import sys
+import os
 
-directory = "../batch_output/"
+directory = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), "batch_output")
 function_name = 'covid'
 plot_log = False  # if true, the plot is on log scale
 prefix = 'plot_'
@@ -36,7 +38,7 @@ except FileNotFoundError:
 w_samples = getattr(function, 'w_samples')
 weights = getattr(function, 'weights')
 
-data = torch.load(directory + filename)
+data = torch.load(os.path.join(directory, filename))
 output = dict()
 start = time()
 

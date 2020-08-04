@@ -3,12 +3,14 @@ this is for analyzing batches of job runs
 """
 import torch
 import matplotlib.pyplot as plt
-from helper_fns.value_plotter import generate_values
-from test_functions.function_picker import function_picker
+from value_plotter import generate_values
+from BoRisk.test_functions import function_picker
 import warnings
-from helper_fns.analyzer_plots import plot_out
+from analyzer_plots import plot_out
+import os
 
-directory = "../batch_output/"
+directory = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), "batch_output")
 function_name = 'braninwilliams'
 plot_gap = True  # if true, we plot the optimality gap
 plot_log = True  # if true, the plot is on log scale
@@ -46,7 +48,7 @@ if plot_gap:
                            dim_x=dim_x, dim_w=dim_w, weights=weights)
     best_value = torch.min(y)
 
-data = torch.load(directory + filename)
+data = torch.load(os.path.join(directory, filename))
 output = dict()
 
 

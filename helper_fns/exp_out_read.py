@@ -4,13 +4,16 @@ Just reads the current best output reported and saves it for plotting.
 
 import torch
 from time import time
+import os
 
 
-directory = '../exp_output/'
+directory = os.path.join(os.path.dirname(
+    os.path.dirname(os.path.abspath(__file__))), "exp_output")
 
-output_key = 'tts_kgcp_q=1'
-iterations = 80
-seed_list = range(1, 31)
+# specify the parameters for the files to read
+output_key = 'tts_rhoKG_q=1'
+iterations = 40
+seed_list = range(1, 11)
 
 # function_name = 'braninwilliams'
 # suffix = '_var_10fant_6start_%s_' % output_key
@@ -23,23 +26,27 @@ seed_list = range(1, 31)
 # suffix2 = '_a=0.75_cont.pt'
 # rho = 'cvar'
 
-function_name = 'covid'
-suffix = '_cvar_%s_' % output_key
-suffix2 = '_a=0.9_weights.pt'
-rho = 'cvar'
+# function_name = 'covid'
+# suffix = '_cvar_%s_' % output_key
+# suffix2 = '_a=0.9_weights.pt'
+# rho = 'cvar'
 
-# function_name = 'portfolio_surrogate'
-# suffix = '_var_%s_' % output_key
-# # suffix2 = '_a=0.8.pt'
-# suffix2 = '_a=0.8_cont.pt'
-# rho = 'var'
+function_name = 'portfolio_surrogate'
+suffix = '_var_%s_' % output_key
+# suffix2 = '_a=0.8.pt'
+suffix2 = '_a=0.8_cont.pt'
+rho = 'var'
 
-output_file = '../batch_output/plot_%s_%s' % (function_name, rho)
+output_file = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "batch_output",
+    "plot_%s_%s" % (function_name, rho)
+)
 
 
 def read_bests(seed):
     start = time()
-    filename = directory + function_name + suffix + str(seed) + suffix2
+    filename = os.path.join(directory, function_name + suffix + str(seed) + suffix2)
     data = torch.load(filename)
     try:
         data_0 = data[0]
