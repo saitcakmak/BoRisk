@@ -5,7 +5,7 @@ import torch
 import matplotlib.pyplot as plt
 from BoRisk.test_functions import function_picker
 from time import time
-from analyzer_plots import plot_out
+from helper_fns.analyzer_plots import plot_out
 import sys
 import os
 

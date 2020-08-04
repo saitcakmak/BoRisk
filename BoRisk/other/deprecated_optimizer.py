@@ -12,6 +12,7 @@ from torch import Tensor
 from BoRisk.other.deprecated_rhokg import OneShotrhoKG
 from math import ceil
 from BoRisk.optimizer import Optimizer
+from BoRisk.utils import draw_constrained_sobol
 
 
 class DeprOptimizer(Optimizer):
@@ -186,8 +187,9 @@ class DeprOptimizer(Optimizer):
         best = torch.argmax(torch.mean(values, dim=-1))
         return solutions[best].detach(), torch.mean(values, dim=-1)[best].detach()
 
-    def disc_optimize_OSrhoKG(self, acqf: OneShotrhoKG, w_samples: Tensor) -> Tuple[
-        Tensor, Tensor]:
+    def disc_optimize_OSrhoKG(
+            self, acqf: OneShotrhoKG, w_samples: Tensor
+    ) -> Tuple[Tensor, Tensor]:
         """
         Optimizer that restricts w component to w_samples.
         :param acqf: rhoKG object to be optimized
@@ -272,9 +274,11 @@ class DeprOptimizer(Optimizer):
         idx[-1] = torch.argmax(outer_values)
         solutions = outer_sols[idx].unsqueeze(-2)
 
-        random_outer = draw_constrained_sobol(self.one_shot_outer_bounds,
-                                              self.num_restarts, q=1,
-                                              inequality_constraints=self.inequality_constraints)
+        random_outer = draw_constrained_sobol(
+            self.one_shot_outer_bounds,
+            self.num_restarts, q=1,
+            inequality_constraints=self.inequality_constraints
+        )
 
         solutions = torch.cat((random_outer, solutions), dim=0)
 
@@ -286,7 +290,8 @@ class DeprOptimizer(Optimizer):
         Generates the one-shot raw samples for start of the optimization.
         This is only to be used for starting optimization for the first time
         in a given loop. After that, we will utilize the fantasy solutions.
-        :param w_samples: If specified, the w component of the samples is restricted to this set
+        :param w_samples: If specified, the w component of the samples is
+            restricted to this set
         :return: Raw samples
         """
         if self.inequality_constraints is not None:
@@ -310,11 +315,8 @@ class DeprOptimizer(Optimizer):
             w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
             w_picked = w_samples[w_ind, :]
             for i in range(self.q):
-                X_rnd[..., i * self.dim + self.dim_x:(i + 1) * self.dim] = w_picked[...,
-                                                                           i,
-                                                                           :].unsqueeze(
-                    -2)
-
+                X_rnd[..., i * self.dim + self.dim_x:(i + 1) * self.dim] = \
+                    w_picked[..., i, :].unsqueeze(-2)
         return X_rnd
 
     def evaluate_samples(self, acqf: OneShotrhoKG, samples: Tensor) -> Tensor:

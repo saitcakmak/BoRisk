@@ -2,7 +2,7 @@ import torch
 from botorch.models import SingleTaskGP
 from BoRisk.acquisition import InnerRho
 from time import sleep
-from plotter import contour_plotter
+from helper_fns.plotter import contour_plotter
 from botorch.models.transforms import Standardize
 from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.constraints.constraints import GreaterThan

@@ -3,7 +3,7 @@ this is for analyzing batches of job runs
 """
 import torch
 import matplotlib.pyplot as plt
-from value_plotter import generate_values
+from helper_fns.value_plotter import generate_values
 from BoRisk.test_functions import function_picker
 import warnings
 import os

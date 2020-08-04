@@ -38,3 +38,24 @@ class SineQuadratic(SyntheticTestFunction):
 
     def evaluate_true(self, X: Tensor) -> Tensor:
         return torch.sin(self.a * X[..., 0]).unsqueeze(-1) + X[..., 1].pow(2).unsqueeze(-1)
+
+
+class ConstrainedQuadratic(SyntheticTestFunction):
+    """
+    Sum of squares of each elements.
+    Has a constraint that the first two dimensions must sum to less than 1.
+    Has global minimum at 0.
+    """
+    _optimal_value = 0.0
+
+    def __init__(
+            self, dim: int = 3, noise_std: Optional[float] = None, negate: bool =False
+    ):
+        self.dim = dim
+        self._bounds = [(0, 1) for _ in range(self.dim)]
+        self._optimizers = [tuple(0.0 for _ in range(self.dim))]
+        super().__init__(noise_std=noise_std, negate=negate)
+        self.inequality_constraints = [(torch.tensor([0, 1]), torch.tensor([-1., -1.]), -1.)]
+
+    def evaluate_true(self, X: Tensor) -> Tensor:
+        return torch.sum(X.pow(2), -1, True)

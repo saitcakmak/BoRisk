@@ -3,10 +3,10 @@ this is for analyzing batches of job runs
 """
 import torch
 import matplotlib.pyplot as plt
-from value_plotter import generate_values
+from helper_fns.value_plotter import generate_values
 from BoRisk.test_functions import function_picker
 import warnings
-from analyzer_plots import plot_out
+from helper_fns.analyzer_plots import plot_out
 import os
 
 directory = os.path.join(os.path.dirname(

@@ -59,6 +59,8 @@ and repeats for the given number of iterations.
 
 - BoRisk/acquisition.py: defines the acquisition functions. 
 
+- BoRisk/utils.py: utilities for drawing constrained random variables.
+
 Note: While the code was being written, the rhoKG acquisition function was called VaRKG
  and the 
 approximation was referred to as KGCP. While cleaning up the code, the names were

@@ -16,7 +16,7 @@ from BoRisk.test_functions import function_picker
 from botorch.models.transforms import Standardize
 from BoRisk.optimizer import Optimizer, InnerOptimizer
 import numpy as np
-from plotter import contour_plotter
+from helper_fns.plotter import contour_plotter
 import matplotlib.pyplot as plt
 
 seed = 0

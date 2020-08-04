@@ -13,7 +13,7 @@ from gpytorch.priors import GammaPrior
 from BoRisk.acquisition import InnerRho
 from BoRisk.test_functions import function_picker
 from BoRisk.optimizer import Optimizer
-from analyzer_plots import plot_out
+from helper_fns.analyzer_plots import plot_out
 import os
 
 directory = os.path.join(os.path.dirname(

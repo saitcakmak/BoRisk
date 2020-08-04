@@ -2,7 +2,9 @@
 The function picker.
 Find most in: https://www.sfu.ca/~ssurjano/optimization.html
 """
-from BoRisk.test_functions.simple_test_functions import SineQuadratic, SimpleQuadratic
+from BoRisk.test_functions.simple_test_functions import (
+    SineQuadratic, SimpleQuadratic, ConstrainedQuadratic
+)
 from BoRisk.test_functions.standardized_function import StandardizedFunction
 from BoRisk.test_functions.cont_newsvendor import ContinuousNewsvendor
 from BoRisk.test_functions.prod_line import ProductionLine
@@ -11,45 +13,50 @@ from BoRisk.test_functions.robust_synthetic import Marzat6
 # from test_functions.cvx_portfolio_simulator import CVXPortfolioSimulator
 from BoRisk.test_functions.portfolio_surrogate import PortfolioSurrogate
 from BoRisk.test_functions.covid_exp_class import CovidSim, CovidEval
-from botorch.test_functions import (Ackley,
-                                    Beale,
-                                    Branin,
-                                    DixonPrice,
-                                    EggHolder,
-                                    Levy,
-                                    Rastrigin,
-                                    SixHumpCamel,
-                                    ThreeHumpCamel,
-                                    Powell,
-                                    Hartmann)
+from botorch.test_functions import (
+    Ackley,
+    Beale,
+    Branin,
+    DixonPrice,
+    EggHolder,
+    Levy,
+    Rastrigin,
+    SixHumpCamel,
+    ThreeHumpCamel,
+    Powell,
+    Hartmann,
+)
 from botorch.test_functions import SyntheticTestFunction
 
-function_dict = {"simplequad": SimpleQuadratic,
-                 "sinequad": SineQuadratic,
-                 "powell": Powell,
-                 "beale": Beale,
-                 "dixonprice": DixonPrice,
-                 "eggholder": EggHolder,
-                 "levy": Levy,
-                 "rastrigin": Rastrigin,
-                 "branin": Branin,
-                 "ackley": Ackley,
-                 "hartmann3": Hartmann,
-                 "hartmann4": Hartmann,
-                 "hartmann6": Hartmann,
-                 "sixhumpcamel": SixHumpCamel,
-                 "threehumpcamel": ThreeHumpCamel,
-                 "braninwilliams": BraninWilliams,
-                 "marzat": Marzat6,
-                 # "portfolio": CVXPortfolioSimulator,
-                 "portfolio_surrogate": PortfolioSurrogate,
-                 "covid": CovidSim,
-                 "covid_eval": CovidEval  # Only to be used for evaluating the results
-                 }
+function_dict = {
+    "simplequad": SimpleQuadratic,
+    "consquad": ConstrainedQuadratic,
+    "sinequad": SineQuadratic,
+    "powell": Powell,
+    "beale": Beale,
+    "dixonprice": DixonPrice,
+    "eggholder": EggHolder,
+    "levy": Levy,
+    "rastrigin": Rastrigin,
+    "branin": Branin,
+    "ackley": Ackley,
+    "hartmann3": Hartmann,
+    "hartmann4": Hartmann,
+    "hartmann6": Hartmann,
+    "sixhumpcamel": SixHumpCamel,
+    "threehumpcamel": ThreeHumpCamel,
+    "braninwilliams": BraninWilliams,
+    "marzat": Marzat6,
+    # "portfolio": CVXPortfolioSimulator,
+    "portfolio_surrogate": PortfolioSurrogate,
+    "covid": CovidSim,
+    "covid_eval": CovidEval  # Only to be used for evaluating the results
+}
 
 
-def function_picker(function_name: str, noise_std: float = 0.1,
-                    negate: bool = False) -> SyntheticTestFunction:
+def function_picker(
+        function_name: str, noise_std: float = 0.1, negate: bool = False
+) -> SyntheticTestFunction:
     """
     Returns the appropriate function callable
     If adding new BoTorch test functions, run them through StandardizedFunction.
