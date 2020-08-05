@@ -184,7 +184,7 @@ class CovidSim(SyntheticTestFunction):
                 for df in dfs_sims:
                     num_infected += self.populations[j] - df.iloc[self.time_horizon]['S'] - df.iloc[self.time_horizon][
                         'QS']
-            out[i, 0, 0] = num_infected / self.replications
+            out[i, 0, 0] = torch.true_divide(num_infected, self.replications)
         if self.negate:
             out = -out
         # recover the old random state
