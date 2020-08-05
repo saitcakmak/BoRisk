@@ -40,12 +40,21 @@ class Optimizer:
     between iterations and not get stuck at the same point.
     """
 
-    def __init__(self, num_restarts: int, raw_multiplier: int,
-                 num_fantasies: int, dim: int, dim_x: int, q: int = 1,
-                 inequality_constraints: List[Tuple] = None,
-                 random_frac: float = 0.4,
-                 limiter: float = 10, eta: float = 2.0,
-                 maxiter: int = 1000):
+    def __init__(
+            self,
+            num_restarts: int,
+            raw_multiplier: int,
+            num_fantasies: int,
+            dim: int,
+            dim_x: int,
+            q: int = 1,
+            inequality_constraints: List[Tuple] = None,
+            random_frac: float = 0.4,
+            limiter: float = 10,
+            eta: float = 2.0,
+            maxiter: int = 1000,
+            low_fantasies: Optional[int] = None
+    ):
         """
         Initialize with optimization settings.
         :param num_restarts: number of restart points for optimization
@@ -62,6 +71,9 @@ class Optimizer:
         :param eta: Parameter for exponential weighting of raw samples
                     to generate the starting solutions
         :param maxiter: maximum iterations of L-BFGS-B to Run
+        :param low_fantasies: see AbsKG.change_num_fantasies for details. This reduces
+            the number of fantasies used during raw sample evaluation to reduce the
+            computational cost. It is recommended (=4) but not enabled by default.
         """
         self.num_restarts = num_restarts
         self.num_refine_restarts = max(1, ceil(num_restarts / 10.0))
@@ -80,6 +92,7 @@ class Optimizer:
         self.maxiter = maxiter
         self.current_best = None
         self.inequality_constraints = inequality_constraints
+        self.low_fantasies = low_fantasies
 
     def generate_inner_raw_samples(self) -> Tensor:
         """
@@ -193,7 +206,13 @@ class Optimizer:
         :param batch_size: We will do the optimization in mini batches to save on memory
         :return: Optimal solution and value
         """
+        if self.low_fantasies is not None:
+            # set the low num_fantasies
+            acqf.change_num_fantasies(num_fantasies=self.low_fantasies)
         initial_conditions = self.generate_outer_restart_points(acqf, w_samples)
+        if self.low_fantasies is not None:
+            # recover the original num_fantasies
+            acqf.change_num_fantasies()
         if w_samples is not None:
             fixed_features = dict()
             for j in range(self.q):

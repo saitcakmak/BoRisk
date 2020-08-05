@@ -62,7 +62,8 @@ class Experiment:
                  'inner_raw_multiplier': 5,
                  'weights': None,
                  'fix_samples': True,
-                 'one_shot': False
+                 'one_shot': False,
+                 'low_fantasies': None
                  }
 
     def __init__(self, function: str, **kwargs):
@@ -97,6 +98,9 @@ class Experiment:
         :param fix_samples: In continuous case of W, whether the samples are redrawn at every iteration
             or fixed to w_samples.
         :param one_shot: Uses one-shot optimization. DO NOT USE unless you know what you're doing.
+        :param low_fantasies: see AbsKG.change_num_fantasies for details. This reduces
+            the number of fantasies used during raw sample evaluation to reduce the
+            computational cost. It is recommended (=4) but not enabled by default.
         """
         if 'seed' in kwargs.keys():
             warnings.warn('Seed should be set outside. It will be ignored!')
@@ -123,6 +127,7 @@ class Experiment:
         self.X = torch.empty(0, self.dim)
         self.Y = torch.empty(0, 1)
         self.model = None
+        self.low_fantasies = kwargs.get("low_fantasies", None)
         self.inner_optimizer = InnerOptimizer(
             num_restarts=self.num_inner_restarts,
             raw_multiplier=self.inner_raw_multiplier,
@@ -151,7 +156,8 @@ class Experiment:
                 dim_x=self.dim_x,
                 q=self.q,
                 maxiter=self.maxiter,
-                inequality_constraints=self.function.inequality_constraints
+                inequality_constraints=self.function.inequality_constraints,
+                low_fantasies=self.low_fantasies
             )
 
         if self.fix_samples:
@@ -262,8 +268,6 @@ class Experiment:
         current_best_sol, current_best_value, inner_VaR = self.current_best(
             past_only=self.apx, inner_seed=inner_seed)
 
-        fantasy_seed = int(torch.randint(100000, (1,)))
-
         if self.random_sampling:
             candidate = constrained_rand(
                 (self.q, self.dim), self.function.inequality_constraints
@@ -272,13 +276,11 @@ class Experiment:
         else:
             if self.apx:
                 acqf = rhoKGapx(current_best_rho=current_best_value,
-                                fantasy_seed=fantasy_seed,
                                 past_x=self.X[:, :self.dim_x],
                                 inner_seed=inner_seed,
                                 **vars(self))
             elif self.one_shot:
                 acqf = OneShotrhoKG(current_best_rho=current_best_value,
-                                    fantasy_seed=fantasy_seed,
                                     past_x=self.X[:, :self.dim_x],
                                     inner_seed=inner_seed,
                                     **vars(self))
@@ -286,7 +288,6 @@ class Experiment:
             else:
                 acqf = rhoKG(inner_optimizer=self.inner_optimizer.optimize,
                              current_best_rho=current_best_value,
-                             fantasy_seed=fantasy_seed,
                              inner_seed=inner_seed,
                              **{_: vars(self)[_] for _ in vars(self) if
                                 _ != 'inner_optimizer'})

@@ -271,7 +271,7 @@ class OneShotrhoKG(AbsKG):
         :return: value of VaR-KG at X (to be maximized) - size: batch size x num_fantasies
         """
         warnings.warn("This works very poorly due to poor optimization. "
-                      "Use the nested VaRKG if possible.")
+                      "Use rhoKG if possible.")
         # make sure X has proper shape
         X = X.reshape(-1, 1, X.size(-1))
         batch_size = X.size(0)
@@ -301,11 +301,6 @@ class OneShotrhoKG(AbsKG):
         else:
             w_samples = torch.rand((self.num_samples, self.dim_w))
 
-        if self.fantasy_seed is None:
-            fantasy_seed = int(torch.randint(100000, (1,)))
-        else:
-            fantasy_seed = self.fantasy_seed
-
         if self.inner_seed is None:
             inner_seed = int(torch.randint(100000, (1,)))
         else:
@@ -313,7 +308,6 @@ class OneShotrhoKG(AbsKG):
 
         w_actual = X_actual[..., -self.dim_w:]
 
-        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
         for i in range(num_batches):
             left_index = i * self.mini_batch_size
             if i == num_batches - 1:
@@ -323,10 +317,10 @@ class OneShotrhoKG(AbsKG):
             # construct the fantasy model
             if self.cuda:
                 fantasy_model = self.model.fantasize(
-                    X_actual[left_index:right_index].cuda(), sampler).cuda()
+                    X_actual[left_index:right_index].cuda(), self.sampler).cuda()
             else:
                 fantasy_model = self.model.fantasize(X_actual[left_index:right_index],
-                                                     sampler)
+                                                     self.sampler)
 
             inner_VaR = InnerRho(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,

@@ -39,6 +39,7 @@ kwargs['num_inner_restarts'] = 5 * dim_x
 kwargs['CVaR'] = True
 kwargs['alpha'] = 0.9
 kwargs['disc'] = True
+kwargs['low_fantasies'] = 4
 num_x_samples = 6
 num_init_w = 10
 

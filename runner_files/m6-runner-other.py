@@ -21,12 +21,14 @@ key_list = ['EI',
             'MES',
             'qKG',
             'UCB',
+            'classical_random',
             ]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [ExpectedImprovement,
                qMaxValueEntropy,
                qKnowledgeGradient,
                UpperConfidenceBound,
+               qKnowledgeGradient
                ]
 q_base = 8  # q for rhoKG. For others, it is q_base / num_samples
 iterations = 25

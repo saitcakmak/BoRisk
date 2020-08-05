@@ -63,11 +63,16 @@ class InnerRho(MCAcquisitionFunction):
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.cuda = cuda
         if self.num_repetitions > 0:
-            raw_sobol = draw_sobol_normal_samples(d=self.num_samples,
-                                                  n=self.num_repetitions * self.num_fantasies,
-                                                  seed=inner_seed)
-            self.sobol_samples = raw_sobol.reshape(self.num_repetitions, self.num_fantasies, 1,
-                                                   self.num_samples, 1)
+            # If you get an error here, which should not happen with reasonable
+            # num_fantasies and num_samples, change this to torch.randn().
+            raw_sobol = draw_sobol_normal_samples(
+                d=self.num_fantasies * self.num_samples,
+                n=self.num_repetitions,
+                seed=inner_seed
+            )
+            self.sobol_samples = raw_sobol.reshape(
+                self.num_repetitions, self.num_fantasies, 1, self.num_samples, 1
+            )
             # This is using different samples for each fantasy. Do we want this?
         if weights is not None:
             if weights.size(0) != w_samples.size(0):
@@ -78,7 +83,8 @@ class InnerRho(MCAcquisitionFunction):
         self.weights = weights
         if self.weights is not None:
             if self.weights.size(0) != self.w_samples.size(0):
-                raise NotImplementedError("Weights must be of the same size(0) as w_samples")
+                raise NotImplementedError(
+                    "Weights must be of the same size(0) as w_samples")
             if torch.sum(self.weights) != 1:
                 raise ValueError("Weights must be normalized")
 
@@ -114,14 +120,16 @@ class InnerRho(MCAcquisitionFunction):
             else:
                 # Is this still the case? Or does the latest modifications allow for
                 # general shapes?
-                raise ValueError("InnerVaR supports only up to 2 dimensional batch models")
+                raise ValueError(
+                    "InnerVaR supports only up to 2 dimensional batch models")
         else:
             if X.shape[-4:-2] != self.batch_shape:
                 raise ValueError('If passing large batch dimensional X, last two batch '
                                  'shapes must match the model batch_shape')
             if len(self.batch_shape) > 2:
-                raise ValueError('This is not set to handle larger than 2 dimensional batch models.'
-                                 'Things can go wrong, it has not been tested.')
+                raise ValueError(
+                    'This is not set to handle larger than 2 dimensional batch models.'
+                    'Things can go wrong, it has not been tested.')
         batch_shape = X.shape[:-2]
         batch_dim = len(batch_shape)
 
@@ -141,12 +149,16 @@ class InnerRho(MCAcquisitionFunction):
             base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
             if batch_dim >= 3:
                 base_samples = base_samples.view(-1, *[1] * (batch_dim - 2),
-                                                 *base_samples.shape[-4:]).repeat(1, *batch_shape[:-2], 1,
+                                                 *base_samples.shape[-4:]).repeat(1,
+                                                                                  *batch_shape[
+                                                                                   :-2],
+                                                                                  1,
                                                                                   1, 1, 1)
             # this next line is the cause of runtime warning, specifically the rsample part
             # changing base samples doesn't do anything - the reason is taking too many samples too
             # close to each other. See the issue in github.
-            samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]), base_samples)
+            samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]),
+                                                      base_samples)
         else:
             # get the posterior mean
             post = self.model.posterior(z)
@@ -159,7 +171,8 @@ class InnerRho(MCAcquisitionFunction):
         # while calculating rho
         if self.weights is None:
             if self.CVaR:
-                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :], dim=-2)
+                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :],
+                                    dim=-2)
             elif self.expectation:
                 values = torch.mean(samples, dim=-2)
             else:
@@ -169,12 +182,15 @@ class InnerRho(MCAcquisitionFunction):
             summed_weights = torch.empty(weights.size())
             summed_weights[..., 0, :] = weights[..., 0, :]
             for i in range(1, weights.size(-2)):
-                summed_weights[..., i, :] = summed_weights[..., i - 1, :] + weights[..., i, :]
+                summed_weights[..., i, :] = summed_weights[..., i - 1, :] + weights[...,
+                                                                            i, :]
             if not self.expectation:
                 gr_ind = summed_weights >= self.alpha
-                var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1], dtype=torch.long) * weights.size(-2)
+                var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1],
+                                     dtype=torch.long) * weights.size(-2)
                 for i in range(weights.size(-2)):
-                    var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]], torch.tensor([i]))
+                    var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]],
+                                                           torch.tensor([i]))
 
                 if self.CVaR:
                     # deletes (zeroes) the non-tail weights
@@ -208,7 +224,7 @@ class AbsKG(MCAcquisitionFunction, ABC):
 
     def __init__(self, model: Model,
                  num_samples: int, alpha: Union[Tensor, float],
-                 current_best_rho: Optional[Tensor], num_fantasies: int, fantasy_seed: Optional[int],
+                 current_best_rho: Optional[Tensor], num_fantasies: int,
                  dim: int, dim_x: int,
                  q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
                  num_repetitions: int = 0,
@@ -222,10 +238,6 @@ class AbsKG(MCAcquisitionFunction, ABC):
         :param alpha: VaR risk level alpha
         :param current_best_rho: the best VaR value form the current GP model
         :param num_fantasies: number of fantasies used to calculate VaR-KG (number of Z repetitions)
-        :param fantasy_seed: if specified this seed is used in the sampler for the fantasy models.
-            it will result in fantasies being common across calls to the forward function of the
-            constructed object, reducing the randomness in optimization.
-            if None, then each forward call will generate an independent set of fantasies.
         :param dim: The full dimension of X = (x, w)
         :param dim_x: dimension of x in X = (x, w)
         :param q: for the q-batch parallel evaluation
@@ -264,9 +276,11 @@ class AbsKG(MCAcquisitionFunction, ABC):
         self.expectation = expectation
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
-        self.fantasy_seed = fantasy_seed
         self.inner_seed = inner_seed
         self.cuda = cuda
+        self.sampler = SobolQMCNormalSampler(self.num_fantasies)
+        # this keeps track of the actual num_fantasies being used at the moment
+        self.active_fantasies = self.num_fantasies
 
         self.fix_samples = fix_samples
         if fixed_samples is not None:
@@ -279,8 +293,10 @@ class AbsKG(MCAcquisitionFunction, ABC):
             self.fixed_samples = None
 
         self.num_repetitions = num_repetitions
-        if lookahead_samples is not None and (lookahead_samples.dim() != 2 or lookahead_samples.size(-1) != self.dim_w):
-            raise ValueError("lookahead_samples must be of size num_lookahead_samples x dim_w")
+        if lookahead_samples is not None and (
+                lookahead_samples.dim() != 2 or lookahead_samples.size(-1) != self.dim_w):
+            raise ValueError(
+                "lookahead_samples must be of size num_lookahead_samples x dim_w")
         self.lookahead_samples = lookahead_samples
         self.weights = weights
 
@@ -300,6 +316,23 @@ class AbsKG(MCAcquisitionFunction, ABC):
         """
         self.call_count = 0
         self.last_inner_solution = None
+
+    def change_num_fantasies(self, num_fantasies: Optional[int] = None) -> None:
+        """
+        To lower the cost of raw_sample evaluation, we can lower num_fantasies. This
+        handles changing the effective num_fantasies and recovering the original
+        parameters. The change is implemented by changing the sample shape of the
+        sampler.
+
+        Args:
+            num_fantasies: The lower num_fantasies to use. If None, we recover the
+                original num_fantasies.
+        """
+        if num_fantasies is None:
+            num_fantasies = self.num_fantasies
+        self.sampler._sample_shape = torch.Size([num_fantasies])
+        self.sampler.base_samples = None
+        self.active_fantasies = num_fantasies
 
 
 class rhoKGapx(AbsKG):
@@ -339,24 +372,20 @@ class rhoKGapx(AbsKG):
         else:
             w_samples = torch.rand((self.num_samples, self.dim_w))
 
-        if self.fantasy_seed is None:
-            fantasy_seed = int(torch.randint(100000, (1,)))
-        else:
-            fantasy_seed = self.fantasy_seed
-
         if self.inner_seed is None:
             inner_seed = int(torch.randint(100000, (1,)))
         else:
             inner_seed = self.inner_seed
 
-        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches
+        # of size mini_batch_size
         num_batches = ceil(batch_size / self.mini_batch_size)
         values = torch.empty(batch_size)
 
         if self.last_inner_solution is None:
-            self.last_inner_solution = torch.empty(self.num_fantasies, batch_size, 1, self.dim_x)
-
-        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
+            self.last_inner_solution = torch.empty(
+                self.active_fantasies, batch_size, 1, self.dim_x
+            )
 
         for i in range(num_batches):
             left_index = i * self.mini_batch_size
@@ -367,35 +396,46 @@ class rhoKGapx(AbsKG):
 
             # construct the fantasy model
             if self.cuda:
-                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(), sampler).cuda()
+                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(),
+                                                     self.sampler).cuda()
             else:
-                fantasy_model = self.model.fantasize(X[left_index:right_index], sampler)
+                fantasy_model = self.model.fantasize(X[left_index:right_index],
+                                                     self.sampler)
 
             inner_rho = InnerRho(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
                                  num_repetitions=self.num_repetitions,
                                  inner_seed=inner_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                 CVaR=self.CVaR, expectation=self.expectation,
+                                 cuda=self.cuda,
                                  weights=self.weights)
 
             if self.call_count % self.tts_frequency == 0:
                 x_comp = X[left_index:right_index, :, :self.dim_x]
-                x_inner = torch.cat((x_comp, self.past_x.repeat(right_index - left_index, 1, 1)),
-                                    dim=-2).repeat(self.num_fantasies, 1, 1, 1)
 
-                temp_values = torch.empty(self.past_x.size(0) + self.q, self.num_fantasies, right_index - left_index)
+                x_inner = torch.cat(
+                    (x_comp, self.past_x.repeat(right_index - left_index, 1, 1)),
+                    dim=-2
+                ).repeat(self.active_fantasies, 1, 1, 1)
+
+                temp_values = torch.empty(
+                    self.past_x.size(0) + self.q, self.active_fantasies,
+                    right_index - left_index)
                 for j in range(temp_values.size(0)):
                     with settings.propagate_grads(True):
                         temp_values[j] = - inner_rho(x_inner[..., j, :].unsqueeze(-2))
                 best = torch.argmin(temp_values, dim=0)
-                detailed_values = torch.gather(temp_values, 0, best.unsqueeze(0)).reshape(self.num_fantasies,
-                                                                                          right_index - left_index)
-                self.last_inner_solution[:, left_index:right_index] = torch.gather(x_inner, 2,
-                                                                                   best.unsqueeze(-1).unsqueeze(
-                                                                                       -1).repeat(1, 1, 1, self.dim_x))
+                detailed_values = torch.gather(
+                    temp_values, 0, best.unsqueeze(0)
+                ).reshape(self.active_fantasies, right_index - left_index)
+                self.last_inner_solution[:, left_index:right_index] = \
+                    torch.gather(x_inner, 2, best.unsqueeze(-1).unsqueeze(-1).repeat(
+                        1, 1, 1, self.dim_x))
             else:
-                detailed_values = - inner_rho(self.last_inner_solution[:, left_index:right_index])
-            values[left_index:right_index] = self.current_best_rho - torch.mean(detailed_values, dim=0)
+                detailed_values = - inner_rho(
+                    self.last_inner_solution[:, left_index:right_index])
+            values[left_index:right_index] = self.current_best_rho - torch.mean(
+                detailed_values, dim=0)
         self.call_count += 1
         return values
 
@@ -438,11 +478,6 @@ class rhoKG(AbsKG):
         else:
             w_samples = torch.rand((self.num_samples, self.dim_w))
 
-        if self.fantasy_seed is None:
-            fantasy_seed = int(torch.randint(100000, (1,)))
-        else:
-            fantasy_seed = self.fantasy_seed
-
         if self.inner_seed is None:
             inner_seed = int(torch.randint(100000, (1,)))
         else:
@@ -452,10 +487,10 @@ class rhoKG(AbsKG):
         num_batches = ceil(batch_size / self.mini_batch_size)
         values = torch.empty(batch_size)
 
-        sampler = SobolQMCNormalSampler(self.num_fantasies, seed=fantasy_seed)
-
         if self.last_inner_solution is None:
-            self.last_inner_solution = torch.empty(self.num_fantasies, batch_size, 1, self.dim_x)
+            self.last_inner_solution = torch.empty(
+                self.active_fantasies, batch_size, 1, self.dim_x
+            )
 
         for i in range(num_batches):
             left_index = i * self.mini_batch_size
@@ -466,15 +501,18 @@ class rhoKG(AbsKG):
 
             # construct the fantasy model
             if self.cuda:
-                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(), sampler).cuda()
+                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(),
+                                                     self.sampler).cuda()
             else:
-                fantasy_model = self.model.fantasize(X[left_index:right_index], sampler)
+                fantasy_model = self.model.fantasize(X[left_index:right_index],
+                                                     self.sampler)
 
             inner_rho = InnerRho(model=fantasy_model, w_samples=w_samples,
                                  alpha=self.alpha, dim_x=self.dim_x,
                                  num_repetitions=self.num_repetitions,
                                  inner_seed=inner_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation, cuda=self.cuda,
+                                 CVaR=self.CVaR, expectation=self.expectation,
+                                 cuda=self.cuda,
                                  weights=self.weights)
             # optimize inner VaR
             with settings.propagate_grads(True):
@@ -484,7 +522,7 @@ class rhoKG(AbsKG):
                 else:
                     value = inner_rho(self.last_inner_solution[:, left_index:right_index])
             value = -value
-            values[left_index:right_index] = self.current_best_rho - torch.mean(value, dim=0)
+            values[left_index:right_index] = self.current_best_rho - torch.mean(value,
+                                                                                dim=0)
         self.call_count += 1
         return values
-

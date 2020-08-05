@@ -40,6 +40,7 @@ kwargs['CVaR'] = True
 kwargs['expectation'] = False
 kwargs['alpha'] = 0.75
 kwargs['disc'] = False
+kwargs['low_fantasies'] = 4
 num_x_samples = 10
 num_init_w = 8
 

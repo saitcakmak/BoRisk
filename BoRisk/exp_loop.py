@@ -69,6 +69,8 @@ def exp_loop(function_name: str, seed: int, filename: str, iterations: int,
             filename = filename + '_random'
         if kwargs.get('tts_frequency', 1) > 1 and 'tts' not in filename:
             filename = filename + '_tts'
+        if kwargs.get('low_fantasies', None) is not None and "low_fant" not in filename:
+            filename = filename + '_low_fant_%d' % kwargs.get("low_fantasies")
     if kwargs.get('weights') is not None and 'weights' not in filename:
         filename = filename + '_weights'
     try:

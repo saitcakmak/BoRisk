@@ -46,6 +46,7 @@ kwargs['CVaR'] = False
 kwargs['expectation'] = False
 kwargs['alpha'] = 0.7
 kwargs['disc'] = True
+kwargs['low_fantasies'] = 4
 num_x_samples = 6
 
 output_dict = dict()
