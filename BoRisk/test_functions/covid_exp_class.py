@@ -9,8 +9,9 @@ potentially with multiple populations.
 import torch
 from torch import Tensor
 import numpy as np
-from BoRisk.test_functions.covid_simulators.analysis_helpers import \
-    run_multiple_trajectories
+from BoRisk.test_functions.covid_simulators.analysis_helpers import (
+    run_multiple_trajectories,
+)
 from BoRisk.test_functions.covid_simulators.modified_params import base_params
 from botorch.test_functions.synthetic import SyntheticTestFunction
 from typing import List, Optional
@@ -53,50 +54,57 @@ class CovidSim(SyntheticTestFunction):
 
     # The set of random points - low end - middle - high end of the given range,
     # independenly for each
-    w_samples = torch.tensor([[0., 0., 0.],
-                              [0., 0., 0.5],
-                              [0., 0., 1.],
-                              [0., 0.5, 0.],
-                              [0., 0.5, 0.5],
-                              [0., 0.5, 1.],
-                              [0., 1., 0.],
-                              [0., 1., 0.5],
-                              [0., 1., 1.],
-                              [0.5, 0., 0.],
-                              [0.5, 0., 0.5],
-                              [0.5, 0., 1.],
-                              [0.5, 0.5, 0.],
-                              [0.5, 0.5, 0.5],
-                              [0.5, 0.5, 1.],
-                              [0.5, 1., 0.],
-                              [0.5, 1., 0.5],
-                              [0.5, 1., 1.],
-                              [1., 0., 0.],
-                              [1., 0., 0.5],
-                              [1., 0., 1.],
-                              [1., 0.5, 0.],
-                              [1., 0.5, 0.5],
-                              [1., 0.5, 1.],
-                              [1., 1., 0.],
-                              [1., 1., 0.5],
-                              [1., 1., 1.]])
+    w_samples = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.0, 0.0, 0.5],
+            [0.0, 0.0, 1.0],
+            [0.0, 0.5, 0.0],
+            [0.0, 0.5, 0.5],
+            [0.0, 0.5, 1.0],
+            [0.0, 1.0, 0.0],
+            [0.0, 1.0, 0.5],
+            [0.0, 1.0, 1.0],
+            [0.5, 0.0, 0.0],
+            [0.5, 0.0, 0.5],
+            [0.5, 0.0, 1.0],
+            [0.5, 0.5, 0.0],
+            [0.5, 0.5, 0.5],
+            [0.5, 0.5, 1.0],
+            [0.5, 1.0, 0.0],
+            [0.5, 1.0, 0.5],
+            [0.5, 1.0, 1.0],
+            [1.0, 0.0, 0.0],
+            [1.0, 0.0, 0.5],
+            [1.0, 0.0, 1.0],
+            [1.0, 0.5, 0.0],
+            [1.0, 0.5, 0.5],
+            [1.0, 0.5, 1.0],
+            [1.0, 1.0, 0.0],
+            [1.0, 1.0, 0.5],
+            [1.0, 1.0, 1.0],
+        ]
+    )
     # Corresponding weights, middle with p=0.5, low and high with p=0.25 independenly
     # for each
-    weights = torch.pow(2, torch.sum(w_samples == 0.5, dim=1)) / 64.
+    weights = torch.pow(2, torch.sum(w_samples == 0.5, dim=1)) / 64.0
     # This here is the same except with weights [0.3, 0.4, 0.3] for low-mid-high
     # weights = 0.001 * torch.pow(3, 3 - torch.sum(w_samples == 0.5, dim=1)) * \
     #           torch.pow(4, torch.sum(w_samples == 0.5, dim=1))
 
     _optimizers = None
 
-    def __init__(self, populations: Tensor = torch.tensor([50000, 75000, 100000]),
-                 prevalence_bounds: List = [(0.001, 0.004), (0.002, 0.006), (0.002, 0.008)],
-                 num_tests: int = 10000,
-                 replications: int = 1,
-                 time_horizon: int = 14, sim_params: dict = None,
-                 noise_std: Optional[float] = None,
-                 negate: bool = False
-                 ):
+    def __init__(
+        self,
+        populations: Tensor = torch.tensor([50000, 75000, 100000]),
+        prevalence_bounds: List = [(0.001, 0.004), (0.002, 0.006), (0.002, 0.008)],
+        num_tests: int = 10000,
+        replications: int = 1,
+        time_horizon: int = 14,
+        sim_params: dict = None,
+        noise_std: Optional[float] = None,
+        negate: bool = False,
+    ):
         """
         If you change problem dimension, change w_samples etc as well!!
         Initialize the problem with given number of populations.
@@ -119,11 +127,13 @@ class CovidSim(SyntheticTestFunction):
         self.dim_w = self.num_pop
         self.dim = self.num_pop + self.dim_w - 1
         self._bounds = [(0, 1) for _ in range(self.num_pop - 1)] + prevalence_bounds
-        super().__init__(noise_std = None, negate=negate)
+        super().__init__(noise_std=None, negate=negate)
         if sim_params is not None:
             for key, value in sim_params.items():
                 self.common_params[key] = value
-        self.inequality_constraints = [(torch.tensor([0, 1]), torch.tensor([-1., -1.]), -1.)]
+        self.inequality_constraints = [
+            (torch.tensor([0, 1]), torch.tensor([-1.0, -1.0]), -1.0)
+        ]
 
     def forward(self, X: Tensor, noise: bool = True, run_seed: int = None) -> Tensor:
         """
@@ -157,33 +167,39 @@ class CovidSim(SyntheticTestFunction):
             # then they're normalized to sum to one and the last population gets no
             # testing. The algorithms should never cross into there though.
             # We do constrained optimization to avoid this issue.
-            if torch.sum(X[i][0, :-self.dim_w]) < 1:
+            if torch.sum(X[i][0, : -self.dim_w]) < 1:
                 x = torch.zeros(self.num_pop)
-                x[:-1] = X[i][0, :-self.dim_w]
-                x[-1] = 1 - torch.sum(X[i][0, :-self.dim_w])
+                x[:-1] = X[i][0, : -self.dim_w]
+                x[-1] = 1 - torch.sum(X[i][0, : -self.dim_w])
             else:
                 x = torch.zeros(self.num_pop)
-                x[:-1] = X[i][:, :-self.dim_w] / torch.sum(X[i][:, :-self.dim_w])
+                x[:-1] = X[i][:, : -self.dim_w] / torch.sum(X[i][:, : -self.dim_w])
             # Fraction of each population that can be tested based on given solution
             pop_test_frac = self.num_tests * x / self.populations
             num_infected = 0
             for j in range(self.num_pop):
                 pop_params = base_params.copy()
-                pop_params['test_population_fraction'] = pop_test_frac[j]
-                pop_params['population_size'] = self.populations[j]
-                pop_params['initial_ID_prevalence'] = X[i, 0, self.num_pop + j - 1]
+                pop_params["test_population_fraction"] = pop_test_frac[j]
+                pop_params["population_size"] = self.populations[j]
+                pop_params["initial_ID_prevalence"] = X[i, 0, self.num_pop + j - 1]
                 loop = True
                 while loop:
                     try:
-                        dfs_sims = run_multiple_trajectories(pop_params, ntrajectories=self.replications,
-                                                             time_horizon=self.time_horizon)
+                        dfs_sims = run_multiple_trajectories(
+                            pop_params,
+                            ntrajectories=self.replications,
+                            time_horizon=self.time_horizon,
+                        )
                         loop = False
                     except RuntimeError:
                         print("got error, repeating simulation")
                         continue
                 for df in dfs_sims:
-                    num_infected += self.populations[j] - df.iloc[self.time_horizon]['S'] - df.iloc[self.time_horizon][
-                        'QS']
+                    num_infected += (
+                        self.populations[j]
+                        - df.iloc[self.time_horizon]["S"]
+                        - df.iloc[self.time_horizon]["QS"]
+                    )
             out[i, 0, 0] = torch.true_divide(num_infected, self.replications)
         if self.negate:
             out = -out
@@ -204,10 +220,18 @@ class CovidSim(SyntheticTestFunction):
         :return: Result
         """
         if run_seed is None:
-            arg_list = [(X[i].reshape(1, 1, -1), True, int(torch.randint(low=1, high=11, size=(1,))))
-                        for i in range(X.size(0))]
+            arg_list = [
+                (
+                    X[i].reshape(1, 1, -1),
+                    True,
+                    int(torch.randint(low=1, high=11, size=(1,))),
+                )
+                for i in range(X.size(0))
+            ]
         else:
-            arg_list = [(X[i].reshape(1, 1, -1), True, run_seed) for i in range(X.size(0))]
+            arg_list = [
+                (X[i].reshape(1, 1, -1), True, run_seed) for i in range(X.size(0))
+            ]
         with Pool() as pool:
             out = pool.starmap(self, arg_list)
         out = torch.cat(out, dim=0)
@@ -218,6 +242,7 @@ class CovidEval(CovidSim):
     """
     This is purely for evaluating covid solutions. It will call CovidSim with all 10 seeds and average over.
     """
+
     def forward(self, X: Tensor, noise: bool = True, run_seed: int = None) -> Tensor:
         """
         Anything but X is ignored. Calls CovidSim with all 10 seeds and averages the results.
@@ -231,7 +256,7 @@ class CovidEval(CovidSim):
             return super().forward(X, run_seed=run_seed)
         out = torch.empty(10, *X.shape[:-1], 1)
         for i in range(10):
-            out[i] = super().forward(X, run_seed=i+1).reshape(*X.shape[:-1], 1)
+            out[i] = super().forward(X, run_seed=i + 1).reshape(*X.shape[:-1], 1)
         out = torch.mean(out, dim=0)
         return out
 
@@ -240,5 +265,9 @@ if __name__ == "__main__":
     sim = CovidEval()
     # print(sim.weights)
     # X = torch.tensor([0.6, 0.8, 0.002, 0.004, 0.003]).reshape(1, 1, -1)
-    X = torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]]).reshape(1, 1, -1).repeat(4, 1, 1)
+    X = (
+        torch.tensor([[0.7, 0.2, 0.0040, 0.0040, 0.0080]])
+        .reshape(1, 1, -1)
+        .repeat(4, 1, 1)
+    )
     print(sim(X))

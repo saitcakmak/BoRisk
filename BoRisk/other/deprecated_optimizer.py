@@ -54,9 +54,10 @@ class DeprOptimizer(Optimizer):
         """
         super().__init__(**kwargs)
         self.full_dim = self.q * self.dim + self.num_fantasies * self.dim_x
-        self.one_shot_outer_bounds = torch.tensor([[0.], [1.]]).repeat(1,
-                                                                       self.q * self.dim)
-        self.full_bounds = torch.tensor([[0.], [1.]]).repeat(1, self.full_dim)
+        self.one_shot_outer_bounds = torch.tensor([[0.0], [1.0]]).repeat(
+            1, self.q * self.dim
+        )
+        self.full_bounds = torch.tensor([[0.0], [1.0]]).repeat(1, self.full_dim)
         self.fant_sols = None  # fantasy solutions
         self.fant_values = None
         self.outer_sols = None  # VaRKG solutions
@@ -87,50 +88,55 @@ class DeprOptimizer(Optimizer):
         num_periods = ceil(self.maxiter / self.periods)
         solutions = None
         values = None
-        options = {'maxiter': min(self.periods, self.maxiter)}
+        options = {"maxiter": min(self.periods, self.maxiter)}
         for i in range(num_periods):
             if i == 0:
-                initial_conditions = self.generate_initial_conditions(acqf, raw_samples,
-                                                                      raw_values,
-                                                                      permuted_samples)
+                initial_conditions = self.generate_initial_conditions(
+                    acqf, raw_samples, raw_values, permuted_samples
+                )
             else:
-                samples_from_sols = self.generate_samples_from_solutions(solutions,
-                                                                         values)
-                picked_sols = self.pick_full_solutions(self.num_restarts,
-                                                       self.num_restarts)
+                samples_from_sols = self.generate_samples_from_solutions(
+                    solutions, values
+                )
+                picked_sols = self.pick_full_solutions(
+                    self.num_restarts, self.num_restarts
+                )
                 sol_no_eval = torch.cat((samples_from_sols, picked_sols), dim=0)
-                initial_conditions = self.generate_initial_conditions(acqf, solutions,
-                                                                      torch.mean(values,
-                                                                                 dim=-1),
-                                                                      sol_no_eval)
+                initial_conditions = self.generate_initial_conditions(
+                    acqf, solutions, torch.mean(values, dim=-1), sol_no_eval
+                )
             solutions, values = gen_candidates_scipy(
                 initial_conditions=initial_conditions,
                 acquisition_function=acqf,
                 lower_bounds=self.full_bounds[0],
                 upper_bounds=self.full_bounds[1],
                 options=options,
-                inequality_constraints=self.inequality_constraints)
+                inequality_constraints=self.inequality_constraints,
+            )
             self.add_full_solutions(solutions, values)
         # add the resulting solutions to be used for next iteration. Normalizing in the
         # end to get - VaR value
         self.add_inner_solutions(
-            solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
-            values.reshape(-1) - self.current_best)
+            solutions[:, :, self.q * self.dim :].reshape(-1, self.dim_x),
+            values.reshape(-1) - self.current_best,
+        )
         # doing a last bit of optimization with only 20 best solutions
-        options = {'maxiter': self.maxiter}
+        options = {"maxiter": self.maxiter}
         _, idx = torch.sort(torch.mean(values, dim=-1))
         solutions, values = gen_candidates_scipy(
-            initial_conditions=solutions[idx[:self.num_refine_restarts]],
+            initial_conditions=solutions[idx[: self.num_refine_restarts]],
             acquisition_function=acqf,
             lower_bounds=self.full_bounds[0],
             upper_bounds=self.full_bounds[1],
             options=options,
-            inequality_constraints=self.inequality_constraints)
+            inequality_constraints=self.inequality_constraints,
+        )
         # add the resulting solutions to be used for next iteration. Normalizing in the
         # end to get - VaR value
         self.add_inner_solutions(
-            solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
-            values.reshape(-1) - self.current_best)
+            solutions[:, :, self.q * self.dim :].reshape(-1, self.dim_x),
+            values.reshape(-1) - self.current_best,
+        )
         solutions = solutions.cpu().detach()
         values = torch.mean(values, dim=-1).cpu().detach()
         best = torch.argmax(values)
@@ -169,26 +175,29 @@ class DeprOptimizer(Optimizer):
         if self.inequality_constraints is not None:
             raise NotImplementedError("one-shot is not implemented with constraints")
         initial_conditions = self.generate_simple_OSrhoKG_restart_points(acqf)
-        options = {'maxiter': self.maxiter}
+        options = {"maxiter": self.maxiter}
 
-        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
-                                                 acquisition_function=acqf,
-                                                 lower_bounds=self.full_bounds[0],
-                                                 upper_bounds=self.full_bounds[1],
-                                                 options=options)
-
-        _, idx = torch.sort(torch.mean(values, dim=-1))
         solutions, values = gen_candidates_scipy(
-            initial_conditions=solutions[idx[:self.num_refine_restarts]],
+            initial_conditions=initial_conditions,
             acquisition_function=acqf,
             lower_bounds=self.full_bounds[0],
             upper_bounds=self.full_bounds[1],
-            options=options)
+            options=options,
+        )
+
+        _, idx = torch.sort(torch.mean(values, dim=-1))
+        solutions, values = gen_candidates_scipy(
+            initial_conditions=solutions[idx[: self.num_refine_restarts]],
+            acquisition_function=acqf,
+            lower_bounds=self.full_bounds[0],
+            upper_bounds=self.full_bounds[1],
+            options=options,
+        )
         best = torch.argmax(torch.mean(values, dim=-1))
         return solutions[best].detach(), torch.mean(values, dim=-1)[best].detach()
 
     def disc_optimize_OSrhoKG(
-            self, acqf: OneShotrhoKG, w_samples: Tensor
+        self, acqf: OneShotrhoKG, w_samples: Tensor
     ) -> Tuple[Tensor, Tensor]:
         """
         Optimizer that restricts w component to w_samples.
@@ -206,38 +215,42 @@ class DeprOptimizer(Optimizer):
         raw_values = self.evaluate_samples(acqf, raw_samples)
         permuted_samples = self.pick_full_solutions(self.raw_samples, 0)
 
-        options = {'maxiter': self.maxiter}
+        options = {"maxiter": self.maxiter}
 
         fixed_features = dict()
         for j in range(self.q):
             for i in range(self.dim_x, self.dim):
                 fixed_features[j * self.dim + i] = None
 
-        initial_conditions = self.generate_initial_conditions(acqf, raw_samples,
-                                                              raw_values,
-                                                              permuted_samples)
+        initial_conditions = self.generate_initial_conditions(
+            acqf, raw_samples, raw_values, permuted_samples
+        )
 
-        solutions, values = gen_candidates_scipy(initial_conditions=initial_conditions,
-                                                 acquisition_function=acqf,
-                                                 lower_bounds=self.full_bounds[0],
-                                                 upper_bounds=self.full_bounds[1],
-                                                 options=options,
-                                                 fixed_features=fixed_features)
-        self.add_full_solutions(solutions, values)
-
-        _, idx = torch.sort(torch.mean(values, dim=-1))
         solutions, values = gen_candidates_scipy(
-            initial_conditions=solutions[idx[:self.num_refine_restarts]],
+            initial_conditions=initial_conditions,
             acquisition_function=acqf,
             lower_bounds=self.full_bounds[0],
             upper_bounds=self.full_bounds[1],
             options=options,
-            fixed_features=fixed_features)
+            fixed_features=fixed_features,
+        )
+        self.add_full_solutions(solutions, values)
+
+        _, idx = torch.sort(torch.mean(values, dim=-1))
+        solutions, values = gen_candidates_scipy(
+            initial_conditions=solutions[idx[: self.num_refine_restarts]],
+            acquisition_function=acqf,
+            lower_bounds=self.full_bounds[0],
+            upper_bounds=self.full_bounds[1],
+            options=options,
+            fixed_features=fixed_features,
+        )
         # add the resulting solutions to be used for next iteration. Normalizing in the
         # end to get - VaR value
         self.add_inner_solutions(
-            solutions[:, :, self.q * self.dim:].reshape(-1, self.dim_x),
-            values.reshape(-1) - self.current_best)
+            solutions[:, :, self.q * self.dim :].reshape(-1, self.dim_x),
+            values.reshape(-1) - self.current_best,
+        )
         solutions = solutions.cpu().detach()
         values = torch.mean(values, dim=-1).cpu().detach()
         best = torch.argmax(values)
@@ -253,12 +266,14 @@ class DeprOptimizer(Optimizer):
         :param values: Corresponding values
         :return: generated samples of size num_restarts x 1 x full_dim
         """
-        outer_sols = solutions[:, :, :self.q * self.dim].reshape(-1, self.q * self.dim)
+        outer_sols = solutions[:, :, : self.q * self.dim].reshape(-1, self.q * self.dim)
         outer_values = torch.mean(values, dim=-1)
-        fantasy_sols = solutions[:, :, self.q * self.dim:].reshape(-1, self.num_fantasies,
-                                                                   self.dim_x)
+        fantasy_sols = solutions[:, :, self.q * self.dim :].reshape(
+            -1, self.num_fantasies, self.dim_x
+        )
         picked_fantasies = torch.empty(
-            (2 * self.num_restarts, self.num_fantasies, self.dim_x))
+            (2 * self.num_restarts, self.num_fantasies, self.dim_x)
+        )
         for i in range(self.num_fantasies):
             solutions_i = fantasy_sols[:, i, :]
             values_i = values[:, i]
@@ -276,8 +291,9 @@ class DeprOptimizer(Optimizer):
 
         random_outer = draw_constrained_sobol(
             self.one_shot_outer_bounds,
-            self.num_restarts, q=1,
-            inequality_constraints=self.inequality_constraints
+            self.num_restarts,
+            q=1,
+            inequality_constraints=self.inequality_constraints,
         )
 
         solutions = torch.cat((random_outer, solutions), dim=0)
@@ -301,22 +317,26 @@ class DeprOptimizer(Optimizer):
         # sampling from the optimizers
         num_non_random = int(self.raw_samples * (1 - self.random_frac))
         weights = torch.exp(self.eta * standardize(self.inner_values))
-        idx = torch.multinomial(weights, num_non_random * self.num_fantasies,
-                                replacement=True)
+        idx = torch.multinomial(
+            weights, num_non_random * self.num_fantasies, replacement=True
+        )
 
         # set the respective initial conditions to the sampled optimizers
         # we add some extra noise here to avoid all the samples being the same
-        X_rnd[-num_non_random:, 0, -self.num_fantasies * self.dim_x:] = \
-            self.inner_solutions[idx].view(num_non_random,
-                                           self.num_fantasies * self.dim_x) \
+        X_rnd[-num_non_random:, 0, -self.num_fantasies * self.dim_x :] = (
+            self.inner_solutions[idx].view(
+                num_non_random, self.num_fantasies * self.dim_x
+            )
             + torch.randn((num_non_random, self.num_fantasies * self.dim_x)) * 0.001
+        )
 
         if w_samples is not None:
             w_ind = torch.randint(w_samples.size(0), (self.raw_samples, self.q))
             w_picked = w_samples[w_ind, :]
             for i in range(self.q):
-                X_rnd[..., i * self.dim + self.dim_x:(i + 1) * self.dim] = \
-                    w_picked[..., i, :].unsqueeze(-2)
+                X_rnd[..., i * self.dim + self.dim_x : (i + 1) * self.dim] = w_picked[
+                    ..., i, :
+                ].unsqueeze(-2)
         return X_rnd
 
     def evaluate_samples(self, acqf: OneShotrhoKG, samples: Tensor) -> Tensor:
@@ -325,7 +345,7 @@ class DeprOptimizer(Optimizer):
         :return: Values
         """
         if samples.dim() != 3 or samples.size(-1) != self.full_dim:
-            raise ValueError('Samples must be num_solutions x 1 x full_dim')
+            raise ValueError("Samples must be num_solutions x 1 x full_dim")
         with torch.no_grad():
             # Y is num_solutions x num_fantasies
             Y = acqf(samples).detach()
@@ -341,7 +361,7 @@ class DeprOptimizer(Optimizer):
         :return: The generated fantasy solutions, n x num_fantasies x dim_x
         """
         if self.fant_sols is None:
-            raise ValueError('This should not be called before add_fantasy_solutions!')
+            raise ValueError("This should not be called before add_fantasy_solutions!")
         picked_solutions = torch.empty((n, self.num_fantasies, self.dim_x))
         for i in range(self.num_fantasies):
             solutions = self.fant_sols[:, i, :]
@@ -362,7 +382,7 @@ class DeprOptimizer(Optimizer):
         if n == 0:
             return None
         if self.outer_sols is None:
-            raise ValueError('This should not be called before add_outer_solutions!')
+            raise ValueError("This should not be called before add_outer_solutions!")
         weights = torch.exp(self.eta * standardize(self.outer_values))
         idx = torch.multinomial(weights, n, replacement=True)
         idx[-1] = torch.argmax(self.outer_values)
@@ -379,7 +399,9 @@ class DeprOptimizer(Optimizer):
         """
         if self.inequality_constraints is not None:
             raise NotImplementedError("one-shot is not implemented with constraints")
-        random_outer = draw_sobol_samples(self.one_shot_outer_bounds, num_random_outer, 1)
+        random_outer = draw_sobol_samples(
+            self.one_shot_outer_bounds, num_random_outer, 1
+        )
         fantasy_sols = self.pick_fantasy_solutions(n).reshape(n, 1, -1)
         picked_outer = self.pick_outer_solutions(n - num_random_outer)
         if picked_outer is not None:
@@ -390,8 +412,13 @@ class DeprOptimizer(Optimizer):
         full_sols = torch.cat((outer_sols, fantasy_sols), dim=-1)
         return full_sols
 
-    def generate_initial_conditions(self, acqf: OneShotrhoKG, sol_eval: Tensor,
-                                    val_eval: Tensor, sol_no_eval: Tensor) -> Tensor:
+    def generate_initial_conditions(
+        self,
+        acqf: OneShotrhoKG,
+        sol_eval: Tensor,
+        val_eval: Tensor,
+        sol_no_eval: Tensor,
+    ) -> Tensor:
         """
         Takes a bunch of raw solutions and returns initial conditions.
         Number of provided solutions must exceed num_restarts.
@@ -424,10 +451,10 @@ class DeprOptimizer(Optimizer):
         :param values: Corresponding values
         :return: None
         """
-        outer_sols = solutions[:, :, :self.q * self.dim]
+        outer_sols = solutions[:, :, : self.q * self.dim]
         outer_values = torch.mean(values, dim=-1)
         self.add_outer_solutions(outer_sols, outer_values)
-        fantasy_sols = solutions[:, :, self.q * self.dim:]
+        fantasy_sols = solutions[:, :, self.q * self.dim :]
         self.add_fantasy_solutions(fantasy_sols, values)
 
     def add_fantasy_solutions(self, solutions: Tensor, values: Tensor):
@@ -463,5 +490,5 @@ class DeprOptimizer(Optimizer):
             self.outer_values = torch.cat((self.outer_values, values), dim=0)
             if self.outer_sols.size(0) > self.limit:
                 _, indices = torch.sort(self.outer_values, dim=0)
-                self.outer_sols = self.outer_sols[indices[-self.limit:]]
-                self.outer_values = self.outer_values[indices[-self.limit:]]
+                self.outer_sols = self.outer_sols[indices[-self.limit :]]
+                self.outer_values = self.outer_values[indices[-self.limit :]]

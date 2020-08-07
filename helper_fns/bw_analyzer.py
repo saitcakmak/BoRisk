@@ -9,15 +9,16 @@ import warnings
 from helper_fns.analyzer_plots import plot_out
 import os
 
-directory = os.path.join(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))), "batch_output")
-function_name = 'braninwilliams'
+directory = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "batch_output"
+)
+function_name = "braninwilliams"
 plot_gap = True  # if true, we plot the optimality gap
 plot_log = True  # if true, the plot is on log scale
-prefix = 'plot_'
+prefix = "plot_"
 # prefix = ''
-suffix = '_var'
-filename = '%s%s%s' % (prefix, function_name, suffix)
+suffix = "_var"
+filename = "%s%s%s" % (prefix, function_name, suffix)
 dim_w = 2
 CVaR = False
 alpha = 0.7
@@ -30,22 +31,31 @@ num_plot = 10  # max number of plot lines in a figure
 w_batch_size = 12
 # this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
 
-w_samples = getattr(function, 'w_samples')
-if function_name in ['marzat', 'portfolio']:
+w_samples = getattr(function, "w_samples")
+if function_name in ["marzat", "portfolio"]:
     w_samples = torch.rand(num_w, dim_w)
 if w_samples is None:
-    warnings.warn('w_samples is None!')
+    warnings.warn("w_samples is None!")
     if dim_w == 1:
         w_samples = torch.linspace(0, 1, num_w).reshape(num_w, 1)
     elif w_samples is None:
-        raise ValueError('Specify w_samples!')
-weights = getattr(function, 'weights')
+        raise ValueError("Specify w_samples!")
+weights = getattr(function, "weights")
 if weights is None:
-    warnings.warn('weights is None!')
+    warnings.warn("weights is None!")
 
 if plot_gap:
-    _, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, alpha=alpha, plug_in_w=w_samples, function=function,
-                           dim_x=dim_x, dim_w=dim_w, weights=weights)
+    _, y = generate_values(
+        num_x=num_x,
+        num_w=num_w,
+        CVaR=CVaR,
+        alpha=alpha,
+        plug_in_w=w_samples,
+        function=function,
+        dim_x=dim_x,
+        dim_w=dim_w,
+        weights=weights,
+    )
     best_value = torch.min(y)
 
 data = torch.load(os.path.join(directory, filename))
@@ -60,12 +70,14 @@ def get_obj(X: torch.Tensor):
     """
     X = X.reshape(-1, 1, dim_x)
     if (X > 1).any() or (X < 0).any():
-        raise ValueError('Some of the solutions is out of bounds. Make sure to reevaluate')
+        raise ValueError(
+            "Some of the solutions is out of bounds. Make sure to reevaluate"
+        )
     sols = torch.cat((X.repeat(1, num_w, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
     vals = function(sols)
     vals, _ = torch.sort(vals, dim=-2)
     if CVaR:
-        values = torch.mean(vals[:, int(alpha * num_w):, :], dim=-2)
+        values = torch.mean(vals[:, int(alpha * num_w) :, :], dim=-2)
     else:
         values = vals[:, int(alpha * num_w), :]
     return values
@@ -74,12 +86,20 @@ def get_obj(X: torch.Tensor):
 for key in data.keys():
     output[key] = dict()
     if "_q" in key:
-        sub = key[key.find("_q") + 1:]
+        sub = key[key.find("_q") + 1 :]
         next_ = sub.find("_")
         start = 2 if "=" in sub else 1
         q = int(sub[start:next_]) if next_ > 0 else int(sub[start:])
     else:
-        if key in ['EI', 'MES', 'qKG', 'UCB', 'classical_random', 'EI_long', 'qKG_long']:
+        if key in [
+            "EI",
+            "MES",
+            "qKG",
+            "UCB",
+            "classical_random",
+            "EI_long",
+            "qKG_long",
+        ]:
             q = w_batch_size
         else:
             q = 1
@@ -87,16 +107,18 @@ for key in data.keys():
     inner_keys = list(sub_data.keys())
     for i in range(len(inner_keys)):
         if sub_data[inner_keys[i]] is None:
-            raise ValueError('Some of the data is None! Key: %s ' % key)
-        best_list = sub_data[inner_keys[i]]['current_best']
-        if 'x' not in output[key].keys():
-            output[key]['x'] = torch.linspace(0, best_list.size(0) - 1, best_list.size(0)) * q
+            raise ValueError("Some of the data is None! Key: %s " % key)
+        best_list = sub_data[inner_keys[i]]["current_best"]
+        if "x" not in output[key].keys():
+            output[key]["x"] = (
+                torch.linspace(0, best_list.size(0) - 1, best_list.size(0)) * q
+            )
         values = get_obj(best_list)
         reshaped = values.reshape(1, -1)
-        if 'y' not in output[key].keys():
-            output[key]['y'] = reshaped
+        if "y" not in output[key].keys():
+            output[key]["y"] = reshaped
         else:
-            output[key]['y'] = torch.cat([output[key]['y'], reshaped], dim=0)
+            output[key]["y"] = torch.cat([output[key]["y"], reshaped], dim=0)
 
 
 def search_around(point: torch.Tensor, radius: float):
@@ -120,11 +142,13 @@ def search_around(point: torch.Tensor, radius: float):
 
 if plot_gap:
     for key in output.keys():
-        if 'y' in output[key].keys():
-            best_found, in_ind = torch.min(output[key]['y'], dim=-1)
+        if "y" in output[key].keys():
+            best_found, in_ind = torch.min(output[key]["y"], dim=-1)
             best_found, out_ind = torch.min(best_found, dim=-1)
             if best_found < best_value:
-                best_found_point = data[key][list(data[key].keys())[out_ind]]['current_best'][in_ind[out_ind]]
+                best_found_point = data[key][list(data[key].keys())[out_ind]][
+                    "current_best"
+                ][in_ind[out_ind]]
                 searched_best = search_around(best_found_point, 0.01)
                 best_value = min(best_found, best_value, searched_best)
 # If the key has no output, remove it.
@@ -134,6 +158,11 @@ for key in output.keys():
 # Comment out to get actual value. Uncomment to get gap
 if plot_gap:
     for key in output.keys():
-        output[key]['y'] = output[key]['y'] - best_value
+        output[key]["y"] = output[key]["y"] - best_value
 
-plot_out(output=output, title="Branin Willams Log Optimality Gap", ylabel="log gap", plot_log=plot_log)
+plot_out(
+    output=output,
+    title="Branin Willams Log Optimality Gap",
+    ylabel="log gap",
+    plot_log=plot_log,
+)

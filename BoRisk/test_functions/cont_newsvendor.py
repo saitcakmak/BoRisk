@@ -8,6 +8,7 @@ class ContinuousNewsvendor(SyntheticTestFunction):
     This is the continuous news-vendor problem adopted from SimOpt.
     See the write-up for implementation details.
     """
+
     dim = 3
     _bounds = [(0, 1) for _ in range(dim)]
     _optimizers = None  # is given by a formula in notes for given alpha beta
@@ -65,18 +66,24 @@ class ContinuousNewsvendor(SyntheticTestFunction):
         demand = torch.empty((*x.size()[:-1], self.run_length))
         if self.crn:
             for i in range(self.run_length):
-                demand[..., i] = torch.pow(torch.pow(torch.rand(1).repeat(*x.size()), -1/beta.double()) - 1,
-                                           1/alpha.double()).squeeze(-1)
+                demand[..., i] = torch.pow(
+                    torch.pow(torch.rand(1).repeat(*x.size()), -1 / beta.double()) - 1,
+                    1 / alpha.double(),
+                ).squeeze(-1)
         else:
             for i in range(self.run_length):
-                demand[..., i] = torch.pow(torch.pow(torch.rand(*x.size()), -1/beta.double()) - 1,
-                                           1/alpha.double()).squeeze(-1)
+                demand[..., i] = torch.pow(
+                    torch.pow(torch.rand(*x.size()), -1 / beta.double()) - 1,
+                    1 / alpha.double(),
+                ).squeeze(-1)
 
         # compute profit
         period_cost = self.cost * x
         sales = torch.min(demand, x.expand(*x.size()[:-1], self.run_length))
         sales_revenue = self.sell_price * sales
-        salvage_revenue = self.salvage * (x.expand(*x.size()[:-1], self.run_length) - sales)
+        salvage_revenue = self.salvage * (
+            x.expand(*x.size()[:-1], self.run_length) - sales
+        )
         profit = sales_revenue + salvage_revenue - period_cost
 
         # restore old random state
@@ -91,7 +98,8 @@ class ContinuousNewsvendor(SyntheticTestFunction):
 if __name__ == "__main__":
     # for testing purposes
     from time import time
+
     start = time()
     ctnv = ContinuousNewsvendor()
     print(ctnv(torch.tensor([0.9, 0.5, 0.5])))
-    print('time: ', time()-start)
+    print("time: ", time() - start)

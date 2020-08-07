@@ -15,6 +15,7 @@ from gpytorch.priors import GammaPrior
 from torch import Tensor
 from botorch.test_functions.synthetic import SyntheticTestFunction
 import os
+
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
 
@@ -53,8 +54,12 @@ class PortfolioSurrogate(SyntheticTestFunction):
             data_list.append(torch.load(data_file))
 
         # join the data together
-        X = torch.cat([data_list[i]['X'] for i in range(len(data_list))], dim=0).squeeze(-2)
-        Y = torch.cat([data_list[i]['Y'] for i in range(len(data_list))], dim=0).squeeze(-2)
+        X = torch.cat(
+            [data_list[i]["X"] for i in range(len(data_list))], dim=0
+        ).squeeze(-2)
+        Y = torch.cat(
+            [data_list[i]["Y"] for i in range(len(data_list))], dim=0
+        ).squeeze(-2)
 
         # fit GP
         noise_prior = GammaPrior(1.1, 0.5)
@@ -72,16 +77,20 @@ class PortfolioSurrogate(SyntheticTestFunction):
         # We save the state dict to avoid fitting the GP every time which takes ~3 mins
         try:
             state_dict = torch.load(
-                os.path.join(script_dir, "portfolio_surrogate_state_dict.pt"))
+                os.path.join(script_dir, "portfolio_surrogate_state_dict.pt")
+            )
             model = SingleTaskGP(X, Y, likelihood, outcome_transform=Standardize(m=1))
             model.load_state_dict(state_dict)
         except FileNotFoundError:
             model = SingleTaskGP(X, Y, likelihood, outcome_transform=Standardize(m=1))
             mll = ExactMarginalLogLikelihood(model.likelihood, model)
             from time import time
+
             start = time()
             fit_gpytorch_model(mll)
-            print("fitting took %s seconds" % (time()-start))
-            torch.save(model.state_dict(),
-                       os.path.join(script_dir, "portfolio_surrogate_state_dict.pt"))
+            print("fitting took %s seconds" % (time() - start))
+            torch.save(
+                model.state_dict(),
+                os.path.join(script_dir, "portfolio_surrogate_state_dict.pt"),
+            )
         self.model = model

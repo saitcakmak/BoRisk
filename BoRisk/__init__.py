@@ -18,5 +18,5 @@ __all__ = [
     "Optimizer",
     "InnerOptimizer",
     "draw_constrained_sobol",
-    "constrained_rand"
+    "constrained_rand",
 ]

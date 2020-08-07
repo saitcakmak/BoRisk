@@ -1,7 +1,7 @@
 import torch
 from cvx_portfolio_simulator import CVXPortfolioSimulator
 
-simulator = CVXPortfolioSimulator(experiment_id='test')
+simulator = CVXPortfolioSimulator(experiment_id="test")
 torch.manual_seed(0)
 X = torch.zeros(torch.Size([3, 1, 5]))
 X[..., 0] += 0.0264

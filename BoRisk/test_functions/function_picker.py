@@ -3,13 +3,16 @@ The function picker.
 Find most in: https://www.sfu.ca/~ssurjano/optimization.html
 """
 from BoRisk.test_functions.simple_test_functions import (
-    SineQuadratic, SimpleQuadratic, ConstrainedQuadratic
+    SineQuadratic,
+    SimpleQuadratic,
+    ConstrainedQuadratic,
 )
 from BoRisk.test_functions.standardized_function import StandardizedFunction
 from BoRisk.test_functions.cont_newsvendor import ContinuousNewsvendor
 from BoRisk.test_functions.prod_line import ProductionLine
 from BoRisk.test_functions.branin_williams import BraninWilliams
 from BoRisk.test_functions.robust_synthetic import Marzat6
+
 # from test_functions.cvx_portfolio_simulator import CVXPortfolioSimulator
 from BoRisk.test_functions.portfolio_surrogate import PortfolioSurrogate
 from BoRisk.test_functions.covid_exp_class import CovidSim, CovidEval
@@ -50,12 +53,12 @@ function_dict = {
     # "portfolio": CVXPortfolioSimulator,
     "portfolio_surrogate": PortfolioSurrogate,
     "covid": CovidSim,
-    "covid_eval": CovidEval  # Only to be used for evaluating the results
+    "covid_eval": CovidEval,  # Only to be used for evaluating the results
 }
 
 
 def function_picker(
-        function_name: str, noise_std: float = 0.1, negate: bool = False
+    function_name: str, noise_std: float = 0.1, negate: bool = False
 ) -> SyntheticTestFunction:
     """
     Returns the appropriate function callable
@@ -67,17 +70,22 @@ def function_picker(
     :param negate: In most cases, should be true for maximization
     :return: Function callable
     """
-    if function_name == 'newsvendor':
+    if function_name == "newsvendor":
         function = ContinuousNewsvendor()
-    elif function_name == 'prod_line':
+    elif function_name == "prod_line":
         function = ProductionLine()
     elif function_name in function_dict.keys():
         if function_name[-1].isdigit():
-            function = StandardizedFunction(function_dict[function_name](
-                dim=int(function_name[-1]), noise_std=noise_std), negate=negate)
+            function = StandardizedFunction(
+                function_dict[function_name](
+                    dim=int(function_name[-1]), noise_std=noise_std
+                ),
+                negate=negate,
+            )
         else:
-            function = StandardizedFunction(function_dict[function_name](
-                noise_std=noise_std), negate=negate)
+            function = StandardizedFunction(
+                function_dict[function_name](noise_std=noise_std), negate=negate
+            )
     else:
         raise ValueError("Function name was not found!")
 

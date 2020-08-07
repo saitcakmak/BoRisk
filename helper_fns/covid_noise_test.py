@@ -7,9 +7,9 @@ from time import time
 
 start = time()
 
-function = function_picker('covid')
+function = function_picker("covid")
 
-X = torch.tensor([0.3, 0.5, 1., 1., .5]).reshape(-1, 1, 5)
+X = torch.tensor([0.3, 0.5, 1.0, 1.0, 0.5]).reshape(-1, 1, 5)
 
 y = function(X.repeat(50, 10, 1))
 

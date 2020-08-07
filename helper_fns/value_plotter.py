@@ -13,7 +13,7 @@ from BoRisk.test_functions import function_picker
 
 # Initialize the test function
 noise_std = 0  # observation noise level - no noise allows for a more precise evaluation
-function_name = 'braninwilliams'
+function_name = "braninwilliams"
 function = function_picker(function_name, noise_std)
 
 CVaR = False  # if true, calculate CVaR instead of VaR
@@ -29,7 +29,9 @@ dim_x = d - dim_w  # dimension of the x component
 alpha = 0.7  # alpha of the risk function
 
 
-def plot(x: Tensor, y: Tensor, lb: List[float] = [0., 0.], ub: List[float] = [1., 1.]):
+def plot(
+    x: Tensor, y: Tensor, lb: List[float] = [0.0, 0.0], ub: List[float] = [1.0, 1.0]
+):
     """
     plots the appropriate plot
     :param lb: lower bound
@@ -59,9 +61,19 @@ def plot(x: Tensor, y: Tensor, lb: List[float] = [0., 0.], ub: List[float] = [1.
     plt.show()
 
 
-def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] = [0., 0.], ub: List[float] = [1., 1.],
-                    plug_in_w: Tensor = None, function=function, dim_x=dim_x, dim_w=dim_w, alpha=alpha,
-                    weights: Tensor = None):
+def generate_values(
+    num_x: int,
+    num_w: int,
+    CVaR: bool = False,
+    lb: List[float] = [0.0, 0.0],
+    ub: List[float] = [1.0, 1.0],
+    plug_in_w: Tensor = None,
+    function=function,
+    dim_x=dim_x,
+    dim_w=dim_w,
+    alpha=alpha,
+    weights: Tensor = None,
+):
     """
     This is used for finding the best value when analyzing the output.
     Generates the C/VaR values on a grid.
@@ -97,14 +109,20 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
         w = plug_in_w
 
     # generate X = (x, w)
-    X = torch.cat((x.unsqueeze(-2).expand(*x.size()[:-1], num_w, dim_x), w.repeat(*x.size()[:-1], 1, 1)), dim=-1)
+    X = torch.cat(
+        (
+            x.unsqueeze(-2).expand(*x.size()[:-1], num_w, dim_x),
+            w.repeat(*x.size()[:-1], 1, 1),
+        ),
+        dim=-1,
+    )
 
     # evaluate the function, sort and get the C/VaR value
     values = function(X)
     values, ind = values.sort(dim=-2)
     if weights is None:
         if CVaR:
-            y = torch.mean(values[..., int(alpha * num_w):, :], dim=-2)
+            y = torch.mean(values[..., int(alpha * num_w) :, :], dim=-2)
         else:
             y = values[..., int(alpha * num_w), :].squeeze(-2)
         return x, y
@@ -113,11 +131,17 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
         summed_weights = torch.empty(weights.size())
         summed_weights[..., 0, :] = weights[..., 0, :]
         for i in range(1, weights.size(-2)):
-            summed_weights[..., i, :] = summed_weights[..., i - 1, :] + weights[..., i, :]
+            summed_weights[..., i, :] = (
+                summed_weights[..., i - 1, :] + weights[..., i, :]
+            )
         gr_ind = summed_weights >= alpha
-        var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1], dtype=torch.long) * weights.size(-2)
+        var_ind = torch.ones(
+            [*summed_weights.size()[:-2], 1, 1], dtype=torch.long
+        ) * weights.size(-2)
         for i in range(weights.size(-2)):
-            var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]], torch.tensor([i]))
+            var_ind[gr_ind[..., i, :]] = torch.min(
+                var_ind[gr_ind[..., i, :]], torch.tensor([i])
+            )
 
         if CVaR:
             # deletes (zeroes) the non-tail weights
@@ -130,8 +154,15 @@ def generate_values(num_x: int, num_w: int, CVaR: bool = False, lb: List[float] 
         return x, values
 
 
-if __name__ == '__main__':
-    x, y = generate_values(num_x=num_x, num_w=num_w, CVaR=CVaR, plug_in_w=w_samples, weights=weights,
-                           lb=lb, ub=ub)
+if __name__ == "__main__":
+    x, y = generate_values(
+        num_x=num_x,
+        num_w=num_w,
+        CVaR=CVaR,
+        plug_in_w=w_samples,
+        weights=weights,
+        lb=lb,
+        ub=ub,
+    )
     print(x[torch.argmin(y)])
     plot(x, y, lb, ub)

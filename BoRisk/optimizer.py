@@ -41,19 +41,19 @@ class Optimizer:
     """
 
     def __init__(
-            self,
-            num_restarts: int,
-            raw_multiplier: int,
-            num_fantasies: int,
-            dim: int,
-            dim_x: int,
-            q: int = 1,
-            inequality_constraints: List[Tuple] = None,
-            random_frac: float = 0.4,
-            limiter: float = 10,
-            eta: float = 2.0,
-            maxiter: int = 1000,
-            low_fantasies: Optional[int] = None
+        self,
+        num_restarts: int,
+        raw_multiplier: int,
+        num_fantasies: int,
+        dim: int,
+        dim_x: int,
+        q: int = 1,
+        inequality_constraints: List[Tuple] = None,
+        random_frac: float = 0.4,
+        limiter: float = 10,
+        eta: float = 2.0,
+        maxiter: int = 1000,
+        low_fantasies: Optional[int] = None,
     ):
         """
         Initialize with optimization settings.
@@ -82,8 +82,8 @@ class Optimizer:
         self.dim = dim
         self.dim_x = dim_x
         self.q = q
-        self.inner_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim_x)
-        self.outer_bounds = torch.tensor([[0.], [1.]]).repeat(1, dim)
+        self.inner_bounds = torch.tensor([[0.0], [1.0]]).repeat(1, dim_x)
+        self.outer_bounds = torch.tensor([[0.0], [1.0]]).repeat(1, dim)
         self.random_frac = random_frac
         self.limit = self.raw_samples * limiter
         self.inner_solutions = None  # mixed solutions
@@ -104,7 +104,7 @@ class Optimizer:
                 bounds=self.inner_bounds,
                 n=self.raw_samples,
                 q=1,
-                inequality_constraints=self.inequality_constraints
+                inequality_constraints=self.inequality_constraints,
             )
         elif self.inner_solutions.size(0) < (1 - self.random_frac) * self.raw_samples:
             num_reused = self.inner_solutions.size(0)
@@ -113,22 +113,25 @@ class Optimizer:
                 bounds=self.inner_bounds,
                 n=num_remaining,
                 q=1,
-                inequality_constraints=self.inequality_constraints
+                inequality_constraints=self.inequality_constraints,
             )
-            return torch.cat((self.inner_solutions.unsqueeze(-2), random_samples), dim=0)
+            return torch.cat(
+                (self.inner_solutions.unsqueeze(-2), random_samples), dim=0
+            )
         else:
-            reused = self.inner_solutions[torch.randperm(n=self.inner_solutions.size(0))][
-                     :self.raw_samples].unsqueeze(-2)
+            reused = self.inner_solutions[
+                torch.randperm(n=self.inner_solutions.size(0))
+            ][: self.raw_samples].unsqueeze(-2)
             random_samples = draw_constrained_sobol(
                 bounds=self.inner_bounds,
                 n=int(self.raw_samples * self.random_frac),
                 q=1,
-                inequality_constraints=self.inequality_constraints
+                inequality_constraints=self.inequality_constraints,
             )
             return torch.cat((reused, random_samples), dim=0)
 
     def generate_restart_points_from_samples(
-            self, X: Tensor, acqf: Union[InnerRho, rhoKG, rhoKGapx]
+        self, X: Tensor, acqf: Union[InnerRho, rhoKG, rhoKGapx]
     ) -> Tensor:
         """
         Generates the restart points from the given raw samples (X).
@@ -165,8 +168,8 @@ class Optimizer:
             acquisition_function=acqf,
             lower_bounds=self.inner_bounds[0],
             upper_bounds=self.inner_bounds[1],
-            options={'maxiter': self.maxiter},
-            inequality_constraints=self.inequality_constraints
+            options={"maxiter": self.maxiter},
+            inequality_constraints=self.inequality_constraints,
         )
         solutions = solutions.cpu().detach()
         values = values.cpu().detach()
@@ -177,26 +180,31 @@ class Optimizer:
         self.current_best = -value
         return solution, value
 
-    def generate_outer_restart_points(self, acqf: Union[rhoKG, rhoKGapx],
-                                      w_samples: Tensor = None) -> Tensor:
+    def generate_outer_restart_points(
+        self, acqf: Union[rhoKG, rhoKGapx], w_samples: Tensor = None
+    ) -> Tensor:
         """
         Generates the restarts points for rhoKGapx or rhoKG
         :param acqf: The acquisition function being optimized
         :param w_samples: the list of w samples to use
         :return: restart points
         """
-        X = draw_constrained_sobol(bounds=self.outer_bounds, n=self.raw_samples, q=self.q,
-                                   inequality_constraints=self.inequality_constraints)
+        X = draw_constrained_sobol(
+            bounds=self.outer_bounds,
+            n=self.raw_samples,
+            q=self.q,
+            inequality_constraints=self.inequality_constraints,
+        )
         if w_samples is not None:
             w_ind = torch.randint(w_samples.shape[0], (self.raw_samples, self.q))
-            X[..., self.dim_x:] = w_samples[w_ind, :]
+            X[..., self.dim_x :] = w_samples[w_ind, :]
         return self.generate_restart_points_from_samples(X, acqf)
 
     def optimize_outer(
-            self,
-            acqf: Union[rhoKG, rhoKGapx],
-            w_samples: Tensor = None,
-            batch_size: int = 5
+        self,
+        acqf: Union[rhoKG, rhoKGapx],
+        w_samples: Tensor = None,
+        batch_size: int = 5,
     ) -> Tuple[Tensor, Tensor]:
         """
         rhoKGapx, Nested or Tts optimizer with w component restricted to w_samples
@@ -226,32 +234,34 @@ class Optimizer:
         num_batches = ceil(init_size / batch_size)
         solutions = torch.empty(init_size, self.q, self.dim)
         values = torch.empty(init_size)
-        options = {'maxiter': int(self.maxiter / 25)}
+        options = {"maxiter": int(self.maxiter / 25)}
         for i in range(num_batches):
             l_idx = i * batch_size
             if i == num_batches - 1:
                 r_idx = init_size
             else:
                 r_idx = (i + 1) * batch_size
-            solutions[l_idx:r_idx], values[l_idx:r_idx] = \
-                gen_candidates_scipy(initial_conditions=initial_conditions[l_idx:r_idx],
-                                     acquisition_function=acqf,
-                                     lower_bounds=self.outer_bounds[0],
-                                     upper_bounds=self.outer_bounds[1],
-                                     options=options,
-                                     fixed_features=fixed_features,
-                                     inequality_constraints=self.inequality_constraints)
+            solutions[l_idx:r_idx], values[l_idx:r_idx] = gen_candidates_scipy(
+                initial_conditions=initial_conditions[l_idx:r_idx],
+                acquisition_function=acqf,
+                lower_bounds=self.outer_bounds[0],
+                upper_bounds=self.outer_bounds[1],
+                options=options,
+                fixed_features=fixed_features,
+                inequality_constraints=self.inequality_constraints,
+            )
         _, idx = torch.sort(values)
         acqf.tts_reset()
-        options = {'maxiter': self.maxiter}
+        options = {"maxiter": self.maxiter}
         solutions, values = gen_candidates_scipy(
-            initial_conditions=solutions[idx[:self.num_refine_restarts]],
+            initial_conditions=solutions[idx[: self.num_refine_restarts]],
             acquisition_function=acqf,
             lower_bounds=self.outer_bounds[0],
             upper_bounds=self.outer_bounds[1],
             options=options,
             fixed_features=fixed_features,
-            inequality_constraints=self.inequality_constraints)
+            inequality_constraints=self.inequality_constraints,
+        )
         best = torch.argmax(values)
         return solutions[best].cpu().detach(), values[best].cpu().detach()
 
@@ -261,9 +271,11 @@ class Optimizer:
         Gets rid of a good bit of previous solutions
         :return: None
         """
-        if self.inner_solutions is not None and \
-                self.inner_solutions.size(0) > self.raw_samples:
-            indices = torch.randperm(n=self.inner_solutions.size(0))[:self.raw_samples]
+        if (
+            self.inner_solutions is not None
+            and self.inner_solutions.size(0) > self.raw_samples
+        ):
+            indices = torch.randperm(n=self.inner_solutions.size(0))[: self.raw_samples]
             self.inner_solutions = self.inner_solutions[indices]
             self.inner_values = self.inner_values[indices]
 
@@ -283,7 +295,7 @@ class Optimizer:
             self.inner_solutions = torch.cat((self.inner_solutions, solutions), dim=0)
             self.inner_values = torch.cat((self.inner_values, values), dim=0)
             if self.inner_solutions.shape[0] > self.limit:
-                indices = torch.randperm(n=self.inner_solutions.shape[0])[:self.limit]
+                indices = torch.randperm(n=self.inner_solutions.shape[0])[: self.limit]
                 self.inner_solutions = self.inner_solutions[indices]
                 self.inner_values = self.inner_values[indices]
 
@@ -303,10 +315,18 @@ class InnerOptimizer:
     between iterations and not get stuck at the same point.
     """
 
-    def __init__(self, num_restarts: int, raw_multiplier: int, dim_x: int,
-                 inequality_constraints: Optional[List[Tuple]] = None,
-                 random_frac: float = 0.5, new_iter_frac: float = 0.5,
-                 limiter: float = 10, eta: float = 2.0, maxiter: int = 100):
+    def __init__(
+        self,
+        num_restarts: int,
+        raw_multiplier: int,
+        dim_x: int,
+        inequality_constraints: Optional[List[Tuple]] = None,
+        random_frac: float = 0.5,
+        new_iter_frac: float = 0.5,
+        limiter: float = 10,
+        eta: float = 2.0,
+        maxiter: int = 100,
+    ):
         """
         Initialize with optimization settings.
         :param num_restarts: number of restart points for optimization
@@ -329,7 +349,7 @@ class InnerOptimizer:
         self.num_restarts = num_restarts
         self.raw_samples = num_restarts * raw_multiplier
         self.dim_x = dim_x
-        self.bounds = torch.tensor([[0.], [1.]]).repeat(1, dim_x)
+        self.bounds = torch.tensor([[0.0], [1.0]]).repeat(1, dim_x)
         self.random_frac = random_frac
         self.new_iter_frac = new_iter_frac
         self.limit = self.raw_samples * limiter
@@ -347,23 +367,26 @@ class InnerOptimizer:
         if self.previous_solutions is None:
             samples = constrained_rand(
                 (self.raw_samples, *batch_shape, 1, self.dim_x),
-                inequality_constraints=self.inequality_constraints
+                inequality_constraints=self.inequality_constraints,
             )
             return samples
         else:
-            if self.previous_solutions.size(0) < (1 - self.random_frac) * \
-                    self.raw_samples:
+            if (
+                self.previous_solutions.size(0)
+                < (1 - self.random_frac) * self.raw_samples
+            ):
                 num_reused = self.previous_solutions.size(0)
                 num_random = self.raw_samples - num_reused
             else:
                 num_reused = self.raw_samples - int(self.raw_samples * self.random_frac)
                 num_random = int(self.raw_samples * self.random_frac)
-            idx = torch.randint(self.previous_solutions.size(0),
-                                (num_reused, *batch_shape))
+            idx = torch.randint(
+                self.previous_solutions.size(0), (num_reused, *batch_shape)
+            )
             reused = self.previous_solutions[idx, :, :]
             random_samples = constrained_rand(
                 (num_random, *batch_shape, 1, self.dim_x),
-                inequality_constraints=self.inequality_constraints
+                inequality_constraints=self.inequality_constraints,
             )
             samples = torch.cat((reused, random_samples), dim=0)
             return samples
@@ -400,9 +423,12 @@ class InnerOptimizer:
                 idcs[i, -1] = max_idx[i]
         idcs = idcs.reshape(*batch_shape, -1).permute(2, 0, 1)
         # gather the indices from X
-        return X.gather(dim=0,
-                        index=idcs.view(*idcs.shape, 1, 1).repeat(*[1] * (idcs.dim() + 1),
-                                                                  self.dim_x))
+        return X.gather(
+            dim=0,
+            index=idcs.view(*idcs.shape, 1, 1).repeat(
+                *[1] * (idcs.dim() + 1), self.dim_x
+            ),
+        )
 
     def optimize(self, acqf: MCAcquisitionFunction) -> Tuple[Tensor, Tensor]:
         """
@@ -414,9 +440,10 @@ class InnerOptimizer:
         # shape = num_restarts x *acqf.batch_shape x 1 x dim_X
         if self.inequality_constraints is not None:
             org_shape = initial_conditions.shape
-            initial_conditions = initial_conditions.reshape(self.num_restarts, -1,
-                                                            self.dim_x)
-        options = {'maxiter': int(self.maxiter / 25)}
+            initial_conditions = initial_conditions.reshape(
+                self.num_restarts, -1, self.dim_x
+            )
+        options = {"maxiter": int(self.maxiter / 25)}
         with settings.propagate_grads(True):
             solutions, values = gen_candidates_scipy(
                 initial_conditions=initial_conditions,
@@ -424,19 +451,22 @@ class InnerOptimizer:
                 lower_bounds=self.bounds[0],
                 upper_bounds=self.bounds[1],
                 options=options,
-                inequality_constraints=self.inequality_constraints)
+                inequality_constraints=self.inequality_constraints,
+            )
         self.add_solutions(solutions.view(-1, 1, self.dim_x).detach())
         best_ind = torch.argmax(values, dim=0)
         if self.inequality_constraints is not None:
             solutions = solutions.reshape(org_shape)
-        solution = solutions.gather(dim=0,
-                                    index=best_ind.view(1, *best_ind.shape, 1, 1).repeat(
-                                        *[1] * (best_ind.dim() + 2),
-                                        self.dim_x))
+        solution = solutions.gather(
+            dim=0,
+            index=best_ind.view(1, *best_ind.shape, 1, 1).repeat(
+                *[1] * (best_ind.dim() + 2), self.dim_x
+            ),
+        )
         if self.inequality_constraints is not None:
             org_shape = solution.shape
             solution = solution.reshape(1, -1, self.dim_x)
-        options = {'maxiter': self.maxiter}
+        options = {"maxiter": self.maxiter}
         with settings.propagate_grads(True):
             solution, value = gen_candidates_scipy(
                 initial_conditions=solution,
@@ -444,7 +474,7 @@ class InnerOptimizer:
                 lower_bounds=self.bounds[0],
                 upper_bounds=self.bounds[1],
                 options=options,
-                inequality_constraints=self.inequality_constraints
+                inequality_constraints=self.inequality_constraints,
             )
             # This is needed due to nested optimization
             value = acqf(solution)
@@ -458,10 +488,13 @@ class InnerOptimizer:
         Gets rid of a good bit of previous solutions
         :return: None
         """
-        if self.previous_solutions is not None and \
-                self.previous_solutions.size(0) > self.raw_samples * self.new_iter_frac:
+        if (
+            self.previous_solutions is not None
+            and self.previous_solutions.size(0) > self.raw_samples * self.new_iter_frac
+        ):
             indices = torch.randperm(n=self.previous_solutions.size(0))[
-                      :int(self.raw_samples * self.new_iter_frac)]
+                : int(self.raw_samples * self.new_iter_frac)
+            ]
             self.previous_solutions = self.previous_solutions[indices]
 
     def add_solutions(self, solutions: Tensor):
@@ -471,10 +504,11 @@ class InnerOptimizer:
         :return: None
         """
         if self.previous_solutions is not None:
-            self.previous_solutions = torch.cat((self.previous_solutions, solutions),
-                                                dim=0)
+            self.previous_solutions = torch.cat(
+                (self.previous_solutions, solutions), dim=0
+            )
         else:
             self.previous_solutions = solutions
         if self.previous_solutions.size(0) > self.limit:
-            indices = torch.randperm(n=self.previous_solutions.size(0))[:self.limit]
+            indices = torch.randperm(n=self.previous_solutions.size(0))[: self.limit]
             self.previous_solutions = self.previous_solutions[indices]

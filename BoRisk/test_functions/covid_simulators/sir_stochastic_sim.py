@@ -13,7 +13,7 @@ class SIRStochasticSimulation:
 
         # Meta-parameters governing the maximum number of days an
         # individual spends in each 'infection' state
-        self.max_time_ID = params['max_time_ID']
+        self.max_time_ID = params["max_time_ID"]
 
         # parameters governing distribution over time spent in each
         # of these infection states:
@@ -21,38 +21,38 @@ class SIRStochasticSimulation:
         # sample_X_times(n) returns a numpy array times of length max_time_X
         # such that times[k] is the number of people who stay in state X
         # for k time periods, and sum(times) == n.
-        self.sample_ID_times = params['ID_time_function']
+        self.sample_ID_times = params["ID_time_function"]
 
         # assumption: sample_QI_exit_count(n) returns a number m <= n
         #             indicating the number of people in the state QI
         #             who exit quarantine, given than n people initially
         #             start there
-        self.sample_QI_exit_count = params['sample_QI_exit_function']
-        self.sample_QS_exit_count = params['sample_QS_exit_function']
+        self.sample_QI_exit_count = params["sample_QI_exit_function"]
+        self.sample_QS_exit_count = params["sample_QS_exit_function"]
 
         # parameters governing distribution over transition out of
         # each infection state
-        self.exposed_infection_p = params['exposed_infection_p']
-        self.contacts_lambda = params['expected_contacts_per_day']
+        self.exposed_infection_p = params["exposed_infection_p"]
+        self.contacts_lambda = params["expected_contacts_per_day"]
 
         # parameters governing test protocol
-        self.days_between_tests = params['days_between_tests']
-        self.test_pop_fraction = params['test_population_fraction']
-        self.test_QFNR = params['test_protocol_QFNR']
-        self.test_QFPR = params['test_protocol_QFPR']
+        self.days_between_tests = params["days_between_tests"]
+        self.test_pop_fraction = params["test_population_fraction"]
+        self.test_QFNR = params["test_protocol_QFNR"]
+        self.test_QFPR = params["test_protocol_QFPR"]
 
         # parameters governing contact tracing
-        self.perform_contact_tracing = params['perform_contact_tracing']
-        self.contact_tracing_c = params['contact_tracing_constant']
+        self.perform_contact_tracing = params["perform_contact_tracing"]
+        self.contact_tracing_c = params["contact_tracing_constant"]
 
         # flag governing meaning of the pre-ID state
 
         # parameters governing initial state of simulation
-        self.pop_size = params['population_size']
-        self.init_ID_count = params['initial_ID_count']
+        self.pop_size = params["population_size"]
+        self.init_ID_count = params["initial_ID_count"]
 
         self.init_S_count = self.pop_size - self.init_ID_count
-        assert (self.init_S_count >= 0)
+        assert self.init_S_count >= 0
 
         # instantiate state variables and relevant simulation variables
         self.reset_initial_state()
@@ -125,8 +125,11 @@ class SIRStochasticSimulation:
     def step(self):
         """ simulate a single day in the progression of the disease """
 
-        # do testing logic first 
-        if self.current_day - self.last_test_day >= self.days_between_tests or self.last_test_day == -1:
+        # do testing logic first
+        if (
+            self.current_day - self.last_test_day >= self.days_between_tests
+            or self.last_test_day == -1
+        ):
             self.last_test_day = self.current_day
             self.run_test()
 
@@ -139,7 +142,9 @@ class SIRStochasticSimulation:
         # simulate new exposures between free infectious & free susceptible:
         free_tot = free_infectious + free_susceptible + self.R
 
-        poisson_param = free_infectious * self.contacts_lambda * free_susceptible / free_tot
+        poisson_param = (
+            free_infectious * self.contacts_lambda * free_susceptible / free_tot
+        )
 
         n_contacts = min(np.random.poisson(poisson_param), self.S)
         new_ID = np.random.binomial(n_contacts, self.exposed_infection_p)
@@ -184,11 +189,9 @@ class SIRStochasticSimulation:
         self.ID[self.max_time_ID - 1] = 0
 
     def get_current_state_vector(self):
-        return np.concatenate([
-            [self.S], [self.QS], [self.QI], [self.R],
-            self.ID
-        ])
+        return np.concatenate([[self.S], [self.QS], [self.QI], [self.R], self.ID])
 
     def get_state_vector_labels(self):
-        return ['S', 'QS', 'QI', 'R'] + \
-               ['ID_{}'.format(x) for x in range(self.max_time_ID)]
+        return ["S", "QS", "QI", "R"] + [
+            "ID_{}".format(x) for x in range(self.max_time_ID)
+        ]

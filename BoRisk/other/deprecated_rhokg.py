@@ -23,14 +23,22 @@ class OldInnerRho(MCAcquisitionFunction):
     This is the inner optimization problem of rhoKG
     """
 
-    def old__init__(self, model: Model, w_samples: Tensor,
-                    alpha: Union[Tensor, float], dim_x: int,
-                    num_repetitions: int = 0,
-                    lookahead_samples: Tensor = None,
-                    inner_seed: Optional[int] = None,
-                    CVaR: bool = False, expectation: bool = False,
-                    cuda: bool = False, w_actual: Tensor = None,
-                    weights: Tensor = None, **kwargs):
+    def old__init__(
+        self,
+        model: Model,
+        w_samples: Tensor,
+        alpha: Union[Tensor, float],
+        dim_x: int,
+        num_repetitions: int = 0,
+        lookahead_samples: Tensor = None,
+        inner_seed: Optional[int] = None,
+        CVaR: bool = False,
+        expectation: bool = False,
+        cuda: bool = False,
+        w_actual: Tensor = None,
+        weights: Tensor = None,
+        **kwargs
+    ):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -72,12 +80,14 @@ class OldInnerRho(MCAcquisitionFunction):
         self.cuda = cuda
         self.w_actual = w_actual
         if self.num_repetitions > 0 and lookahead_samples is None:
-            raw_sobol = draw_sobol_normal_samples(d=self.num_samples,
-                                                  n=self.num_repetitions * self.num_fantasies,
-                                                  seed=inner_seed)
-            self.sobol_samples = raw_sobol.reshape(self.num_repetitions,
-                                                   self.num_fantasies, 1,
-                                                   self.num_samples, 1)
+            raw_sobol = draw_sobol_normal_samples(
+                d=self.num_samples,
+                n=self.num_repetitions * self.num_fantasies,
+                seed=inner_seed,
+            )
+            self.sobol_samples = raw_sobol.reshape(
+                self.num_repetitions, self.num_fantasies, 1, self.num_samples, 1
+            )
             # This is using different samples for each fantasy. Do we want this?
         if weights is not None:
             if weights.size(0) != w_samples.size(0):
@@ -89,7 +99,8 @@ class OldInnerRho(MCAcquisitionFunction):
         if self.weights is not None:
             if self.weights.size(0) != self.w_samples.size(0):
                 raise NotImplementedError(
-                    "Weights must be of the same size(0) as w_samples")
+                    "Weights must be of the same size(0) as w_samples"
+                )
             if torch.sum(self.weights) != 1:
                 raise ValueError("Weights must be normalized")
 
@@ -124,17 +135,20 @@ class OldInnerRho(MCAcquisitionFunction):
                     X = X.reshape(-1, *self.batch_shape, 1, self.dim_x)
             else:
                 raise ValueError(
-                    "InnerVaR supports only up to 2 dimensional batch models")
+                    "InnerVaR supports only up to 2 dimensional batch models"
+                )
         else:
             if X.shape[-4:-2] != self.batch_shape:
                 raise ValueError(
-                    'If passing large batch dimensional X, last two batch shapes'
-                    ' must match the model batch_shape')
+                    "If passing large batch dimensional X, last two batch shapes"
+                    " must match the model batch_shape"
+                )
             if len(self.batch_shape) > 2:
                 raise ValueError(
-                    'This is not set to handle larger than 2 dimensional batch models.'
-                    'Things can go wrong, it has not been tested.')
-        batch_shape = X.shape[0: -2]
+                    "This is not set to handle larger than 2 dimensional batch models."
+                    "Things can go wrong, it has not been tested."
+                )
+        batch_shape = X.shape[0:-2]
         batch_dim = len(batch_shape)
 
         # Repeat w to get the appropriate batch shape, then concatenate with x to get the full solutions, uses CRN
@@ -143,7 +157,9 @@ class OldInnerRho(MCAcquisitionFunction):
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
         if self.cuda:
-            z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1).cuda()
+            z = torch.cat(
+                (X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1
+            ).cuda()
         else:
             z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1)
 
@@ -156,17 +172,15 @@ class OldInnerRho(MCAcquisitionFunction):
         elif self.num_repetitions > 0:
             base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
             if batch_dim >= 3:
-                base_samples = base_samples.view(-1, *[1] * (batch_dim - 2),
-                                                 *base_samples.shape[-4:]).repeat(1,
-                                                                                  *batch_shape[
-                                                                                   :-2],
-                                                                                  1,
-                                                                                  1, 1, 1)
+                base_samples = base_samples.view(
+                    -1, *[1] * (batch_dim - 2), *base_samples.shape[-4:]
+                ).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
             # this next line is the cause of runtime warning, specifically the rsample part
             # changing base samples doesn't do anything - the reason is taking too many samples too
             # close to each other. See the issue in github.
-            samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]),
-                                                      base_samples)
+            samples = self.model.posterior(z).rsample(
+                torch.Size([self.num_repetitions]), base_samples
+            )
         else:
             # get the posterior mean
             post = self.model.posterior(z)
@@ -177,8 +191,9 @@ class OldInnerRho(MCAcquisitionFunction):
 
         if self.weights is None:
             if self.CVaR:
-                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :],
-                                    dim=-2)
+                values = torch.mean(
+                    samples[..., int(self.num_samples * self.alpha) :, :], dim=-2
+                )
             elif self.expectation:
                 values = torch.mean(samples, dim=-2)
             else:
@@ -188,15 +203,18 @@ class OldInnerRho(MCAcquisitionFunction):
             summed_weights = torch.empty(weights.size())
             summed_weights[..., 0, :] = weights[..., 0, :]
             for i in range(1, weights.size(-2)):
-                summed_weights[..., i, :] = summed_weights[..., i - 1, :] + weights[...,
-                                                                            i, :]
+                summed_weights[..., i, :] = (
+                    summed_weights[..., i - 1, :] + weights[..., i, :]
+                )
             if not self.expectation:
                 gr_ind = summed_weights >= self.alpha
-                var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1],
-                                     dtype=torch.long) * weights.size(-2)
+                var_ind = torch.ones(
+                    [*summed_weights.size()[:-2], 1, 1], dtype=torch.long
+                ) * weights.size(-2)
                 for i in range(weights.size(-2)):
-                    var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]],
-                                                           torch.tensor([i]))
+                    var_ind[gr_ind[..., i, :]] = torch.min(
+                        var_ind[gr_ind[..., i, :]], torch.tensor([i])
+                    )
 
                 if self.CVaR:
                     # deletes (zeroes) the non-tail weights
@@ -215,7 +233,7 @@ class OldInnerRho(MCAcquisitionFunction):
 
         # return negative so that the optimization minimizes the function
         if len(self.batch_shape) < 2:
-            values = - values.squeeze()
+            values = -values.squeeze()
             if values.size() == torch.Size([]):
                 values = values.reshape(-1)
             return values
@@ -231,17 +249,21 @@ class OldInnerRho(MCAcquisitionFunction):
         else:
             lookahead_seed = self.lookahead_seed
         # generate the lookahead points, w component
-        if self.lookahead_samples.dim() != 2 or self.lookahead_samples.size(
-                -1) != self.dim_w:
+        if (
+            self.lookahead_samples.dim() != 2
+            or self.lookahead_samples.size(-1) != self.dim_w
+        ):
             raise ValueError(
-                "lookahead_samples must be of size num_lookahead_samples x dim_w")
+                "lookahead_samples must be of size num_lookahead_samples x dim_w"
+            )
         w = self.lookahead_samples.repeat(*batch_shape, 1, 1)
 
         # If evaluating VaRKG with lookaheads, add the point evaluated to lookahead points
         if self.w_actual is not None:
             w = torch.cat(
                 (w, self.w_actual.expand((*batch_shape, *self.w_actual.size()[-2:]))),
-                dim=-2)
+                dim=-2,
+            )
 
         # merge with X to generate full dimensional points
         if self.cuda:
@@ -270,8 +292,9 @@ class OneShotrhoKG(AbsKG):
             being evaluated, the remaining (num_fantasies x dim_x) are the solutions to the inner problem.
         :return: value of VaR-KG at X (to be maximized) - size: batch size x num_fantasies
         """
-        warnings.warn("This works very poorly due to poor optimization. "
-                      "Use rhoKG if possible.")
+        warnings.warn(
+            "This works very poorly due to poor optimization. " "Use rhoKG if possible."
+        )
         # make sure X has proper shape
         X = X.reshape(-1, 1, X.size(-1))
         batch_size = X.size(0)
@@ -282,7 +305,8 @@ class OneShotrhoKG(AbsKG):
             if X.size(-1) == self.q * self.dim:
                 return self.evaluate_kg(X)
             raise ValueError(
-                'X must be of size: batch size x 1 x (q x dim + num_fantasies x dim_x) or (q x dim)')
+                "X must be of size: batch size x 1 x (q x dim + num_fantasies x dim_x) or (q x dim)"
+            )
         X_actual, X_fantasies = torch.split(X, split_sizes, dim=-1)
         X_actual = X_actual.reshape(batch_size, self.q, self.dim)
         # After permuting, we get size self.num_fantasies x batch size x 1 x dim_x
@@ -306,7 +330,7 @@ class OneShotrhoKG(AbsKG):
         else:
             inner_seed = self.inner_seed
 
-        w_actual = X_actual[..., -self.dim_w:]
+        w_actual = X_actual[..., -self.dim_w :]
 
         for i in range(num_batches):
             left_index = i * self.mini_batch_size
@@ -317,23 +341,31 @@ class OneShotrhoKG(AbsKG):
             # construct the fantasy model
             if self.cuda:
                 fantasy_model = self.model.fantasize(
-                    X_actual[left_index:right_index].cuda(), self.sampler).cuda()
+                    X_actual[left_index:right_index].cuda(), self.sampler
+                ).cuda()
             else:
-                fantasy_model = self.model.fantasize(X_actual[left_index:right_index],
-                                                     self.sampler)
+                fantasy_model = self.model.fantasize(
+                    X_actual[left_index:right_index], self.sampler
+                )
 
-            inner_VaR = InnerRho(model=fantasy_model, w_samples=w_samples,
-                                 alpha=self.alpha, dim_x=self.dim_x,
-                                 num_repetitions=self.num_repetitions,
-                                 lookahead_samples=self.lookahead_samples,
-                                 inner_seed=inner_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation,
-                                 cuda=self.cuda,
-                                 w_actual=w_actual[left_index:right_index],
-                                 weights=self.weights)
+            inner_VaR = InnerRho(
+                model=fantasy_model,
+                w_samples=w_samples,
+                alpha=self.alpha,
+                dim_x=self.dim_x,
+                num_repetitions=self.num_repetitions,
+                lookahead_samples=self.lookahead_samples,
+                inner_seed=inner_seed,
+                CVaR=self.CVaR,
+                expectation=self.expectation,
+                cuda=self.cuda,
+                w_actual=w_actual[left_index:right_index],
+                weights=self.weights,
+            )
             # sample and return
             with settings.propagate_grads(True):
-                inner_values = - inner_VaR(X_fantasies[:, left_index:right_index, :, :])
+                inner_values = -inner_VaR(X_fantasies[:, left_index:right_index, :, :])
             values[
-            left_index: right_index] = self.current_best_rho - inner_values.permute(1, 0)
+                left_index:right_index
+            ] = self.current_best_rho - inner_values.permute(1, 0)
         return values

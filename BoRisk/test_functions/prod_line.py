@@ -10,6 +10,7 @@ class ProductionLine(SyntheticTestFunction):
     This is the ProductionLine problem adopted from SimOpt.
     See the write-up for implementation details.
     """
+
     _optimizers = None
     rate_lb = 0  # lower bound of server rates
     rate_scale = 2  # scale of server rates
@@ -20,8 +21,14 @@ class ProductionLine(SyntheticTestFunction):
     c_0 = 1
     c_1 = 400
 
-    def __init__(self, num_servers: int = 3, capacity: int = 10, server_cost: Tensor = torch.tensor([1, 5, 9]),
-                 run_length: float = 1000, repetitions: int = 10):
+    def __init__(
+        self,
+        num_servers: int = 3,
+        capacity: int = 10,
+        server_cost: Tensor = torch.tensor([1, 5, 9]),
+        run_length: float = 1000,
+        repetitions: int = 10,
+    ):
         """
         Initialize the problem
         :param num_servers: Number of servers in the system, also gives the problem dimension (num_servers + 1)
@@ -87,12 +94,18 @@ class ProductionLine(SyntheticTestFunction):
         """
         # set up the variables and draw a number of random variables for start
         N = 1000  # the size of chunks of random variables to generate
-        arrival_stream = Tensor(exponential(1/arrival.detach().numpy(), N))
-        server_stream = Tensor(exponential(1/rates.detach().numpy(), (N, self.num_servers)))
+        arrival_stream = Tensor(exponential(1 / arrival.detach().numpy(), N))
+        server_stream = Tensor(
+            exponential(1 / rates.detach().numpy(), (N, self.num_servers))
+        )
         arrival_index = 0
         server_index = torch.zeros(self.num_servers, dtype=torch.long)
-        server_queue = torch.zeros(self.num_servers, dtype=torch.long)  # queue accounts for customer in service as well
-        blocked = torch.zeros(self.num_servers, dtype=torch.bool)  # 1 if server is blocked, 0 otherwise
+        server_queue = torch.zeros(
+            self.num_servers, dtype=torch.long
+        )  # queue accounts for customer in service as well
+        blocked = torch.zeros(
+            self.num_servers, dtype=torch.bool
+        )  # 1 if server is blocked, 0 otherwise
         time = 0
         event_list = []  # list of events
         # Each event is a list: [event time, event type, associated server]
@@ -110,8 +123,10 @@ class ProductionLine(SyntheticTestFunction):
             current_event = event_list.pop(next_event)
             # if time is up, return the revenue, otherwise, update time
             if current_event[0] > self.run_length:
-                revenue = ((self.r * completed_count / time) / (self.c_0 + torch.sum(self.server_cost * rates))) \
-                          - self.c_1
+                revenue = (
+                    (self.r * completed_count / time)
+                    / (self.c_0 + torch.sum(self.server_cost * rates))
+                ) - self.c_1
                 return revenue
             else:
                 time = current_event[0]
@@ -128,13 +143,19 @@ class ProductionLine(SyntheticTestFunction):
                         # if the next server is free
                         server_queue[server] -= 1
                         server_queue[server + 1] += 1
-                        event = [time + server_stream[server_index[server + 1], server + 1], 1, server + 1]
+                        event = [
+                            time + server_stream[server_index[server + 1], server + 1],
+                            1,
+                            server + 1,
+                        ]
                         event_list.append(event)
                         server_index[server + 1] += 1
                         # check if the server ran out of random variables
                         if server_index[server + 1] == N:
                             server_index[server + 1] = 0
-                            server_stream[:, server + 1] = Tensor(exponential(1 / rates[server + 1].detach().numpy(), N))
+                            server_stream[:, server + 1] = Tensor(
+                                exponential(1 / rates[server + 1].detach().numpy(), N)
+                            )
                     elif server_queue[server + 1] <= self.capacity:
                         # next server is not free but has space in queue
                         server_queue[server] -= 1
@@ -145,13 +166,19 @@ class ProductionLine(SyntheticTestFunction):
 
                 # if not blocked, serve next customer
                 if server_queue[server] > 0 and not blocked[server]:
-                    event = [time + server_stream[server_index[server], server], 1, server]
+                    event = [
+                        time + server_stream[server_index[server], server],
+                        1,
+                        server,
+                    ]
                     event_list.append(event)
                     server_index[server] += 1
                     # check if the server ran out of random variables
                     if server_index[server] == N:
                         server_index[server] = 0
-                        server_stream[:, server] = Tensor(exponential(1 / rates[server].detach().numpy(), N))
+                        server_stream[:, server] = Tensor(
+                            exponential(1 / rates[server].detach().numpy(), N)
+                        )
 
                 # check for chains of blockages
                 if server and server_queue[server] <= self.capacity:
@@ -161,13 +188,21 @@ class ProductionLine(SyntheticTestFunction):
                         if blocked[check]:
                             if server_queue[check] > 1:
                                 # if there's more in the queue, serve them
-                                event = [time + server_stream[server_index[check], check], 1, check]
+                                event = [
+                                    time + server_stream[server_index[check], check],
+                                    1,
+                                    check,
+                                ]
                                 event_list.append(event)
                                 server_index[check] += 1
                                 # check if the server ran out of random variables
                                 if server_index[check] == N:
                                     server_index[check] = 0
-                                    server_stream[:, check] = Tensor(exponential(1 / rates[check].detach().numpy(), N))
+                                    server_stream[:, check] = Tensor(
+                                        exponential(
+                                            1 / rates[check].detach().numpy(), N
+                                        )
+                                    )
                             blocked[check] = 0  # unblock the server
                             server_queue[check + 1] += 1
                             server_queue[check] -= 1
@@ -182,22 +217,34 @@ class ProductionLine(SyntheticTestFunction):
                 # process arrivals
                 if server_queue[0] == 0:
                     # server is empty
-                    event = [time + server_stream[server_index[0], 0], 1, 0]  # service completion event
+                    event = [
+                        time + server_stream[server_index[0], 0],
+                        1,
+                        0,
+                    ]  # service completion event
                     event_list.append(event)
                     server_index[0] += 1
                     # check if the server ran out of random variables
                     if server_index[0] == N:
                         server_index[0] = 0
-                        server_stream[:, 0] = Tensor(exponential(1 / rates[0].detach().numpy(), N))
+                        server_stream[:, 0] = Tensor(
+                            exponential(1 / rates[0].detach().numpy(), N)
+                        )
 
                 server_queue[0] += 1  # increment queue
-                event = [time + arrival_stream[arrival_index], 0, 0]  # generate next arrival
+                event = [
+                    time + arrival_stream[arrival_index],
+                    0,
+                    0,
+                ]  # generate next arrival
                 event_list.append(event)
                 arrival_index += 1
                 # if we ran out of random numbers, generate new ones
                 if arrival_index == N:
                     arrival_index = 0
-                    arrival_stream = Tensor(exponential(1 / arrival.detach().numpy(), N))
+                    arrival_stream = Tensor(
+                        exponential(1 / arrival.detach().numpy(), N)
+                    )
 
             # select the next event as argmin of event time
             next_event = int(torch.argmin(Tensor(event_list)[:, 0]).reshape(-1)[0])
@@ -209,7 +256,8 @@ class ProductionLine(SyntheticTestFunction):
 if __name__ == "__main__":
     # for testing purposes
     from time import time
+
     start = time()
     line = ProductionLine(repetitions=10)
     print(line(torch.tensor([0.75, 0.5, 0.25, 0.3])))
-    print('time: ', time()-start)
+    print("time: ", time() - start)

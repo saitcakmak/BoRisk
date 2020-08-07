@@ -22,7 +22,7 @@ import matplotlib.pyplot as plt
 seed = 0
 torch.manual_seed(seed)
 
-function_name = 'branin'
+function_name = "branin"
 dim_w = 1
 num_samples = 10
 num_restarts = 40
@@ -67,19 +67,22 @@ fit_gpytorch_model(mll)
 
 # if needed, in order to evaluate a specific situation, we could load the GP here and use that instead.
 
-inner_optimizer = InnerOptimizer(num_restarts=num_inner_restarts,
-                                 raw_multiplier=inner_raw_multiplier,
-                                 dim_x=dim_x,
-                                 maxiter=maxiter)
+inner_optimizer = InnerOptimizer(
+    num_restarts=num_inner_restarts,
+    raw_multiplier=inner_raw_multiplier,
+    dim_x=dim_x,
+    maxiter=maxiter,
+)
 
-optimizer = Optimizer(num_restarts=num_restarts,
-                      raw_multiplier=raw_multiplier,
-                      num_fantasies=num_fantasies,
-                      dim=d,
-                      dim_x=dim_x,
-                      q=q,
-                      maxiter=maxiter,
-                      )
+optimizer = Optimizer(
+    num_restarts=num_restarts,
+    raw_multiplier=raw_multiplier,
+    num_fantasies=num_fantasies,
+    dim=d,
+    dim_x=dim_x,
+    q=q,
+    maxiter=maxiter,
+)
 
 fix_samples = True
 fixed_samples = w_samples
@@ -90,10 +93,17 @@ num_repetitions = 40
 fantasy_seed = int(torch.randint(10000, (1,)))
 inner_seed = int(torch.randint(10000, (1,)))
 
-inner_rho = InnerRho(model=gp, w_samples=w_samples, alpha=alpha, dim_x=dim_x,
-                     num_repetitions=num_repetitions,
-                     inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
-                     weights=weights)
+inner_rho = InnerRho(
+    model=gp,
+    w_samples=w_samples,
+    alpha=alpha,
+    dim_x=dim_x,
+    num_repetitions=num_repetitions,
+    inner_seed=inner_seed,
+    CVaR=CVaR,
+    expectation=expectation,
+    weights=weights,
+)
 
 past_x = train_X[:, :dim_x]
 
@@ -102,39 +112,62 @@ if apx:
         values = inner_rho(past_x)
     best = torch.argmax(values)
     current_best_sol = past_x[best]
-    current_best_value = - values[best]
+    current_best_value = -values[best]
 else:
     current_best_sol, current_best_value = optimizer.optimize_inner(inner_rho)
     current_best_value = -current_best_value
 
-rhokgapx = rhoKGapx(model=gp, num_samples=num_samples, alpha=alpha,
-                    current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-                    fantasy_seed=fantasy_seed,
-                    dim=d, dim_x=dim_x, past_x=past_x, tts_frequency=tts_frequency, q=q,
-                    fix_samples=fix_samples, fixed_samples=fixed_samples,
-                    num_repetitions=num_repetitions,
-                    inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
-                    weights=weights)
+rhokgapx = rhoKGapx(
+    model=gp,
+    num_samples=num_samples,
+    alpha=alpha,
+    current_best_VaR=current_best_value,
+    num_fantasies=num_fantasies,
+    fantasy_seed=fantasy_seed,
+    dim=d,
+    dim_x=dim_x,
+    past_x=past_x,
+    tts_frequency=tts_frequency,
+    q=q,
+    fix_samples=fix_samples,
+    fixed_samples=fixed_samples,
+    num_repetitions=num_repetitions,
+    inner_seed=inner_seed,
+    CVaR=CVaR,
+    expectation=expectation,
+    weights=weights,
+)
 
-rhokg = rhoKG(model=gp, num_samples=num_samples, alpha=alpha,
-              current_best_VaR=current_best_value, num_fantasies=num_fantasies,
-              fantasy_seed=fantasy_seed,
-              dim=d, dim_x=dim_x, inner_optimizer=inner_optimizer.optimize,
-              tts_frequency=tts_frequency,
-              q=q, fix_samples=fix_samples, fixed_samples=fixed_samples,
-              num_repetitions=num_repetitions,
-              inner_seed=inner_seed, CVaR=CVaR, expectation=expectation,
-              weights=weights)
+rhokg = rhoKG(
+    model=gp,
+    num_samples=num_samples,
+    alpha=alpha,
+    current_best_VaR=current_best_value,
+    num_fantasies=num_fantasies,
+    fantasy_seed=fantasy_seed,
+    dim=d,
+    dim_x=dim_x,
+    inner_optimizer=inner_optimizer.optimize,
+    tts_frequency=tts_frequency,
+    q=q,
+    fix_samples=fix_samples,
+    fixed_samples=fixed_samples,
+    num_repetitions=num_repetitions,
+    inner_seed=inner_seed,
+    CVaR=CVaR,
+    expectation=expectation,
+    weights=weights,
+)
 
 k = 40  # number of points in x
 
 if apx:
-    name = 'rhoKGapx'
+    name = "rhoKGapx"
 else:
-    name = 'rhoKG'
+    name = "rhoKG"
 if tts_frequency > 1:
-    name = 'tts_' + name
-filename = 'acqf_val_%s_cvar_%s_seed_%d.pt' % (function_name, name, seed)
+    name = "tts_" + name
+filename = "acqf_val_%s_cvar_%s_seed_%d.pt" % (function_name, name, seed)
 try:
     res = torch.load(filename)
 except FileNotFoundError:
@@ -147,7 +180,7 @@ xy = torch.cat([torch.tensor(xx).unsqueeze(-1), torch.tensor(yy).unsqueeze(-1)],
 start = time()
 for i in range(num_samples):
     for j in range(k):
-        if res[i, j] != 0.:
+        if res[i, j] != 0.0:
             continue
         X_outer = xy[i, j]
         if apx:
@@ -159,13 +192,13 @@ for i in range(num_samples):
 
 contour_plotter(gp, inner_var=inner_rho)
 plt.figure()
-plt.xlabel('x')
-plt.ylabel('w')
+plt.xlabel("x")
+plt.ylabel("w")
 if apx:
     plot_name = "$\\rho$KG$^{apx}$"
 else:
     plot_name = "$\\rho$KG"
-plt.title('%s Acquisition Function Value' % plot_name)
+plt.title("%s Acquisition Function Value" % plot_name)
 c = plt.contourf(xx, yy, res.detach().squeeze(), levels=25)
 plt.colorbar(c)
 plt.show()

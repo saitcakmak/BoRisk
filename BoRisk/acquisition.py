@@ -20,13 +20,20 @@ class InnerRho(MCAcquisitionFunction):
     This is the inner optimization problem of rhoKG
     """
 
-    def __init__(self, model: Model, w_samples: Tensor,
-                 alpha: Union[Tensor, float], dim_x: int,
-                 num_repetitions: int = 0,
-                 inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False,
-                 cuda: bool = False,
-                 weights: Tensor = None, **kwargs):
+    def __init__(
+        self,
+        model: Model,
+        w_samples: Tensor,
+        alpha: Union[Tensor, float],
+        dim_x: int,
+        num_repetitions: int = 0,
+        inner_seed: Optional[int] = None,
+        CVaR: bool = False,
+        expectation: bool = False,
+        cuda: bool = False,
+        weights: Tensor = None,
+        **kwargs
+    ):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model - typically a fantasy model
@@ -68,7 +75,7 @@ class InnerRho(MCAcquisitionFunction):
             raw_sobol = draw_sobol_normal_samples(
                 d=self.num_fantasies * self.num_samples,
                 n=self.num_repetitions,
-                seed=inner_seed
+                seed=inner_seed,
             )
             self.sobol_samples = raw_sobol.reshape(
                 self.num_repetitions, self.num_fantasies, 1, self.num_samples, 1
@@ -84,7 +91,8 @@ class InnerRho(MCAcquisitionFunction):
         if self.weights is not None:
             if self.weights.size(0) != self.w_samples.size(0):
                 raise NotImplementedError(
-                    "Weights must be of the same size(0) as w_samples")
+                    "Weights must be of the same size(0) as w_samples"
+                )
             if torch.sum(self.weights) != 1:
                 raise ValueError("Weights must be normalized")
 
@@ -121,15 +129,19 @@ class InnerRho(MCAcquisitionFunction):
                 # Is this still the case? Or does the latest modifications allow for
                 # general shapes?
                 raise ValueError(
-                    "InnerVaR supports only up to 2 dimensional batch models")
+                    "InnerVaR supports only up to 2 dimensional batch models"
+                )
         else:
             if X.shape[-4:-2] != self.batch_shape:
-                raise ValueError('If passing large batch dimensional X, last two batch '
-                                 'shapes must match the model batch_shape')
+                raise ValueError(
+                    "If passing large batch dimensional X, last two batch "
+                    "shapes must match the model batch_shape"
+                )
             if len(self.batch_shape) > 2:
                 raise ValueError(
-                    'This is not set to handle larger than 2 dimensional batch models.'
-                    'Things can go wrong, it has not been tested.')
+                    "This is not set to handle larger than 2 dimensional batch models."
+                    "Things can go wrong, it has not been tested."
+                )
         batch_shape = X.shape[:-2]
         batch_dim = len(batch_shape)
 
@@ -139,7 +151,9 @@ class InnerRho(MCAcquisitionFunction):
         w = self.w_samples.repeat(*batch_shape, 1, 1)
         # z is the full dimensional variable (x, w)
         if self.cuda:
-            z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1).cuda()
+            z = torch.cat(
+                (X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1
+            ).cuda()
         else:
             z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1)
 
@@ -148,17 +162,15 @@ class InnerRho(MCAcquisitionFunction):
         if self.num_repetitions > 0:
             base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
             if batch_dim >= 3:
-                base_samples = base_samples.view(-1, *[1] * (batch_dim - 2),
-                                                 *base_samples.shape[-4:]).repeat(1,
-                                                                                  *batch_shape[
-                                                                                   :-2],
-                                                                                  1,
-                                                                                  1, 1, 1)
+                base_samples = base_samples.view(
+                    -1, *[1] * (batch_dim - 2), *base_samples.shape[-4:]
+                ).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
             # this next line is the cause of runtime warning, specifically the rsample part
             # changing base samples doesn't do anything - the reason is taking too many samples too
             # close to each other. See the issue in github.
-            samples = self.model.posterior(z).rsample(torch.Size([self.num_repetitions]),
-                                                      base_samples)
+            samples = self.model.posterior(z).rsample(
+                torch.Size([self.num_repetitions]), base_samples
+            )
         else:
             # get the posterior mean
             post = self.model.posterior(z)
@@ -171,8 +183,9 @@ class InnerRho(MCAcquisitionFunction):
         # while calculating rho
         if self.weights is None:
             if self.CVaR:
-                values = torch.mean(samples[..., int(self.num_samples * self.alpha):, :],
-                                    dim=-2)
+                values = torch.mean(
+                    samples[..., int(self.num_samples * self.alpha) :, :], dim=-2
+                )
             elif self.expectation:
                 values = torch.mean(samples, dim=-2)
             else:
@@ -182,15 +195,18 @@ class InnerRho(MCAcquisitionFunction):
             summed_weights = torch.empty(weights.size())
             summed_weights[..., 0, :] = weights[..., 0, :]
             for i in range(1, weights.size(-2)):
-                summed_weights[..., i, :] = summed_weights[..., i - 1, :] + weights[...,
-                                                                            i, :]
+                summed_weights[..., i, :] = (
+                    summed_weights[..., i - 1, :] + weights[..., i, :]
+                )
             if not self.expectation:
                 gr_ind = summed_weights >= self.alpha
-                var_ind = torch.ones([*summed_weights.size()[:-2], 1, 1],
-                                     dtype=torch.long) * weights.size(-2)
+                var_ind = torch.ones(
+                    [*summed_weights.size()[:-2], 1, 1], dtype=torch.long
+                ) * weights.size(-2)
                 for i in range(weights.size(-2)):
-                    var_ind[gr_ind[..., i, :]] = torch.min(var_ind[gr_ind[..., i, :]],
-                                                           torch.tensor([i]))
+                    var_ind[gr_ind[..., i, :]] = torch.min(
+                        var_ind[gr_ind[..., i, :]], torch.tensor([i])
+                    )
 
                 if self.CVaR:
                     # deletes (zeroes) the non-tail weights
@@ -209,7 +225,7 @@ class InnerRho(MCAcquisitionFunction):
 
         # return negative so that the optimization minimizes the function
         if len(self.batch_shape) < 2:
-            values = - values.squeeze()
+            values = -values.squeeze()
             if values.size() == torch.Size([]):
                 values = values.reshape(-1)
             return values
@@ -222,15 +238,27 @@ class AbsKG(MCAcquisitionFunction, ABC):
     The abstract base class for rhoKG and it's variants
     """
 
-    def __init__(self, model: Model,
-                 num_samples: int, alpha: Union[Tensor, float],
-                 current_best_rho: Optional[Tensor], num_fantasies: int,
-                 dim: int, dim_x: int,
-                 q: int = 1, fix_samples: bool = False, fixed_samples: Tensor = None,
-                 num_repetitions: int = 0,
-                 lookahead_samples: Tensor = None, inner_seed: Optional[int] = None,
-                 CVaR: bool = False, expectation: bool = False, cuda: bool = False,
-                 weights: Tensor = None, **kwargs):
+    def __init__(
+        self,
+        model: Model,
+        num_samples: int,
+        alpha: Union[Tensor, float],
+        current_best_rho: Optional[Tensor],
+        num_fantasies: int,
+        dim: int,
+        dim_x: int,
+        q: int = 1,
+        fix_samples: bool = False,
+        fixed_samples: Tensor = None,
+        num_repetitions: int = 0,
+        lookahead_samples: Tensor = None,
+        inner_seed: Optional[int] = None,
+        CVaR: bool = False,
+        expectation: bool = False,
+        cuda: bool = False,
+        weights: Tensor = None,
+        **kwargs
+    ):
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
@@ -294,15 +322,17 @@ class AbsKG(MCAcquisitionFunction, ABC):
 
         self.num_repetitions = num_repetitions
         if lookahead_samples is not None and (
-                lookahead_samples.dim() != 2 or lookahead_samples.size(-1) != self.dim_w):
+            lookahead_samples.dim() != 2 or lookahead_samples.size(-1) != self.dim_w
+        ):
             raise ValueError(
-                "lookahead_samples must be of size num_lookahead_samples x dim_w")
+                "lookahead_samples must be of size num_lookahead_samples x dim_w"
+            )
         self.lookahead_samples = lookahead_samples
         self.weights = weights
 
         # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
         # much unless set too low.
-        self.mini_batch_size = kwargs.get('mini_batch_size', 50)
+        self.mini_batch_size = kwargs.get("mini_batch_size", 50)
 
     def tts_reset(self):
         """
@@ -396,46 +426,58 @@ class rhoKGapx(AbsKG):
 
             # construct the fantasy model
             if self.cuda:
-                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(),
-                                                     self.sampler).cuda()
+                fantasy_model = self.model.fantasize(
+                    X[left_index:right_index].cuda(), self.sampler
+                ).cuda()
             else:
-                fantasy_model = self.model.fantasize(X[left_index:right_index],
-                                                     self.sampler)
+                fantasy_model = self.model.fantasize(
+                    X[left_index:right_index], self.sampler
+                )
 
-            inner_rho = InnerRho(model=fantasy_model, w_samples=w_samples,
-                                 alpha=self.alpha, dim_x=self.dim_x,
-                                 num_repetitions=self.num_repetitions,
-                                 inner_seed=inner_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation,
-                                 cuda=self.cuda,
-                                 weights=self.weights)
+            inner_rho = InnerRho(
+                model=fantasy_model,
+                w_samples=w_samples,
+                alpha=self.alpha,
+                dim_x=self.dim_x,
+                num_repetitions=self.num_repetitions,
+                inner_seed=inner_seed,
+                CVaR=self.CVaR,
+                expectation=self.expectation,
+                cuda=self.cuda,
+                weights=self.weights,
+            )
 
             if self.call_count % self.tts_frequency == 0:
-                x_comp = X[left_index:right_index, :, :self.dim_x]
+                x_comp = X[left_index:right_index, :, : self.dim_x]
 
                 x_inner = torch.cat(
-                    (x_comp, self.past_x.repeat(right_index - left_index, 1, 1)),
-                    dim=-2
+                    (x_comp, self.past_x.repeat(right_index - left_index, 1, 1)), dim=-2
                 ).repeat(self.active_fantasies, 1, 1, 1)
 
                 temp_values = torch.empty(
-                    self.past_x.size(0) + self.q, self.active_fantasies,
-                    right_index - left_index)
+                    self.past_x.size(0) + self.q,
+                    self.active_fantasies,
+                    right_index - left_index,
+                )
                 for j in range(temp_values.size(0)):
                     with settings.propagate_grads(True):
-                        temp_values[j] = - inner_rho(x_inner[..., j, :].unsqueeze(-2))
+                        temp_values[j] = -inner_rho(x_inner[..., j, :].unsqueeze(-2))
                 best = torch.argmin(temp_values, dim=0)
                 detailed_values = torch.gather(
                     temp_values, 0, best.unsqueeze(0)
                 ).reshape(self.active_fantasies, right_index - left_index)
-                self.last_inner_solution[:, left_index:right_index] = \
-                    torch.gather(x_inner, 2, best.unsqueeze(-1).unsqueeze(-1).repeat(
-                        1, 1, 1, self.dim_x))
+                self.last_inner_solution[:, left_index:right_index] = torch.gather(
+                    x_inner,
+                    2,
+                    best.unsqueeze(-1).unsqueeze(-1).repeat(1, 1, 1, self.dim_x),
+                )
             else:
-                detailed_values = - inner_rho(
-                    self.last_inner_solution[:, left_index:right_index])
+                detailed_values = -inner_rho(
+                    self.last_inner_solution[:, left_index:right_index]
+                )
             values[left_index:right_index] = self.current_best_rho - torch.mean(
-                detailed_values, dim=0)
+                detailed_values, dim=0
+            )
         self.call_count += 1
         return values
 
@@ -501,28 +543,38 @@ class rhoKG(AbsKG):
 
             # construct the fantasy model
             if self.cuda:
-                fantasy_model = self.model.fantasize(X[left_index:right_index].cuda(),
-                                                     self.sampler).cuda()
+                fantasy_model = self.model.fantasize(
+                    X[left_index:right_index].cuda(), self.sampler
+                ).cuda()
             else:
-                fantasy_model = self.model.fantasize(X[left_index:right_index],
-                                                     self.sampler)
+                fantasy_model = self.model.fantasize(
+                    X[left_index:right_index], self.sampler
+                )
 
-            inner_rho = InnerRho(model=fantasy_model, w_samples=w_samples,
-                                 alpha=self.alpha, dim_x=self.dim_x,
-                                 num_repetitions=self.num_repetitions,
-                                 inner_seed=inner_seed,
-                                 CVaR=self.CVaR, expectation=self.expectation,
-                                 cuda=self.cuda,
-                                 weights=self.weights)
+            inner_rho = InnerRho(
+                model=fantasy_model,
+                w_samples=w_samples,
+                alpha=self.alpha,
+                dim_x=self.dim_x,
+                num_repetitions=self.num_repetitions,
+                inner_seed=inner_seed,
+                CVaR=self.CVaR,
+                expectation=self.expectation,
+                cuda=self.cuda,
+                weights=self.weights,
+            )
             # optimize inner VaR
             with settings.propagate_grads(True):
                 if self.call_count % self.tts_frequency == 0:
                     solution, value = self.inner_optimizer(inner_rho)
                     self.last_inner_solution[:, left_index:right_index] = solution
                 else:
-                    value = inner_rho(self.last_inner_solution[:, left_index:right_index])
+                    value = inner_rho(
+                        self.last_inner_solution[:, left_index:right_index]
+                    )
             value = -value
-            values[left_index:right_index] = self.current_best_rho - torch.mean(value,
-                                                                                dim=0)
+            values[left_index:right_index] = self.current_best_rho - torch.mean(
+                value, dim=0
+            )
         self.call_count += 1
         return values

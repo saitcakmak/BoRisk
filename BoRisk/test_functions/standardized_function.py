@@ -23,9 +23,11 @@ class StandardizedFunction:
             self.bounds = Tensor(function._bounds).t()
             self.scale = self.bounds[1] - self.bounds[0]
             self.l_bounds = self.bounds[0]
-            self.w_samples = getattr(self.function, 'w_samples', None)
-            self.weights = getattr(self.function, 'weights', None)
-            self.inequality_constraints = getattr(self.function, 'inequality_constraints', None)
+            self.w_samples = getattr(self.function, "w_samples", None)
+            self.weights = getattr(self.function, "weights", None)
+            self.inequality_constraints = getattr(
+                self.function, "inequality_constraints", None
+            )
             self.negate = negate
         except AttributeError:
             # in case a Class is given instead of an object

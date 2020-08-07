@@ -9,14 +9,15 @@ from helper_fns.analyzer_plots import plot_out
 import sys
 import os
 
-directory = os.path.join(os.path.dirname(
-    os.path.dirname(os.path.abspath(__file__))), "batch_output")
-function_name = 'covid'
+directory = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "batch_output"
+)
+function_name = "covid"
 plot_log = False  # if true, the plot is on log scale
-prefix = 'plot_'
+prefix = "plot_"
 # prefix = ''
-suffix = '_cvar'
-filename = '%s%s%s' % (prefix, function_name, suffix)
+suffix = "_cvar"
+filename = "%s%s%s" % (prefix, function_name, suffix)
 dim_w = 3
 CVaR = True
 alpha = 0.9
@@ -35,8 +36,8 @@ try:
 except FileNotFoundError:
     out = dict()
 
-w_samples = getattr(function, 'w_samples')
-weights = getattr(function, 'weights')
+w_samples = getattr(function, "w_samples")
+weights = getattr(function, "weights")
 
 data = torch.load(os.path.join(directory, filename))
 output = dict()
@@ -79,19 +80,21 @@ def get_obj(X: torch.Tensor, key, inner_key):
         if inner_key in out[key].keys():
             if out[key][inner_key].size(0) >= X.size(0):
                 print("returning existing result for %s %s" % (key, inner_key))
-                return out[key][inner_key][:X.size(0)]
+                return out[key][inner_key][: X.size(0)]
             else:
                 print("reusing the partial output for %s %s" % (key, inner_key))
                 partial_out = out[key][inner_key]
     partial_size = partial_out.size(0)
     if (X > 1).any() or (X < 0).any():
-        raise ValueError('Some of the solutions is out of bounds. Make sure to reevaluate')
+        raise ValueError(
+            "Some of the solutions is out of bounds. Make sure to reevaluate"
+        )
     X = X[partial_size:]
     sols = torch.cat((X.repeat(1, num_w, 1), w_samples.repeat(X.size(0), 1, 1)), dim=-1)
     vals = function(sols)
     vals, _ = torch.sort(vals, dim=-2)
     if CVaR:
-        values = torch.mean(vals[:, int(alpha * num_w):, :], dim=-2)
+        values = torch.mean(vals[:, int(alpha * num_w) :, :], dim=-2)
     else:
         values = vals[:, int(alpha * num_w), :]
     if key not in out.keys():
@@ -107,12 +110,20 @@ def get_obj(X: torch.Tensor, key, inner_key):
 for key in key_list:
     output[key] = dict()
     if "_q" in key:
-        sub = key[key.find("_q") + 1:]
+        sub = key[key.find("_q") + 1 :]
         next_ = sub.find("_")
         start = 2 if "=" in sub else 1
         q = int(sub[start:next_]) if next_ > 0 else int(sub[start:])
     else:
-        if key in ['EI', 'MES', 'qKG', 'UCB', 'classical_random', 'EI_long', 'qKG_long']:
+        if key in [
+            "EI",
+            "MES",
+            "qKG",
+            "UCB",
+            "classical_random",
+            "EI_long",
+            "qKG_long",
+        ]:
             q = w_batch_size
         else:
             q = 1
@@ -120,21 +131,27 @@ for key in key_list:
     inner_keys = list(sub_data.keys())
     for i in range(len(inner_keys)):
         if sub_data[inner_keys[i]] is None:
-            raise ValueError('Some of the data is None! Key: %s ' % key)
-        best_list = sub_data[inner_keys[i]]['current_best']
-        if 'x' not in output[key].keys():
-            output[key]['x'] = torch.linspace(0, best_list.size(0) - 1, best_list.size(0)) * q
+            raise ValueError("Some of the data is None! Key: %s " % key)
+        best_list = sub_data[inner_keys[i]]["current_best"]
+        if "x" not in output[key].keys():
+            output[key]["x"] = (
+                torch.linspace(0, best_list.size(0) - 1, best_list.size(0)) * q
+            )
         values = get_obj(best_list, key, inner_keys[i])
         reshaped = values.reshape(1, -1)
-        if 'y' not in output[key].keys():
-            output[key]['y'] = reshaped
+        if "y" not in output[key].keys():
+            output[key]["y"] = reshaped
         else:
-            output[key]['y'] = torch.cat([output[key]['y'], reshaped], dim=0)
+            output[key]["y"] = torch.cat([output[key]["y"], reshaped], dim=0)
 
 # If the key has no output, remove it.
 for key in output.keys():
     if output[key].keys() == dict().keys():
         output.pop(key)
 
-plot_out(output=output, title="Covid-19 Cumulative Infections ", ylabel="infections", plot_log=plot_log)
-
+plot_out(
+    output=output,
+    title="Covid-19 Cumulative Infections ",
+    ylabel="infections",
+    plot_log=plot_log,
+)

@@ -7,11 +7,11 @@ max_tries = 1000
 
 
 def draw_constrained_sobol(
-        bounds: Tensor,
-        n: int,
-        q: int,
-        seed: Optional[int] = None,
-        inequality_constraints: List[tuple] = None
+    bounds: Tensor,
+    n: int,
+    q: int,
+    seed: Optional[int] = None,
+    inequality_constraints: List[tuple] = None,
 ) -> Tensor:
     """
     Draws Sobol samples, taking into account ONLY the first inequality constraint,
@@ -28,7 +28,7 @@ def draw_constrained_sobol(
     if inequality_constraints is None:
         return samples
     if len(inequality_constraints) > 1:
-        raise NotImplementedError('Multiple inequality constraints is not handled!')
+        raise NotImplementedError("Multiple inequality constraints is not handled!")
     if q > 1:
         raise NotImplementedError
     ineq = inequality_constraints[0]
@@ -41,8 +41,8 @@ def draw_constrained_sobol(
         if seed is not None:
             seed = seed + 1
         violated_ind: Tensor = torch.sum(
-                torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1),
-                dim=-1) < ineq_rhs
+            torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1), dim=-1
+        ) < ineq_rhs
         num_violated = torch.sum(violated_ind)
         if num_violated == 0:
             break
@@ -52,15 +52,18 @@ def draw_constrained_sobol(
             bounds=bounds, n=int(num_violated), q=q, seed=seed
         )
     if tries == max_tries:
-        raise RuntimeError("Max tries exceeded! Could not generate enough samples. "
-                           "Make sure that the feasible region is not empty!")
+        raise RuntimeError(
+            "Max tries exceeded! Could not generate enough samples. "
+            "Make sure that the feasible region is not empty!"
+        )
     return samples
 
 
 def constrained_rand(
-        size: Union[tuple, list, torch.Size],
-        inequality_constraints: List[tuple] = None,
-        **kwargs):
+    size: Union[tuple, list, torch.Size],
+    inequality_constraints: List[tuple] = None,
+    **kwargs
+):
     """
     Draws torch.rand and enforces inequality_constraints
     :param size: Size of the random Tensor to be drawn
@@ -73,7 +76,7 @@ def constrained_rand(
     if inequality_constraints is None:
         return samples
     elif len(inequality_constraints) > 1:
-        raise NotImplementedError('Multiple inequality constraints is not supported!')
+        raise NotImplementedError("Multiple inequality constraints is not supported!")
     ineq = inequality_constraints[0]
     ineq_ind = ineq[0]
     ineq_coef = ineq[1]
@@ -81,15 +84,16 @@ def constrained_rand(
     tries = 0
     while tries < max_tries:
         tries += 1
-        violated_ind: Tensor = \
-            torch.sum(samples[..., ineq_ind] * ineq_coef, dim=-1) < ineq_rhs
+        violated_ind: Tensor = torch.sum(
+            samples[..., ineq_ind] * ineq_coef, dim=-1
+        ) < ineq_rhs
         num_violated = torch.sum(violated_ind)
         if num_violated == 0:
             break
-        samples[violated_ind] = torch.rand(
-            (num_violated, size[-1]), **kwargs
-        )
+        samples[violated_ind] = torch.rand((num_violated, size[-1]), **kwargs)
     if tries == max_tries:
-        raise RuntimeError("Max tries exceeded! Could not generate enough samples. "
-                           "Make sure that the feasible region is not empty!")
+        raise RuntimeError(
+            "Max tries exceeded! Could not generate enough samples. "
+            "Make sure that the feasible region is not empty!"
+        )
     return samples
