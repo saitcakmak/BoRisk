@@ -5,7 +5,7 @@ from botorch.acquisition import MCAcquisitionFunction
 from botorch.generation.gen import gen_candidates_scipy
 from torch import Tensor
 from BoRisk.acquisition import InnerRho, rhoKG, rhoKGapx
-from BoRisk.utils import draw_constrained_sobol, constrained_rand
+from BoRisk.utils.constrained_sampling import draw_constrained_sobol, constrained_rand
 from math import ceil
 
 

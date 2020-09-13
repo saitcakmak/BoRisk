@@ -1,9 +1,8 @@
-from BoRisk import other, test_functions
+from BoRisk import other, test_functions, utils
 from BoRisk.acquisition import AbsKG, InnerRho, rhoKG, rhoKGapx
 from BoRisk.exp_loop import exp_loop
 from BoRisk.experiment import Experiment, BenchmarkExp
 from BoRisk.optimizer import Optimizer, InnerOptimizer
-from BoRisk.utils import draw_constrained_sobol, constrained_rand
 
 __all__ = [
     "other",
@@ -17,6 +16,5 @@ __all__ = [
     "BenchmarkExp",
     "Optimizer",
     "InnerOptimizer",
-    "draw_constrained_sobol",
-    "constrained_rand",
+    "utils",
 ]

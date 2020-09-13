@@ -12,7 +12,9 @@ from botorch.acquisition import MCAcquisitionFunction
 from botorch.models.model import Model
 from botorch.sampling.samplers import SobolQMCNormalSampler
 from botorch.utils import draw_sobol_normal_samples
+from gp_sampling import decoupled_sampler
 from torch import Tensor
+from BoRisk.utils.posterior_sampling import decoupled_posterior_sampling
 
 
 class InnerRho(MCAcquisitionFunction):
@@ -53,12 +55,12 @@ class InnerRho(MCAcquisitionFunction):
         :param kwargs: throwaway arguments - ignored
         """
         super().__init__(model)
-        self.num_samples = w_samples.size(0)
+        self.num_samples = w_samples.shape[0]
         self.alpha = float(alpha)
         self.w_samples = w_samples
         self.num_repetitions = num_repetitions
         self.dim_x = dim_x
-        self.dim_w = w_samples.size(-1)
+        self.dim_w = w_samples.shape[-1]
         self.batch_shape = model._input_batch_shape
         if len(self.batch_shape) == 2:
             self.num_fantasies = self.batch_shape[0]
@@ -69,7 +71,10 @@ class InnerRho(MCAcquisitionFunction):
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.cuda = cuda
-        if self.num_repetitions > 0:
+        # TODO: experimental
+        self.decoupled = True
+        self.num_basis = 256
+        if self.num_repetitions > 0 and not self.decoupled:
             # If you get an error here, which should not happen with reasonable
             # num_fantasies and num_samples, change this to torch.randn().
             raw_sobol = draw_sobol_normal_samples(
@@ -82,7 +87,7 @@ class InnerRho(MCAcquisitionFunction):
             )
             # This is using different samples for each fantasy. Do we want this?
         if weights is not None:
-            if weights.size(0) != w_samples.size(0):
+            if weights.size(0) != w_samples.shape[0]:
                 raise ValueError("Weigts must be of size num_samples.")
             if sum(weights) != 1:
                 raise ValueError("Weights must sum up to 1.")
@@ -95,6 +100,8 @@ class InnerRho(MCAcquisitionFunction):
                 )
             if torch.sum(self.weights) != 1:
                 raise ValueError("Weights must be normalized")
+        # TODO: experimental
+        self.decoupled_sampler = None
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -112,7 +119,7 @@ class InnerRho(MCAcquisitionFunction):
         if X.requires_grad:
             torch.set_grad_enabled(True)
         # make sure X has proper shape, 4 dimensional to match the batch shape of rhoKG
-        assert X.size(-1) == self.dim_x
+        assert X.shape[-1] == self.dim_x
         if X.dim() <= 4:
             if len(self.batch_shape) == 0:
                 X = X.reshape(1, -1, 1, self.dim_x)
@@ -144,8 +151,19 @@ class InnerRho(MCAcquisitionFunction):
                 )
         batch_shape = X.shape[:-2]
         batch_dim = len(batch_shape)
+        # TODO: experimental
+        if self.decoupled:
+            if self.decoupled_sampler is None or \
+                    self.decoupled_sampler.input_batch_shape != list(X.shape[:-2]):
+                self.decoupled_sampler = decoupled_sampler(
+                    model=self.model,
+                    sample_shape=[self.num_repetitions],
+                    num_basis=self.num_basis,
+                    input_batch_shape=X.shape[:-2],
+                )
 
-        # Repeat w to get the appropriate batch shape, then concatenate with x to get the full solutions, uses CRN
+        # Repeat w to get the appropriate batch shape, then concatenate with
+        # x to get the full solutions, uses CRN
         if self.w_samples.size() != (self.num_samples, self.dim_w):
             raise ValueError("w_samples must be of size num_samples x dim_w")
         w = self.w_samples.repeat(*batch_shape, 1, 1)
@@ -157,20 +175,31 @@ class InnerRho(MCAcquisitionFunction):
         else:
             z = torch.cat((X.repeat(*[1] * batch_dim, self.num_samples, 1), w), -1)
 
-        # get the samples - if num_repetitions == 0, then we use mean instead of sample paths
-        # this should only be done if the objective is expectation or |W|=1
+        # get the samples - if num_repetitions == 0, then we use mean instead of
+        # sample paths. this should only be done if the objective is expectation or |W|=1
         if self.num_repetitions > 0:
-            base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
-            if batch_dim >= 3:
-                base_samples = base_samples.view(
-                    -1, *[1] * (batch_dim - 2), *base_samples.shape[-4:]
-                ).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
-            # this next line is the cause of runtime warning, specifically the rsample part
-            # changing base samples doesn't do anything - the reason is taking too many samples too
-            # close to each other. See the issue in github.
-            samples = self.model.posterior(z).rsample(
-                torch.Size([self.num_repetitions]), base_samples
-            )
+            # TODO: this is the place to integrate approximate samples - experimental
+            if not self.decoupled:
+                base_samples = self.sobol_samples.repeat(1, 1, batch_shape[-1], 1, 1)
+                if batch_dim >= 3:
+                    base_samples = base_samples.view(
+                        -1, *[1] * (batch_dim - 2), *base_samples.shape[-4:]
+                    ).repeat(1, *batch_shape[:-2], 1, 1, 1, 1)
+                # this next line is the cause of runtime warning, specifically the rsample
+                # part. Changing base samples doesn't do anything - the reason is taking too
+                # many samples too close to each other. See the issue in github.
+                samples = self.model.posterior(z).rsample(
+                    torch.Size([self.num_repetitions]), base_samples
+                )
+            else:
+                # TODO: try storing the sampler and changing it only when needed
+                # old_state = torch.random.get_rng_state()
+                # torch.manual_seed(0)
+                # samples = decoupled_posterior_sampling(
+                #     z, self.model, [self.num_repetitions]
+                # )
+                # torch.random.set_rng_state(old_state)
+                samples = self.decoupled_sampler(z)
         else:
             # get the posterior mean
             post = self.model.posterior(z)

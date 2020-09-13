@@ -7,3 +7,6 @@ pandas
 
 # only for plotting experiment results
 matplotlib
+
+# approximate GP sampling
+-e git+https://github.com/saitcakmak/gp-sampling.git#egg=gp_sampling

@@ -34,7 +34,7 @@ from BoRisk.optimizer import Optimizer, InnerOptimizer
 import warnings
 from BoRisk.other.deprecated_rhokg import OneShotrhoKG
 from BoRisk.other.deprecated_optimizer import DeprOptimizer
-from BoRisk.utils import constrained_rand
+from BoRisk.utils.constrained_sampling import constrained_rand
 
 
 class Experiment:
