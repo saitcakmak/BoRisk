@@ -35,6 +35,8 @@ import warnings
 from BoRisk.other.deprecated_rhokg import OneShotrhoKG
 from BoRisk.other.deprecated_optimizer import DeprOptimizer
 from BoRisk.utils import constrained_rand
+from BoRisk.apx_cvar_acqf import ApxCVaRKG
+from BoRisk.apx_cvar_optimizer import ApxCVaROptimizer
 
 
 class Experiment:
@@ -58,6 +60,7 @@ class Experiment:
         "expectation": False,
         "cuda": False,
         "apx": True,
+        "apx_cvar": False,
         "disc": True,
         "tts_frequency": 10,
         "num_inner_restarts": 10,
@@ -90,6 +93,7 @@ class Experiment:
         :param expectation: If true, we are running BQO optimization.
         :param cuda: True if using GPUs
         :param apx: If True, the rhoKGapx algorithm is used.
+        :param apx_cvar: If True, we use ApxCVaRKG. Overwrites other options!
         :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
         :param tts_frequency: The frequency of two-time-scale optimization.
             If 1, we do normal nested optimization. Default is 1.
@@ -141,7 +145,19 @@ class Experiment:
             inequality_constraints=self.function.inequality_constraints,
         )
 
-        if self.one_shot:
+        if self.apx_cvar:
+            self.optimizer = ApxCVaROptimizer(
+                num_restarts=self.num_restarts,
+                raw_multiplier=self.raw_multiplier,
+                num_fantasies=self.num_fantasies,
+                dim=self.dim,
+                dim_x=self.dim_x,
+                q=self.q,
+                maxiter=self.maxiter,
+                inequality_constraints=self.function.inequality_constraints,
+                low_fantasies=self.low_fantasies,
+            )
+        elif self.one_shot:
             self.optimizer = DeprOptimizer(
                 num_restarts=self.num_restarts,
                 raw_multiplier=self.raw_multiplier,
@@ -290,7 +306,9 @@ class Experiment:
             )
             value = torch.tensor([0])
         else:
-            if self.apx:
+            if self.apx_cvar:
+                acqf = ApxCVaRKG(current_best_rho=current_best_value, **vars(self))
+            elif self.apx:
                 acqf = rhoKGapx(
                     current_best_rho=current_best_value,
                     past_x=self.X[:, : self.dim_x],
@@ -328,8 +346,8 @@ class Experiment:
         iteration_end = time()
         print("Iteration completed in %s" % (iteration_end - iteration_start))
 
-        if self.one_shot:
-            candidate_point = candidate[:, 0 : self.q * self.dim].reshape(
+        if self.one_shot or self.apx_cvar:
+            candidate_point = candidate[..., : self.q * self.dim].reshape(
                 self.q, self.dim
             )
         else:

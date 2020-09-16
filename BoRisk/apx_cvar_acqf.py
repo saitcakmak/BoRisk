@@ -1,5 +1,4 @@
 from torch.distributions import Normal
-from botorch.utils import t_batch_mode_transform
 from BoRisk.acquisition import AbsKG
 from typing import Optional
 import torch
@@ -30,7 +29,6 @@ class ApxCVaRKG(AbsKG):
         if self.weights is not None:
             raise NotImplementedError("Support for weights is not implementec!")
 
-    @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Evaluate the value of the acquisition function on the given solution set.
@@ -40,6 +38,8 @@ class ApxCVaRKG(AbsKG):
         :return: An `n`-dim tensor of acquisition function values
         # TODO: account for weights / active fantasies
         """
+        if X.dim() == 2 and self.q == 1:
+            X = X.unsqueeze(-2)
         if X.dim() != 3:
             raise ValueError("Only supports X.dim() = 3!")
         n = X.shape[0]

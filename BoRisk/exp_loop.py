@@ -63,6 +63,8 @@ def exp_loop(
     if kwargs.get("q", 1) > 1 and "q=" not in filename:
         filename = filename + "_q=%d" % kwargs.get("q")
     if not benchmark_alg:
+        if kwargs.get("apx_cvar") and "apx_cvar" not in filename:
+            filename = filename + "_apx_cvar"
         if kwargs.get("apx") and "apx" not in filename:
             filename = filename + "_apx"
         if kwargs.get("one_shot") and "one_shot" not in filename:
