@@ -1,7 +1,7 @@
 # BoRisk - Bayesian Optimization of Risk Measures
 https://arxiv.org/abs/2007.05554
 
-####Setup:
+###Setup:
 Within a virtual environment;
 
 Install the requirements, e.g. `pip install -r requirements.txt`
@@ -19,7 +19,7 @@ Now you can use `import BoRisk` or `from BoRisk import ...` to access the packag
         the posterior objective is expensive, thus it is highly recommended to use
          `rhoKGapx` algorithm, and small number of fantasies and optimization parameters.
 
-####Legend:
+###Legend:
 - batch_output/: stores the combined experiment output to be used with `*_analyzer.py` in 
 helper_fns to produce the plots presented in the paper
 
