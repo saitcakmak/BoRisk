@@ -93,6 +93,7 @@ class Optimizer:
         self.current_best = None
         self.inequality_constraints = inequality_constraints
         self.low_fantasies = low_fantasies
+        self.solution_dim = self.q * self.dim
 
     def generate_inner_raw_samples(self) -> Tensor:
         """
@@ -232,7 +233,7 @@ class Optimizer:
         acqf.tts_reset()
         init_size = initial_conditions.shape[0]
         num_batches = ceil(init_size / batch_size)
-        solutions = torch.empty(init_size, self.q, self.dim)
+        solutions = torch.empty(init_size, self.solution_dim)
         values = torch.empty(init_size)
         options = {"maxiter": int(self.maxiter / 25)}
         for i in range(num_batches):
@@ -241,7 +242,7 @@ class Optimizer:
                 r_idx = init_size
             else:
                 r_idx = (i + 1) * batch_size
-            solutions[l_idx:r_idx], values[l_idx:r_idx] = gen_candidates_scipy(
+            batch_solutions, batch_values = gen_candidates_scipy(
                 initial_conditions=initial_conditions[l_idx:r_idx],
                 acquisition_function=acqf,
                 lower_bounds=self.outer_bounds[0],
@@ -250,6 +251,11 @@ class Optimizer:
                 fixed_features=fixed_features,
                 inequality_constraints=self.inequality_constraints,
             )
+
+            solutions[l_idx:r_idx] = batch_solutions.reshape(
+                r_idx - l_idx, self.solution_dim
+            )
+            values[l_idx:r_idx] = batch_values.reshape(-1)
         _, idx = torch.sort(values)
         acqf.tts_reset()
         options = {"maxiter": self.maxiter}

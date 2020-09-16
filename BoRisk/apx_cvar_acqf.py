@@ -1,5 +1,5 @@
 from torch.distributions import Normal
-
+from botorch.utils import t_batch_mode_transform
 from BoRisk.acquisition import AbsKG
 from typing import Optional
 import torch
@@ -17,6 +17,7 @@ class ApxCVaRKG(AbsKG):
     We utilize the closed form expression of `E_f[[f(x) - \beta]^+]` given by
     `\sigma(x) [\phi(u) + u * Phi(u)]` where `u = (\mu(x) - \beta) / sigma(x)`.
     """
+
     def __init__(self, **kwargs) -> None:
         r"""
         See AbsKG.__init__. This simply performs some checks.
@@ -29,6 +30,7 @@ class ApxCVaRKG(AbsKG):
         if self.weights is not None:
             raise NotImplementedError("Support for weights is not implementec!")
 
+    @t_batch_mode_transform()
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Evaluate the value of the acquisition function on the given solution set.
@@ -37,20 +39,20 @@ class ApxCVaRKG(AbsKG):
             `\beta` values for each fantasy model.
         :return: An `n`-dim tensor of acquisition function values
         # TODO: account for weights / active fantasies
-        # TODO: concerns with negation? Do we need to negate certain values since we
-            are interested in minimum rather than maximum? EI uses u = -u if it is for
-            minimization.
         """
         if X.dim() != 3:
             raise ValueError("Only supports X.dim() = 3!")
         n = X.shape[0]
         # separate candidates and fantasy solutions
-        X_actual = X[..., :self.q * self.dim].reshape(n, self.q, self.dim)
-        X_rem = X[..., self.q * self.dim:].reshape(
-            n, self.num_fantasies, self.dim_x + 1
-        ).permute(1, 0, 2).unsqueeze(-2)
+        X_actual = X[..., : self.q * self.dim].reshape(n, self.q, self.dim)
+        X_rem = (
+            X[..., self.q * self.dim :]
+            .reshape(n, self.num_fantasies, self.dim_x + 1)
+            .permute(1, 0, 2)
+            .unsqueeze(-2)
+        )
         # shape num_fantasies x n x 1 x dim_x + 1
-        X_fant = X_rem[..., :self.dim_x]
+        X_fant = X_rem[..., : self.dim_x]
         beta = X_rem[..., -1:]
 
         # generate w_samples
@@ -67,10 +69,13 @@ class ApxCVaRKG(AbsKG):
         # number of solutions being evaluated jointly
 
         # Join X_fant with w_samples
-        z_fant = torch.cat([
-            X_fant.repeat(1, 1, self.num_samples, 1), w_samples.repeat(
-                self.num_fantasies, n, 1, 1)
-        ], dim=-1)
+        z_fant = torch.cat(
+            [
+                X_fant.repeat(1, 1, self.num_samples, 1),
+                w_samples.repeat(self.num_fantasies, n, 1, 1),
+            ],
+            dim=-1,
+        )
 
         # get posterior mean and std dev
         with settings.propagate_grads(True):
@@ -79,7 +84,6 @@ class ApxCVaRKG(AbsKG):
             sigma = torch.sqrt(posterior.variance)
 
         # Calculate `E_f[[f(x) - \beta]^+]`
-        # TODO: negate u?
         u = (mu - beta.expand_as(mu)) / sigma
         # this is from EI
         normal = Normal(torch.zeros_like(u), torch.ones_like(u))
@@ -93,7 +97,8 @@ class ApxCVaRKG(AbsKG):
         # expectation over fantasies
         values = torch.mean(values, dim=0)
         # return with last dim squeezed
-        return values.squeeze(0)
+        # negated since CVaR is being minimized
+        return -values.squeeze(-1)
 
     def change_num_fantasies(self, num_fantasies: Optional[int] = None) -> None:
         raise NotImplementedError("Low fantasies is not supported here!")

@@ -9,7 +9,7 @@ class TestApxCVaR(BotorchTestCase):
         num_train = 6
         dim = 2
         dim_w = 1
-        dim_x = dim-dim_w
+        dim_x = dim - dim_w
         train_X = torch.rand(num_train, dim)
         train_Y = torch.rand(num_train, 1)
         model = SingleTaskGP(train_X, train_Y)
@@ -26,7 +26,7 @@ class TestApxCVaR(BotorchTestCase):
             dim=dim,
             dim_x=dim_x,
             q=q,
-            CVaR=True
+            CVaR=True,
         )
         num_test = 3
         test_X = torch.rand(num_test, 1, q * dim + num_fantasies * (dim_x + 1))
