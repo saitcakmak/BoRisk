@@ -47,3 +47,25 @@ class TestApxCVaROptimizer(BotorchTestCase):
         # check that optimize_outer works as expected
         optimizer.optimize_outer(acqf, None)
         self.assertEqual(optimizer.outer_bounds.shape[-1], optimizer.one_shot_dim)
+
+        # test with constraints and w_samples
+        inequality_constraints = [
+            (torch.tensor([0, 1]), torch.tensor([-1.0, -1.0]), -1.0)
+        ]
+        optimizer = ApxCVaROptimizer(
+            num_restarts=10,
+            raw_multiplier=5,
+            num_fantasies=num_fantasies,
+            dim=dim,
+            dim_x=dim_x,
+            inequality_constraints=inequality_constraints,
+        )
+        w_samples = torch.rand(num_samples, dim_w)
+        solution, value = optimizer.optimize_outer(acqf, w_samples=w_samples)
+        self.assertTrue(solution[..., dim_x:dim] in w_samples)
+        self.assertGreaterEqual(
+            torch.sum(
+                solution[..., inequality_constraints[0][0]] * inequality_constraints[0][1]
+            ),
+            inequality_constraints[0][2],
+        )

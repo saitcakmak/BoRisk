@@ -93,7 +93,7 @@ class Optimizer:
         self.current_best = None
         self.inequality_constraints = inequality_constraints
         self.low_fantasies = low_fantasies
-        self.solution_dim = self.q * self.dim
+        self.solution_shape = [self.q, self.dim]
 
     def generate_inner_raw_samples(self) -> Tensor:
         """
@@ -198,7 +198,9 @@ class Optimizer:
         )
         if w_samples is not None:
             w_ind = torch.randint(w_samples.shape[0], (self.raw_samples, self.q))
-            X[..., self.dim_x :] = w_samples[w_ind, :]
+            if self.q > 1:
+                raise NotImplementedError("This does not support q>1!")
+            X[..., self.dim_x : self.dim] = w_samples[w_ind, :]
         return self.generate_restart_points_from_samples(X, acqf)
 
     def optimize_outer(
@@ -224,16 +226,22 @@ class Optimizer:
             acqf.change_num_fantasies()
         if w_samples is not None:
             fixed_features = dict()
-            for j in range(self.q):
+            # If q-batch is used, then we only need to fix dim_x:dim
+            if self.solution_shape[0] == self.q:
                 for i in range(self.dim_x, self.dim):
-                    fixed_features[j * self.dim + i] = None
+                    fixed_features[i] = None
+            else:
+                # If solutions are one-shot, then we need to fix dim_x:dim for each q
+                for j in range(self.q):
+                    for i in range(self.dim_x, self.dim):
+                        fixed_features[j * self.dim + i] = None
         else:
             fixed_features = None
 
         acqf.tts_reset()
         init_size = initial_conditions.shape[0]
         num_batches = ceil(init_size / batch_size)
-        solutions = torch.empty(init_size, self.solution_dim)
+        solutions = torch.empty(init_size, *self.solution_shape)
         values = torch.empty(init_size)
         options = {"maxiter": int(self.maxiter / 25)}
         for i in range(num_batches):
@@ -242,7 +250,7 @@ class Optimizer:
                 r_idx = init_size
             else:
                 r_idx = (i + 1) * batch_size
-            batch_solutions, batch_values = gen_candidates_scipy(
+            solutions[l_idx:r_idx], values[l_idx:r_idx] = gen_candidates_scipy(
                 initial_conditions=initial_conditions[l_idx:r_idx],
                 acquisition_function=acqf,
                 lower_bounds=self.outer_bounds[0],
@@ -251,11 +259,6 @@ class Optimizer:
                 fixed_features=fixed_features,
                 inequality_constraints=self.inequality_constraints,
             )
-
-            solutions[l_idx:r_idx] = batch_solutions.reshape(
-                r_idx - l_idx, self.solution_dim
-            )
-            values[l_idx:r_idx] = batch_values.reshape(-1)
         _, idx = torch.sort(values)
         acqf.tts_reset()
         options = {"maxiter": self.maxiter}

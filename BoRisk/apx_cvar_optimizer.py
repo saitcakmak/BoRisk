@@ -20,7 +20,7 @@ class ApxCVaROptimizer(Optimizer):
         """
         super().__init__(**kwargs)
         self.one_shot_dim = self.q * self.dim + self.num_fantasies * (self.dim_x + 1)
-        self.solution_dim = self.one_shot_dim
+        self.solution_shape = [1, self.one_shot_dim]
         # generate a boolean tensor that stores indices of beta
         beta_idcs = torch.zeros(self.one_shot_dim, dtype=torch.bool)
         beta_idcs[

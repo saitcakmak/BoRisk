@@ -27,7 +27,11 @@ class ApxCVaRKG(AbsKG):
         if self.cuda:
             raise NotImplementedError("Cuda not supported!")
         if self.weights is not None:
-            raise NotImplementedError("Support for weights is not implementec!")
+            if self.weights.shape[0] != self.num_samples:
+                raise ValueError("Weights must be of size num_samples.")
+            if sum(self.weights) != 1:
+                raise ValueError("Weights must sum up to 1.")
+            self.weights = self.weights.reshape(-1)
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -36,7 +40,7 @@ class ApxCVaRKG(AbsKG):
             tensor of `q` candidates `x, w` and `num_fantasies` solutions `x` and
             `\beta` values for each fantasy model.
         :return: An `n`-dim tensor of acquisition function values
-        # TODO: account for weights / active fantasies
+        # TODO: integrate active fantasies
         """
         if X.dim() == 2 and self.q == 1:
             X = X.unsqueeze(-2)
@@ -52,8 +56,8 @@ class ApxCVaRKG(AbsKG):
             .unsqueeze(-2)
         )
         # shape num_fantasies x n x 1 x dim_x + 1
-        X_fant = X_rem[..., : self.dim_x]
-        beta = X_rem[..., -1:]
+        X_fant = X_rem[..., : self.dim_x]  # num_fantasies x n x 1 x dim_x
+        beta = X_rem[..., -1:]  # num_fantasies x n x 1 x 1
 
         # generate w_samples
         if self.fix_samples:
@@ -90,8 +94,13 @@ class ApxCVaRKG(AbsKG):
         ucdf = normal.cdf(u)
         updf = torch.exp(normal.log_prob(u))
         values = sigma * (updf + u * ucdf)
-        # expectation over w. No weights yet!
-        values = torch.mean(values, dim=-2)
+        # take the expectation over W
+        if self.weights is None:
+            values = torch.mean(values, dim=-2)
+        else:
+            # Get the expectation with weights
+            values = values * self.weights.unsqueeze(-1)
+            values = torch.sum(values, dim=-2)
         # add beta and divide by 1-alpha
         values = beta.view_as(values) + values / (1 - self.alpha)
         # expectation over fantasies

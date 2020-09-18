@@ -31,3 +31,20 @@ class TestApxCVaR(BotorchTestCase):
         num_test = 3
         test_X = torch.rand(num_test, 1, q * dim + num_fantasies * (dim_x + 1))
         self.assertEqual(list(acqf(test_X).shape), [num_test])
+
+        # test with weights
+        weights = torch.rand(num_samples)
+        weights = weights / torch.sum(weights)
+        acqf = ApxCVaRKG(
+            model=model,
+            num_samples=num_samples,
+            alpha=alpha,
+            current_best_rho=None,
+            num_fantasies=num_fantasies,
+            dim=dim,
+            dim_x=dim_x,
+            q=q,
+            CVaR=True,
+            weights=weights,
+        )
+        self.assertEqual(list(acqf(test_X).shape), [num_test])
