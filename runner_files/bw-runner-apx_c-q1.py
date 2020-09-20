@@ -4,12 +4,6 @@ Modify this to fit the experiment you intend to run.
 """
 from BoRisk.exp_loop import exp_loop
 import torch
-from botorch.acquisition import (
-    ExpectedImprovement,
-    UpperConfidenceBound,
-    qMaxValueEntropy,
-    qKnowledgeGradient,
-)
 from BoRisk.test_functions import function_picker
 
 # Modify this and make sure it does what you want!
@@ -17,16 +11,16 @@ from BoRisk.test_functions import function_picker
 function_name = "braninwilliams"
 num_samples = 12
 num_fantasies = 10  # default 50
-key_list = ["EI", "qKG"]
+key_list = ["tts_apx_c_q=1"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
-bm_alg_list = [
-    ExpectedImprovement,
-    qKnowledgeGradient,
-]
-q_base = 12  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 20
+bm_alg_list = [None]
+q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
+iterations = 120
 
-seed_list = range(1, 101)
+import sys
+
+seed_list = [int(sys.argv[1])]
+# seed_list = [6044, 8239, 4933, 3760, 8963]
 
 output_file = "%s_%s" % (function_name, "var_10fant_6start")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -34,10 +28,15 @@ kwargs = dict()
 dim_w = 2
 kwargs["noise_std"] = 10
 function = function_picker(function_name)
-w_samples = function.w_samples
+if dim_w > 1:
+    w_samples = None
+    w_samples = function.w_samples
+    if w_samples is None:
+        raise ValueError("Specify w_samples!")
+else:
+    w_samples = None
 weights = function.weights
 kwargs["weights"] = weights
-weights = function.weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
@@ -47,6 +46,7 @@ kwargs["CVaR"] = True
 kwargs["expectation"] = False
 kwargs["alpha"] = 0.7
 kwargs["disc"] = True
+kwargs["low_fantasies"] = 4
 num_x_samples = 6
 
 output_dict = dict()
@@ -59,6 +59,7 @@ for i, key in enumerate(key_list):
         print("starting key %s seed %d" % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
         random = "random" in key
+        apx = "apx" in key
         if "tts" in key:
             tts_frequency = 10
         else:
@@ -86,6 +87,7 @@ for i, key in enumerate(key_list):
             x_samples=x_samples,
             raw_multiplier=raw_multiplier,
             q=q,
+            apx=apx,
             random_sampling=random,
             tts_frequency=tts_frequency,
             benchmark_alg=bm_alg_list[i],

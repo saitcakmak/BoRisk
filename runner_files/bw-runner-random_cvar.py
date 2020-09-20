@@ -4,12 +4,6 @@ Modify this to fit the experiment you intend to run.
 """
 from BoRisk.exp_loop import exp_loop
 import torch
-from botorch.acquisition import (
-    ExpectedImprovement,
-    UpperConfidenceBound,
-    qMaxValueEntropy,
-    qKnowledgeGradient,
-)
 from BoRisk.test_functions import function_picker
 
 # Modify this and make sure it does what you want!
@@ -17,16 +11,14 @@ from BoRisk.test_functions import function_picker
 function_name = "braninwilliams"
 num_samples = 12
 num_fantasies = 10  # default 50
-key_list = ["EI", "qKG"]
+key_list = ["random"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
-bm_alg_list = [
-    ExpectedImprovement,
-    qKnowledgeGradient,
-]
-q_base = 12  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 20
+bm_alg_list = [None]
+q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
+iterations = 240
 
-seed_list = range(1, 101)
+# seed_list = [int(sys.argv[1])]
+seed_list = range(1, 51)
 
 output_file = "%s_%s" % (function_name, "var_10fant_6start")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -34,10 +26,15 @@ kwargs = dict()
 dim_w = 2
 kwargs["noise_std"] = 10
 function = function_picker(function_name)
-w_samples = function.w_samples
+if dim_w > 1:
+    w_samples = None
+    w_samples = function.w_samples
+    if w_samples is None:
+        raise ValueError("Specify w_samples!")
+else:
+    w_samples = None
 weights = function.weights
 kwargs["weights"] = weights
-weights = function.weights
 dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
