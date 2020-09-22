@@ -175,7 +175,7 @@ def exp_loop(
             handling_count += 1
             if exp.passed:
                 print("Got the error while fitting the GP.")
-                if handling_count < 50:
+                if handling_count < 5:
                     try:
                         print("Trying to refit the GP.")
                         exp.fit_gp()
@@ -209,7 +209,7 @@ def exp_loop(
                     print("Too many tries, returning None!")
                     return None
             else:
-                if handling_count >= 50:
+                if handling_count >= 5:
                     print("Too many tries, returning None!")
                     return None
                 print("Got the error while running the algorithm. Retrying.")
