@@ -11,7 +11,7 @@ from botorch.utils import draw_sobol_samples, standardize
 from torch import Tensor
 from BoRisk.other.deprecated_rhokg import OneShotrhoKG
 from math import ceil
-from BoRisk.optimizer import Optimizer
+from BoRisk.optimization.optimizer import Optimizer
 from BoRisk.utils import draw_constrained_sobol
 
 

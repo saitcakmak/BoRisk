@@ -13,7 +13,7 @@ from botorch.sampling.samplers import SobolQMCNormalSampler
 from botorch.utils import draw_sobol_normal_samples
 from torch import Tensor
 
-from BoRisk.acquisition import AbsKG, InnerRho
+from BoRisk.acquisition.acquisition import AbsKG, InnerRho
 
 
 class OldInnerRho(MCAcquisitionFunction):

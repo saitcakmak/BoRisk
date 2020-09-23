@@ -30,13 +30,13 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from BoRisk.test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
-from BoRisk.optimizer import Optimizer, InnerOptimizer
+from BoRisk.optimization.optimizer import Optimizer, InnerOptimizer
 import warnings
 from BoRisk.other.deprecated_rhokg import OneShotrhoKG
 from BoRisk.other.deprecated_optimizer import DeprOptimizer
 from BoRisk.utils import constrained_rand
-from BoRisk.apx_cvar_acqf import ApxCVaRKG
-from BoRisk.apx_cvar_optimizer import ApxCVaROptimizer
+from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG
+from BoRisk.optimization.apx_cvar_optimizer import ApxCVaROptimizer
 
 
 class Experiment:

@@ -2,8 +2,8 @@ import torch
 from torch import Tensor
 from gpytorch.models import ExactGP
 from BoRisk.utils import draw_constrained_sobol
-from BoRisk.optimizer import Optimizer
-from BoRisk.apx_cvar_acqf import ApxCVaRKG
+from BoRisk.optimization.optimizer import Optimizer
+from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG
 from typing import Tuple, Optional
 
 

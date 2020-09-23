@@ -12,7 +12,7 @@ from gpytorch.likelihoods import GaussianLikelihood
 from gpytorch.priors import GammaPrior
 from BoRisk.acquisition import InnerRho
 from BoRisk.test_functions import function_picker
-from BoRisk.optimizer import Optimizer
+from BoRisk.optimization.optimizer import Optimizer
 from helper_fns.analyzer_plots import plot_out
 import os
 

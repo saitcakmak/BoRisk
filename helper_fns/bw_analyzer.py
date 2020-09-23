@@ -17,10 +17,10 @@ plot_gap = True  # if true, we plot the optimality gap
 plot_log = True  # if true, the plot is on log scale
 prefix = "plot_"
 # prefix = ''
-suffix = "_var"
+suffix = "_cvar"
 filename = "%s%s%s" % (prefix, function_name, suffix)
 dim_w = 2
-CVaR = False
+CVaR = True
 alpha = 0.7
 function = function_picker(function_name, noise_std=0)
 dim = function.dim

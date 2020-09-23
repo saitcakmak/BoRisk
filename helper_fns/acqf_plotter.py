@@ -14,7 +14,7 @@ from gpytorch.constraints.constraints import GreaterThan
 from gpytorch.priors.torch_priors import GammaPrior
 from BoRisk.test_functions import function_picker
 from botorch.models.transforms import Standardize
-from BoRisk.optimizer import Optimizer, InnerOptimizer
+from BoRisk.optimization.optimizer import Optimizer, InnerOptimizer
 import numpy as np
 from helper_fns.plotter import contour_plotter
 import matplotlib.pyplot as plt

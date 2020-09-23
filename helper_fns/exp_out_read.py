@@ -4,39 +4,44 @@ Just reads the current best output reported and saves it for plotting.
 
 import torch
 from time import time
+from BoRisk import test_functions
 import os
 
 
 directory = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exp_output"
+    # "benchmarks"
 )
 
 # specify the parameters for the files to read
 output_key = "tts_rhoKG_q=1"
-iterations = 80
+iterations = 40
 seed_list = range(1, 31)
 
-# function_name = 'braninwilliams'
-# suffix = '_var_10fant_6start_%s_' % output_key
-# suffix2 = '_low_fant_4_weights.pt'
-# rho = 'var'
+function_name = 'braninwilliams'
+suffix = '_var_10fant_6start_%s_' % output_key
+suffix2 = '_low_fant_4_weights.pt'
+# suffix2 = "_cvar_weights.pt"
+# rho = "cvar"
+rho = 'var'
 
-# function_name = 'marzat'
-# suffix = '_cvar_10fant_%s_' % output_key
-# # suffix2 = '_a=0.75.pt'
-# suffix2 = '_a=0.75_cont_low_fant_4.pt'
-# rho = 'cvar'
+# function_name = "marzat"
+# suffix = "_cvar_10fant_%s_" % output_key
+# suffix2 = '_a=0.75.pt'
+# # suffix2 = "_a=0.75_cont_low_fant_4.pt"
+# # suffix2 = '_a=0.75_cont.pt'
+# rho = "cvar"
 
 # function_name = 'covid'
 # suffix = '_cvar_%s_' % output_key
 # suffix2 = '_a=0.9_low_fant_4_weights.pt'
 # rho = 'cvar'
 
-function_name = "portfolio_surrogate"
-suffix = "_var_%s_" % output_key
-# suffix2 = '_a=0.8.pt'
-suffix2 = "_a=0.8_cont_low_fant_4.pt"
-rho = "var"
+# function_name = "portfolio_surrogate"
+# suffix = "_var_%s_" % output_key
+# # suffix2 = '_a=0.8.pt'
+# suffix2 = "_a=0.8_cont_low_fant_4.pt"
+# rho = "var"
 
 output_file = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
@@ -51,10 +56,12 @@ def read_bests(seed):
     try:
         data = torch.load(filename)
     except FileNotFoundError:
+        print("seed %d not found" % seed)
         return None
     try:
         data_0 = data[0]
     except KeyError:
+        print("seed %d key error" % seed)
         return None
     current_best_list = torch.empty((iterations + 1, 1, data_0["dim_x"]))
     current_best_value_list = torch.empty((iterations + 1, 1, 1))
