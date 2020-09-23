@@ -29,9 +29,7 @@ kwargs[
     "negate"
 ] = True  # True if the function is written for maximization, e.g. portfolio
 function = function_picker(function_name)
-kwargs[
-    "fix_sampless"
-] = True  # This should be true. We will just pass None for w_samples to get random samples
+kwargs["fix_samples"] = True
 w_samples = function.w_samples
 weights = function.weights
 kwargs["weights"] = weights

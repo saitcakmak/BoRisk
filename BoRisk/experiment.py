@@ -32,11 +32,11 @@ from BoRisk.test_functions.function_picker import function_picker
 from botorch.models.transforms import Standardize
 from BoRisk.optimization.optimizer import Optimizer, InnerOptimizer
 import warnings
-from BoRisk.other.deprecated_rhokg import OneShotrhoKG
-from BoRisk.other.deprecated_optimizer import DeprOptimizer
 from BoRisk.utils import constrained_rand
 from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG
+from BoRisk.acquisition.one_shot import OneShotrhoKG
 from BoRisk.optimization.apx_cvar_optimizer import ApxCVaROptimizer
+from BoRisk.optimization.one_shot_optimizer import OneShotOptimizer
 
 
 class Experiment:
@@ -92,6 +92,7 @@ class Experiment:
         :param random_sampling: If true, we will use random sampling to generate samples - no KG.
         :param expectation: If true, we are running BQO optimization.
         :param cuda: True if using GPUs
+            # TODO: this is a poor implementation and should be improved.
         :param apx: If True, the rhoKGapx algorithm is used.
         :param apx_cvar: If True, we use ApxCVaRKG. Overwrites other options!
         :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
@@ -144,43 +145,23 @@ class Experiment:
             maxiter=self.maxiter,
             inequality_constraints=self.function.inequality_constraints,
         )
-
         if self.apx_cvar:
-            self.optimizer = ApxCVaROptimizer(
-                num_restarts=self.num_restarts,
-                raw_multiplier=self.raw_multiplier,
-                num_fantasies=self.num_fantasies,
-                dim=self.dim,
-                dim_x=self.dim_x,
-                q=self.q,
-                maxiter=self.maxiter,
-                inequality_constraints=self.function.inequality_constraints,
-                low_fantasies=self.low_fantasies,
-            )
+            optimizer = ApxCVaROptimizer
         elif self.one_shot:
-            self.optimizer = DeprOptimizer(
-                num_restarts=self.num_restarts,
-                raw_multiplier=self.raw_multiplier,
-                num_fantasies=self.num_fantasies,
-                dim=self.dim,
-                dim_x=self.dim_x,
-                q=self.q,
-                maxiter=self.maxiter,
-                inequality_constraints=self.function.inequality_constraints,
-            )
+            optimizer = OneShotOptimizer
         else:
-            self.optimizer = Optimizer(
-                num_restarts=self.num_restarts,
-                raw_multiplier=self.raw_multiplier,
-                num_fantasies=self.num_fantasies,
-                dim=self.dim,
-                dim_x=self.dim_x,
-                q=self.q,
-                maxiter=self.maxiter,
-                inequality_constraints=self.function.inequality_constraints,
-                low_fantasies=self.low_fantasies,
-            )
-
+            optimizer = Optimizer
+        self.optimizer = optimizer(
+            num_restarts=self.num_restarts,
+            raw_multiplier=self.raw_multiplier,
+            num_fantasies=self.num_fantasies,
+            dim=self.dim,
+            dim_x=self.dim_x,
+            q=self.q,
+            maxiter=self.maxiter,
+            inequality_constraints=self.function.inequality_constraints,
+            low_fantasies=self.low_fantasies,
+        )
         if self.fix_samples:
             self.fixed_samples = self.w_samples
         else:
@@ -309,6 +290,12 @@ class Experiment:
         else:
             if self.apx_cvar:
                 acqf = ApxCVaRKG(current_best_rho=current_best_value, **vars(self))
+            elif self.one_shot:
+                acqf = OneShotrhoKG(
+                    current_best_rho=current_best_value,
+                    inner_seed=inner_seed,
+                    **vars(self)
+                )
             elif self.apx:
                 acqf = rhoKGapx(
                     current_best_rho=current_best_value,
@@ -316,14 +303,6 @@ class Experiment:
                     inner_seed=inner_seed,
                     **vars(self)
                 )
-            elif self.one_shot:
-                acqf = OneShotrhoKG(
-                    current_best_rho=current_best_value,
-                    past_x=self.X[:, : self.dim_x],
-                    inner_seed=inner_seed,
-                    **vars(self)
-                )
-                candidate, value = self.optimizer.simple_optimize_OSrhoKG(acqf)
             else:
                 acqf = rhoKG(
                     inner_optimizer=self.inner_optimizer.optimize,
@@ -331,13 +310,10 @@ class Experiment:
                     inner_seed=inner_seed,
                     **{_: vars(self)[_] for _ in vars(self) if _ != "inner_optimizer"}
                 )
-            if not self.one_shot:
-                if self.disc:
-                    candidate, value = self.optimizer.optimize_outer(
-                        acqf, self.w_samples
-                    )
-                else:
-                    candidate, value = self.optimizer.optimize_outer(acqf)
+            if self.disc:
+                candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples)
+            else:
+                candidate, value = self.optimizer.optimize_outer(acqf)
         candidate = candidate.cpu().detach()
         value = value.cpu().detach()
 

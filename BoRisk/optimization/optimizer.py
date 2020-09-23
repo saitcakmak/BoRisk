@@ -141,7 +141,7 @@ class Optimizer:
         :return: `num_restarts x q x dim` Tensor of restart points
         """
         with torch.no_grad():
-            Y = acqf(X).detach()
+            Y = acqf(X)
         Y_std = Y.std()
         max_val, max_idx = torch.max(Y, dim=0)
         Z = (Y - Y.mean()) / Y_std
@@ -156,10 +156,14 @@ class Optimizer:
             idcs[-1] = max_idx
         return X[idcs]
 
-    def optimize_inner(self, acqf: InnerRho) -> Tuple[Tensor, Tensor]:
+    def optimize_inner(
+        self, acqf: InnerRho, return_best_only: bool = True
+    ) -> Tuple[Tensor, Tensor]:
         """
         Optimizes the acquisition function
         :param acqf: The acquisition function being optimized
+        :param return_best_only: If True, returns only the best solution. Otherwise,
+            returns all solutions returned by `gen_candidates_scipy`.
         :return: Best solution and value
         """
         X = self.generate_inner_raw_samples()
@@ -176,10 +180,13 @@ class Optimizer:
         values = values.cpu().detach()
         self.add_inner_solutions(solutions.detach(), values.detach())
         best = torch.argmax(values.view(-1), dim=0)
-        solution = solutions[best].detach()
-        value = values[best].detach()
-        self.current_best = -value
-        return solution, value
+        if return_best_only:
+            solutions = solutions[best].detach()
+            values = values[best].detach()
+            self.current_best = -values
+        else:
+            self.current_best = -values[best].detach()
+        return solutions, values
 
     def generate_outer_restart_points(
         self, acqf: Union[rhoKG, rhoKGapx], w_samples: Tensor = None
@@ -205,7 +212,7 @@ class Optimizer:
 
     def optimize_outer(
         self,
-        acqf: Union[rhoKG, rhoKGapx],
+        acqf: MCAcquisitionFunction,
         w_samples: Tensor = None,
         batch_size: int = 5,
     ) -> Tuple[Tensor, Tensor]:
