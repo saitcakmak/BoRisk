@@ -19,7 +19,11 @@ params_dict = {
     },
     "random": {"label": "$\\rho$-random", "marker": "p", "errorevery": 5},
     "tts_kgcp_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "*", "errorevery": 5},
+    "tts_apx_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "+", "errorevery": 5},
+    "tts_apx_c_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "+", "errorevery": 5},
+    "tts_apx_cvar_q=1": {"label": "ApxCVaRKG", "marker": "x", "errorevery": 5},
     "tts_varkg_q=1": {"label": "$\\rho$KG", "marker": "s", "errorevery": 5},
+    "tts_rhoKG_q=1": {"label": "$\\rho$KG", "marker": "s", "errorevery": 5},
 }
 
 # This is the multiplier for the confidence intervals
@@ -86,5 +90,5 @@ def plot_out(output, title, ylabel, plot_log):
         plt.yticks(ticks=new_ticks)
     if "Covid" in title:
         plt.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
-    # plt.legend(ncol=2)
+    plt.legend(ncol=2)
     plt.show()

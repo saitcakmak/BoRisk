@@ -218,7 +218,8 @@ class Experiment:
             noise_prior=noise_prior,
             batch_shape=[],
             noise_constraint=GreaterThan(
-                0.000005,  # minimum observation noise assumed in the GP model
+                # 0.000005,  # minimum observation noise assumed in the GP model
+                0.0001,
                 transform=None,
                 initial_value=noise_prior_mode,
             ),
