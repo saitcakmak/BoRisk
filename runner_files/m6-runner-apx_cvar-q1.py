@@ -11,7 +11,7 @@ from BoRisk.test_functions import function_picker
 function_name = "marzat"
 num_samples = 40  # this is 40 for rhoKG / apx and 8 for benchmarks
 num_fantasies = 10  # default 50
-key_list = ["tts_apx_cvar_q=1"]
+key_list = ["apx_cvar_q=1"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
@@ -28,9 +28,7 @@ kwargs = dict()
 dim_w = 3
 kwargs["noise_std"] = 1
 function = function_picker(function_name)
-kwargs[
-    "fix_sampless"
-] = True  # This should be true. We will just pass None for w_samples to get random samples
+kwargs["fix_samples"] = True
 w_samples = function.w_samples
 weights = function.weights
 kwargs["weights"] = weights

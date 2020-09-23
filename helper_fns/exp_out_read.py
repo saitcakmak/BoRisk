@@ -9,7 +9,8 @@ import os
 
 
 directory = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "exp_output"
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "exp_output"
     # "benchmarks"
 )
 
@@ -18,12 +19,12 @@ output_key = "tts_rhoKG_q=1"
 iterations = 40
 seed_list = range(1, 31)
 
-function_name = 'braninwilliams'
-suffix = '_var_10fant_6start_%s_' % output_key
-suffix2 = '_low_fant_4_weights.pt'
+function_name = "braninwilliams"
+suffix = "_var_10fant_6start_%s_" % output_key
+suffix2 = "_low_fant_4_weights.pt"
 # suffix2 = "_cvar_weights.pt"
 # rho = "cvar"
-rho = 'var'
+rho = "var"
 
 # function_name = "marzat"
 # suffix = "_cvar_10fant_%s_" % output_key

@@ -28,9 +28,7 @@ kwargs = dict()
 dim_w = 3
 kwargs["noise_std"] = 1
 function = function_picker(function_name)
-kwargs[
-    "fix_sampless"
-] = True  # This should be true. We will just pass None for w_samples to get random samples
+kwargs["fix_samples"] = True
 w_samples = function.w_samples
 weights = function.weights
 kwargs["weights"] = weights

@@ -11,14 +11,14 @@ from BoRisk.test_functions import function_picker
 function_name = "marzat"
 num_samples = 40  # this is 40 for rhoKG / apx and 8 for benchmarks
 num_fantasies = 10  # default 50
-key_list = ["random"]
-# this should be a list of bm algorithms corresponding to the keys. None if rhoKG
-bm_alg_list = [None]
+key_list = ["one_shot_q=1"]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 200
+iterations = 100
 
-# seed_list = [int(sys.argv[1])]
-seed_list = range(1, 101)
+import sys
+
+seed_list = [int(sys.argv[1])]
+# seed_list = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
 
 output_file = "%s_%s" % (function_name, "cvar_10fant")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -36,9 +36,11 @@ raw_multiplier = 50  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
 kwargs["CVaR"] = True
+kwargs["one_shot"] = True
 kwargs["expectation"] = False
 kwargs["alpha"] = 0.75
 kwargs["disc"] = False
+# kwargs["low_fantasies"] = 4
 num_x_samples = 10
 num_init_w = 8
 
@@ -51,12 +53,6 @@ for i, key in enumerate(key_list):
         seed = int(seed)
         print("starting key %s seed %d" % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
-        random = "random" in key
-        apx = "apx" in key
-        if "tts" in key:
-            tts_frequency = 10
-        else:
-            tts_frequency = 1
         if num_x_samples:
             old_state = torch.random.get_rng_state()
             torch.manual_seed(seed)
@@ -71,10 +67,7 @@ for i, key in enumerate(key_list):
             torch.random.set_rng_state(old_state)
         else:
             kwargs["x_samples"] = None
-        if bm_alg_list[i] is None:
-            q = q_base
-        else:
-            q = int(q_base / num_samples)
+        q = q_base
         output = exp_loop(
             function_name,
             seed=int(seed),
@@ -86,10 +79,6 @@ for i, key in enumerate(key_list):
             num_restarts=num_restarts,
             raw_multiplier=raw_multiplier,
             q=q,
-            apx=apx,
-            random_sampling=random,
-            tts_frequency=tts_frequency,
-            benchmark_alg=bm_alg_list[i],
             w_samples=w_samples,
             **kwargs
         )

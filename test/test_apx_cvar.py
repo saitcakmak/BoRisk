@@ -1,6 +1,6 @@
 import torch
 from test.utils import BotorchTestCase
-from BoRisk.apx_cvar_acqf import ApxCVaRKG
+from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG
 from botorch.models import SingleTaskGP
 
 

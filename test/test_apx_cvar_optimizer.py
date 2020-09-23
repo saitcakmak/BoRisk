@@ -1,35 +1,27 @@
 import torch
-from test.utils import BotorchTestCase
-from BoRisk.apx_cvar_acqf import ApxCVaRKG
-from BoRisk.apx_cvar_optimizer import ApxCVaROptimizer
+from test.utils import BotorchTestCase, generate_acqf
+from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG
+from BoRisk.optimization.apx_cvar_optimizer import ApxCVaROptimizer
 from botorch.models import SingleTaskGP
 
 
 class TestApxCVaROptimizer(BotorchTestCase):
     def test_apx_cvar_optimizer(self):
-        num_train = 6
-        dim = 2
+        dim = 3
         dim_w = 1
         dim_x = dim - dim_w
-        train_X = torch.rand(num_train, dim)
-        train_Y = torch.rand(num_train, 1)
-        model = SingleTaskGP(train_X, train_Y)
         num_samples = 10
         num_fantasies = 4
-        alpha = 0.7
         q = 1
-        acqf = ApxCVaRKG(
-            model=model,
-            num_samples=num_samples,
-            alpha=alpha,
-            current_best_rho=None,
-            num_fantasies=num_fantasies,
+        acqf = generate_acqf(
+            ApxCVaRKG,
             dim=dim,
             dim_x=dim_x,
-            q=q,
+            num_samples=num_samples,
+            num_fantasies=num_fantasies,
             CVaR=True,
+            q=q,
         )
-
         optimizer = ApxCVaROptimizer(
             num_restarts=10,
             raw_multiplier=5,
@@ -43,6 +35,11 @@ class TestApxCVaROptimizer(BotorchTestCase):
 
         # check generate_full_bounds error handling
         self.assertRaises(ValueError, optimizer.generate_full_bounds)
+
+        # check initial condition generation
+        optimizer.generate_full_bounds(acqf.model)
+        ics = optimizer.generate_outer_restart_points(acqf)
+        self.assertEqual(list(ics.shape), [10, 1, optimizer.one_shot_dim])
 
         # check that optimize_outer works as expected
         optimizer.optimize_outer(acqf, None)
@@ -65,7 +62,8 @@ class TestApxCVaROptimizer(BotorchTestCase):
         self.assertTrue(solution[..., dim_x:dim] in w_samples)
         self.assertGreaterEqual(
             torch.sum(
-                solution[..., inequality_constraints[0][0]] * inequality_constraints[0][1]
+                solution[..., inequality_constraints[0][0]]
+                * inequality_constraints[0][1]
             ),
             inequality_constraints[0][2],
         )
