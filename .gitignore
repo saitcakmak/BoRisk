@@ -159,3 +159,5 @@ dmypy.json
 /other/
 /runner_files/test.py
 /exp_output/old/
+/debug/
+/debug/

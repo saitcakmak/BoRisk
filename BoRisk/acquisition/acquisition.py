@@ -161,7 +161,7 @@ class rhoKGapx(AbsKG):
             If tts_frequency = 1, then it is normal rhoKGapx.
         """
         super().__init__(**kwargs)
-        self.past_x = past_x.reshape(-1, self.dim_x)
+        self.past_x = torch.unique(past_x.reshape(-1, self.dim_x), dim=0)
         self.tts_frequency = tts_frequency
         self.call_count = 0
         self.last_inner_solution = None
