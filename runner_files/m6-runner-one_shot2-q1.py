@@ -11,7 +11,7 @@ from BoRisk.test_functions import function_picker
 function_name = "marzat"
 num_samples = 40  # this is 40 for rhoKG / apx and 8 for benchmarks
 num_fantasies = 10  # default 50
-key_list = ["one_shot_q=1"]
+key_list = ["one_shot2_q=1"]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
 iterations = 100
 
@@ -31,7 +31,7 @@ w_samples = function.w_samples
 weights = function.weights
 kwargs["weights"] = weights
 dim_x = function.dim - dim_w
-num_restarts = 20 * function.dim
+num_restarts = 50 * function.dim
 raw_multiplier = 100  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
