@@ -11,14 +11,16 @@ from BoRisk.test_functions import function_picker
 function_name = "portfolio_surrogate"
 num_samples = 40  # this is 40 for rhoKG / apx and 10 for benchmarks
 num_fantasies = 10  # default 50
-key_list = ["random"]
+key_list = ["one_shot_q=1"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 160
+iterations = 83
 
-# seed_list = [int(sys.argv[1])]
-seed_list = range(1, 101)
+import sys
+
+seed_list = [int(sys.argv[1])]
+# seed_list = range(1, 11)
 
 output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -34,15 +36,16 @@ w_samples = function.w_samples
 weights = function.weights
 kwargs["weights"] = weights
 dim_x = function.dim - dim_w
-num_restarts = 10 * function.dim
-raw_multiplier = 50  # default 50
+num_restarts = 20 * function.dim
+raw_multiplier = 100  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
 kwargs["CVaR"] = False
 kwargs["expectation"] = False
+kwargs["one_shot"] = True
 kwargs["alpha"] = 0.8
 kwargs["disc"] = False
-kwargs["dtype"] = torch.double
+# kwargs["low_fantasies"] = 4
 num_x_samples = 8
 num_init_w = 10
 
@@ -55,27 +58,24 @@ for i, key in enumerate(key_list):
         seed = int(seed)
         print("starting key %s seed %d" % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
-        random = "random" in key
-        apx = "apx" in key
-        if "tts" in key:
-            tts_frequency = 10
+        if num_x_samples:
+            old_state = torch.random.get_rng_state()
+            torch.manual_seed(seed)
+            x_samples = torch.rand(num_x_samples, dim_x)
+            init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
+            kwargs["x_samples"] = x_samples
+            kwargs["init_w_samples"] = init_w_samples
+            kwargs["init_samples"] = torch.cat(
+                (x_samples.unsqueeze(-2).repeat(1, num_init_w, 1), init_w_samples),
+                dim=-1,
+            )
+            torch.random.set_rng_state(old_state)
         else:
-            tts_frequency = 1
-        # init samples
-        old_state = torch.random.get_rng_state()
-        torch.manual_seed(seed)
-        num_full_samples = num_x_samples * num_init_w
-        init_samples = draw_constrained_sobol(
-            bounds=function.bounds,
-            n=num_full_samples,
-            q=1,
-            inequality_constraints=function.inequality_constraints,
-        ).squeeze(-2)
-        if w_samples is not None:
-            init_samples[..., dim_x:] = w_samples[
-                torch.randint(w_samples.shape[0], size=(num_full_samples,))
-            ]
-        torch.random.set_rng_state(old_state)
+            kwargs["x_samples"] = None
+        if bm_alg_list[i] is None:
+            q = q_base
+        else:
+            q = int(q_base / num_samples)
         output = exp_loop(
             function_name,
             seed=int(seed),
@@ -85,12 +85,8 @@ for i, key in enumerate(key_list):
             num_samples=num_samples,
             num_fantasies=num_fantasies,
             num_restarts=num_restarts,
-            init_samples=init_samples,
             raw_multiplier=raw_multiplier,
-            q=q_base,
-            apx=apx,
-            random_sampling=random,
-            tts_frequency=tts_frequency,
+            q=q,
             benchmark_alg=bm_alg_list[i],
             w_samples=w_samples,
             **kwargs

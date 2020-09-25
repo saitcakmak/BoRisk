@@ -93,8 +93,6 @@ def exp_loop(
             dtype=kwargs.get("dtype", None), device=kwargs.get("device")
         )
         exp.fit_gp()
-
-
     except FileNotFoundError:
         torch.manual_seed(seed=seed)
         last_iteration = -1

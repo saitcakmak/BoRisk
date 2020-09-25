@@ -42,7 +42,6 @@ kwargs["CVaR"] = False
 kwargs["expectation"] = False
 kwargs["alpha"] = 0.8
 kwargs["disc"] = False
-kwargs["dtype"] = torch.double
 num_x_samples = 8
 num_init_w = 10
 
@@ -61,21 +60,24 @@ for i, key in enumerate(key_list):
             tts_frequency = 10
         else:
             tts_frequency = 1
-        # init samples
-        old_state = torch.random.get_rng_state()
-        torch.manual_seed(seed)
-        num_full_samples = num_x_samples * num_init_w
-        init_samples = draw_constrained_sobol(
-            bounds=function.bounds,
-            n=num_full_samples,
-            q=1,
-            inequality_constraints=function.inequality_constraints,
-        ).squeeze(-2)
-        if w_samples is not None:
-            init_samples[..., dim_x:] = w_samples[
-                torch.randint(w_samples.shape[0], size=(num_full_samples,))
-            ]
-        torch.random.set_rng_state(old_state)
+        if num_x_samples:
+            old_state = torch.random.get_rng_state()
+            torch.manual_seed(seed)
+            x_samples = torch.rand(num_x_samples, dim_x)
+            init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
+            kwargs["x_samples"] = x_samples
+            kwargs["init_w_samples"] = init_w_samples
+            kwargs["init_samples"] = torch.cat(
+                (x_samples.unsqueeze(-2).repeat(1, num_init_w, 1), init_w_samples),
+                dim=-1,
+            )
+            torch.random.set_rng_state(old_state)
+        else:
+            kwargs["x_samples"] = None
+        if bm_alg_list[i] is None:
+            q = q_base
+        else:
+            q = int(q_base / num_samples)
         output = exp_loop(
             function_name,
             seed=int(seed),
@@ -85,9 +87,8 @@ for i, key in enumerate(key_list):
             num_samples=num_samples,
             num_fantasies=num_fantasies,
             num_restarts=num_restarts,
-            init_samples=init_samples,
             raw_multiplier=raw_multiplier,
-            q=q_base,
+            q=q,
             apx=apx,
             random_sampling=random,
             tts_frequency=tts_frequency,
