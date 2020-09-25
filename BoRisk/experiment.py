@@ -147,7 +147,7 @@ class Experiment:
             raise ValueError("Either num_samples or w_samples must be specified!")
         if self.expectation:
             self.num_repetitions = 0
-        if self.weights:
+        if self.weights is not None:
             self.weights = self.weights.to(self.w_samples)
         self.X = torch.empty(0, self.dim).to(dtype=self.dtype, device=self.device)
         self.Y = torch.empty(0, 1).to(dtype=self.dtype, device=self.device)
