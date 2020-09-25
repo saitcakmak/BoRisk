@@ -6,6 +6,7 @@ The Experiment class is for running experiments using the acquisition functions 
 here. The BenchmarkExp class is for running the benchmark experiments using the
 existing acquisition functions from BoTorch package.
 """
+from typing import Optional, Tuple
 
 import torch
 from botorch.acquisition import (
@@ -72,7 +73,7 @@ class Experiment:
         "low_fantasies": None,
     }
 
-    def __init__(self, function: str, **kwargs):
+    def __init__(self, function: str, **kwargs) -> None:
         """
         The experiment settings:
         :param function: The problem function to be used.
@@ -190,8 +191,29 @@ class Experiment:
             self.fixed_samples = None
 
         self.passed = False  # error handling
+        self.fit_count = 0
 
-    def initialize_gp(self, init_samples: Tensor = None, n: int = None):
+    def change_dtype_device(
+        self, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None
+    ) -> None:
+        r"""
+        This changes the dtype and device of all experiment tensors, and refits the GP 
+        model.
+        :param dtype: The torch.dtype to use
+        :param device: The device to use
+        """
+        if dtype is None and device is None:
+            return None
+        dtype = dtype or self.dtype
+        device = device or self.device
+        for key, value in vars(self).items():
+            if isinstance(value, Tensor):
+                setattr(self, key, value.to(dtype=dtype, device=device))
+        self.dtype = dtype
+        self.device = torch.device(device)
+        self.fit_gp()
+
+    def initialize_gp(self, init_samples: Tensor = None, n: int = None) -> None:
         """
         Initialize the gp with the given set of samples or number of samples.
         If none given, then defaults to n = 2 dim + 2 random samples.
@@ -212,7 +234,7 @@ class Experiment:
         self.Y = self.function(self.X)
         self.fit_gp()
 
-    def fit_gp(self):
+    def fit_gp(self) -> None:
         """
         Re-fits the GP using the most up to date data.
         """
@@ -241,18 +263,24 @@ class Experiment:
                 (1, self.q, self.dim), dtype=self.dtype, device=self.device
             )
             _ = self.model.posterior(dummy).mean
-        except RuntimeError:
-            self.Y = self.Y + torch.randn_like(self.Y) * 0.001
-            self.fit_gp()
-
+        except RuntimeError as err:
+            if self.fit_count < 5:
+                self.fit_count += 1
+                self.Y = self.Y + torch.randn_like(self.Y) * 0.001
+                self.fit_gp()
+            else:
+                raise err
+        self.fit_count = 0
         self.passed = False
 
-    def current_best(self, past_only: bool = False, inner_seed: int = None):
+    def current_best(
+        self, past_only: bool = False, inner_seed: int = None
+    ) -> Tuple[Tensor, Tensor]:
         """
         Solve the inner optimization problem to return the current optimum
         :param past_only: If true, maximize over previously evaluated x only.
         :param inner_seed: Used for sampling randomness in InnerRho
-        :return: Current best solution and value, and inner VaR for plotting
+        :return: Current best solution and value
         """
         if self.w_samples is None:
             w_samples = torch.rand(
@@ -280,9 +308,9 @@ class Experiment:
             print(
                 "Current best solution, value: ", current_best_sol, current_best_value
             )
-        return current_best_sol, current_best_value, inner_rho
+        return current_best_sol, current_best_value
 
-    def one_iteration(self, **kwargs):
+    def one_iteration(self, **kwargs) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Do a single iteration of the algorithm
         :param kwargs: ignored
@@ -292,7 +320,7 @@ class Experiment:
         inner_seed = int(torch.randint(100000, (1,)))
         self.optimizer.new_iteration()
         self.inner_optimizer.new_iteration()
-        current_best_sol, current_best_value, inner_VaR = self.current_best(
+        current_best_sol, current_best_value = self.current_best(
             past_only=self.apx, inner_seed=inner_seed
         )
 
@@ -368,7 +396,7 @@ class BenchmarkExp(Experiment):
     Note: This negates the function observations to make it a minimization problem.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         """
         Init as usual, just with tiny benchmark specific tweaks.
         See Experiment.__init__()
@@ -384,7 +412,7 @@ class BenchmarkExp(Experiment):
             [[0.0], [1.0]], dtype=self.dtype, device=self.device
         ).repeat(1, self.dim)
 
-    def get_obj(self, X: torch.Tensor, w_samples: Tensor = None):
+    def get_obj(self, X: torch.Tensor, w_samples: Tensor = None) -> Tensor:
         """
         Returns the objective value (VaR etc) for the given x points
         :param X: Solutions, only the X component
@@ -480,7 +508,9 @@ class BenchmarkExp(Experiment):
         # Value is negated to get a minimization problem - the benchmarks are all maximization
         return -values
 
-    def initialize_benchmark_gp(self, x_samples: Tensor, init_w_samples: Tensor = None):
+    def initialize_benchmark_gp(
+        self, x_samples: Tensor, init_w_samples: Tensor = None
+    ) -> None:
         """
         Initialize the GP by taking full C/VaR samples from the given x samples.
         :param x_samples: Tensor of x points, broadcastable to num_samples x 1 x dim_x
@@ -492,12 +522,12 @@ class BenchmarkExp(Experiment):
         self.Y = self.get_obj(x_samples, init_w_samples)
         self.fit_gp()
 
-    def current_best(self, past_only: bool = False, **kwargs):
+    def current_best(self, past_only: bool = False, **kwargs) -> Tuple[Tensor, Tensor]:
         """
         Get the current best solution and value
         :param past_only: If True, optimization is over previously evaluated points only.
         :param kwargs: ignored
-        :return: Current best solution and value, along with inner objective
+        :return: Current best solution and value
         """
         inner = PosteriorMean(self.model)
         if past_only:
@@ -519,9 +549,11 @@ class BenchmarkExp(Experiment):
             print(
                 "Current best solution, value: ", current_best_sol, -current_best_value
             )
-        return current_best_sol, -current_best_value, inner
+        return current_best_sol, -current_best_value
 
-    def one_iteration(self, acqf: AcquisitionFunction):
+    def one_iteration(
+        self, acqf: AcquisitionFunction
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Do a single iteration of the algorithm
         :param acqf: The acquisition function to use. The class constructor,
@@ -534,9 +566,7 @@ class BenchmarkExp(Experiment):
             ProbabilityOfImprovement,
             NoisyExpectedImprovement,
         ]
-        current_best_sol, current_best_value, inner = self.current_best(
-            past_only=past_only
-        )
+        current_best_sol, current_best_value = self.current_best(past_only=past_only)
 
         if self.random_sampling:
             candidate = constrained_rand(

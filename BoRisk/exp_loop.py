@@ -89,7 +89,12 @@ def exp_loop(
             exp = BenchmarkExp(function=function_name, **kwargs)
         exp.X = last_data["train_X"]
         exp.Y = last_data["train_Y"]
+        exp.change_dtype_device(
+            dtype=kwargs.get("dtype", None), device=kwargs.get("device")
+        )
         exp.fit_gp()
+
+
     except FileNotFoundError:
         torch.manual_seed(seed=seed)
         last_iteration = -1
