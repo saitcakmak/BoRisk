@@ -110,6 +110,8 @@ class AbsKG(MCAcquisitionFunction, ABC):
         self.num_repetitions = num_repetitions
         if kwargs.get("weights", None):
             self.weights = weights.to(dtype=self.dtype, device=self.device)
+        else:
+            self.weights = None
 
         # This is the size of mini batches used in for loops to reduce memory
         # requirements. Doesn't affect performance much, unless set too low.

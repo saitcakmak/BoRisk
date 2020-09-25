@@ -42,10 +42,8 @@ class StandardizedFunction:
         :return: function value
         """
         old_state = torch.random.get_rng_state()
-        try:
+        if seed:
             torch.random.manual_seed(seed=seed)
-        except TypeError:
-            torch.random.seed()
         shape = list(X.size())
         shape[-1] = 1
         X = X * self.scale.repeat(shape).to(X) + self.l_bounds.repeat(shape).to(X)

@@ -67,7 +67,7 @@ class Experiment:
         "num_inner_restarts": 10,
         "inner_raw_multiplier": 5,
         "weights": None,
-        "fix_samples": True,
+        "fix_samples": False,
         "one_shot": False,
         "low_fantasies": None,
     }
@@ -138,10 +138,13 @@ class Experiment:
                 .to(dtype=self.dtype, device=self.device)
             )
             self.num_samples = self.w_samples.size(0)
+            self.fixed_samples = True
         elif "num_samples" in kwargs.keys():
             self.num_samples = kwargs["num_samples"]
             self.w_samples = None
             warnings.warn("w_samples is None and will be randomized at each iteration")
+        else:
+            raise ValueError("Either num_samples or w_samples must be specified!")
         if self.expectation:
             self.num_repetitions = 0
         if self.weights:
@@ -180,6 +183,8 @@ class Experiment:
             device=self.device,
         )
         if self.fix_samples:
+            if self.w_samples is None:
+                raise ValueError("To fix samples, specify w_samples.")
             self.fixed_samples = self.w_samples
         else:
             self.fixed_samples = None
