@@ -68,7 +68,7 @@ class Experiment:
         "num_inner_restarts": 10,
         "inner_raw_multiplier": 5,
         "weights": None,
-        "fix_samples": False,
+        "fix_samples": True,
         "one_shot": False,
         "low_fantasies": None,
     }
@@ -184,8 +184,6 @@ class Experiment:
             device=self.device,
         )
         if self.fix_samples:
-            if self.w_samples is None:
-                raise ValueError("To fix samples, specify w_samples.")
             self.fixed_samples = self.w_samples
         else:
             self.fixed_samples = None

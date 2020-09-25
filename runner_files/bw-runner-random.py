@@ -57,6 +57,7 @@ for i, key in enumerate(key_list):
         print("starting key %s seed %d" % (key, seed))
         filename = output_file + "_" + key + "_" + str(seed)
         random = "random" in key
+        apx = "apx" in key
         if "tts" in key:
             tts_frequency = 10
         else:

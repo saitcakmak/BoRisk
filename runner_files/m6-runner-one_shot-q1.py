@@ -89,7 +89,6 @@ for i, key in enumerate(key_list):
             apx=apx,
             random_sampling=random,
             tts_frequency=tts_frequency,
-            benchmark_alg=bm_alg_list[i],
             w_samples=w_samples,
             **kwargs
         )

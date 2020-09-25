@@ -9,30 +9,26 @@ from BoRisk.test_functions import function_picker
 
 # Modify this and make sure it does what you want!
 
-function_name = "braninwilliams"
-num_samples = 12
+function_name = "covid"
+num_samples = 27  # 10 for benchmarks and starting
 num_fantasies = 10  # default 50
-key_list = ["random"]
+key_list = ["apx_cvar_q=1"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 240
+iterations = 80
 
-# seed_list = [int(sys.argv[1])]
-seed_list = range(1, 101)
+import sys
+
+seed_list = [int(sys.argv[1])]
 
 output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
-dim_w = 2
-kwargs["noise_std"] = 10
+dim_w = 3
+kwargs["noise_std"] = None  # noise is built in to the simulator
 function = function_picker(function_name)
-if dim_w > 1:
-    w_samples = None or function.w_samples
-    if w_samples is None:
-        raise ValueError("Specify w_samples!")
-else:
-    w_samples = None
+w_samples = function.w_samples
 weights = function.weights
 kwargs["weights"] = weights
 dim_x = function.dim - dim_w
@@ -41,11 +37,13 @@ raw_multiplier = 50  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
 kwargs["CVaR"] = True
-kwargs["expectation"] = False
-kwargs["alpha"] = 0.7
+kwargs["apx_cvar"] = True
+kwargs["alpha"] = 0.9
 kwargs["disc"] = True
-kwargs["dtype"] = torch.float64
+kwargs["dtype"] = torch.double
+
 num_x_samples = 6
+num_init_w = 10
 
 output_dict = dict()
 
@@ -65,7 +63,7 @@ for i, key in enumerate(key_list):
         # init samples
         old_state = torch.random.get_rng_state()
         torch.manual_seed(seed)
-        num_full_samples = num_x_samples * num_samples
+        num_full_samples = num_x_samples * num_init_w
         init_samples = draw_constrained_sobol(
             bounds=function.bounds,
             n=num_full_samples,
