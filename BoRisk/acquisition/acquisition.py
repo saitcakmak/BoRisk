@@ -32,50 +32,55 @@ class AbsKG(MCAcquisitionFunction, ABC):
         fix_samples: bool = False,
         fixed_samples: Tensor = None,
         num_repetitions: int = 0,
-        lookahead_samples: Tensor = None,
         inner_seed: Optional[int] = None,
         CVaR: bool = False,
         expectation: bool = False,
-        cuda: bool = False,
         weights: Tensor = None,
         **kwargs
-    ):
+    ) -> None:
         r"""
         Initialize the problem for sampling
         :param model: a constructed GP model
         :param num_samples: number of samples to use to calculate VaR (samples of w)
         :param alpha: VaR risk level alpha
         :param current_best_rho: the best VaR value form the current GP model
-        :param num_fantasies: number of fantasies used to calculate VaR-KG (number of Z repetitions)
+        :param num_fantasies: number of fantasies used to calculate rhoKG
         :param dim: The full dimension of X = (x, w)
         :param dim_x: dimension of x in X = (x, w)
         :param q: for the q-batch parallel evaluation
-        :param fix_samples: if True, fixed samples are used for w, generated once and fixed for later
-            samples are generated as i.i.d. uniform(0, 1), i.i.d across dimensions as well
-        :param fixed_samples: if specified, the samples of w are fixed to these. Shape: num_samples x dim_w
-            overwrites fix_samples parameter. If using SAA, this should be specified.
-        :param num_repetitions: number of repetitions for lookaheads or sampling
-        :param lookahead_samples: the lookahead samples to use. shape: num_lookahead_samples ("m") x dim_w
-            has no effect unless num_lookahead_repetitions > 0 and vice-versa
-            if None and num_repetitions > 0, then sampling is used.
-        :param inner_seed: similar to fantasy_seed, used for lookahead fantasy generation or sampling.
-            if not specified, every call to forward will specify a new one to be used across
-            solutions being evaluated.
-        :param CVaR: If true, uses CVaR instead of VaR. Think CVaR-KG.
-        :param expectation: If true, this is BQO.
-        :param cuda: True if using GPUs
-        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+        :param fix_samples: if True, fixes samples of W for an SAA type approximation.
+            The samples (if not given) are generated once and fixed for later.
+            Samples are generated as i.i.d. uniform(0, 1)
+        :param fixed_samples: if specified, the samples of w are fixed to these values.
+            Shape: num_samples x dim_w. This overwrites fix_samples parameter.
+        :param num_repetitions: Number of GP sample paths used to approximate E[rho(F)].
+        :param inner_seed: Fixes the seed used to generate GP sample paths between
+            calls to acqf.forward. If None, calls to acqf() will produce stochastic
+            output.
+        :param CVaR: If true, uses CVaR as the risk measure, instead of VaR. Think CVaRKG.
+        :param expectation: If true, expectation is used as the risk measure
+        :param weights: If w_samples (W) are not uniformly distributed, these are the
+            sample weights, i.e. the probability mass function, summing up to 1.
             A 1-dim tensor of size num_samples
-        :param mini_batch_size: the batch size for inner VaR evaluations. Helps with memory issues.
+        :param mini_batch_size: the batch size for inner rho evaluations. Reduces
+            memory usage.
+        :param dtype: The tensor dtype, defaults to float32
+        :param device: The device to use. Defaults to CPU.
+            NOTE: these two should match with model dtype and device!
         :param kwargs: ignored if not listed here
         """
         super().__init__(model)
+        self.dtype = kwargs.get("dtype", torch.float32)
+        self.device = kwargs.get("device", torch.device("cpu"))
         self.num_samples = num_samples
         self.alpha = alpha
         if current_best_rho is not None:
             self.current_best_rho = current_best_rho.detach()
         else:
             self.current_best_rho = Tensor([0])
+        self.current_best_rho = self.current_best_rho.to(
+            dtype=self.dtype, device=self.device
+        )
         self.num_fantasies = num_fantasies
         self.dim = dim
         self.dim_x = dim_x
@@ -86,7 +91,6 @@ class AbsKG(MCAcquisitionFunction, ABC):
         if CVaR and expectation:
             raise ValueError("CVaR and expectation can't be true at the same time!")
         self.inner_seed = inner_seed
-        self.cuda = cuda
         self.sampler = SobolQMCNormalSampler(self.num_fantasies)
         # this keeps track of the actual num_fantasies being used at the moment
         self.active_fantasies = self.num_fantasies
@@ -96,34 +100,34 @@ class AbsKG(MCAcquisitionFunction, ABC):
             if fixed_samples.size() != (self.num_samples, self.dim_w):
                 raise ValueError("fixed_samples must be of size num_samples x dim_w")
             else:
-                self.fixed_samples = fixed_samples
+                self.fixed_samples = fixed_samples.to(
+                    dtype=self.dtype, device=self.device
+                )
                 self.fix_samples = True
         else:
             self.fixed_samples = None
 
         self.num_repetitions = num_repetitions
-        if lookahead_samples is not None and (
-            lookahead_samples.dim() != 2 or lookahead_samples.size(-1) != self.dim_w
-        ):
-            raise ValueError(
-                "lookahead_samples must be of size num_lookahead_samples x dim_w"
-            )
-        self.lookahead_samples = lookahead_samples
-        self.weights = weights
+        if kwargs.get("weights", None):
+            self.weights = weights.to(dtype=self.dtype, device=self.device)
+        else:
+            self.weights = None
 
-        # This is the size of mini batches used in for loops to reduce memory requirements. Doesn't affect performance
-        # much unless set too low.
+        # This is the size of mini batches used in for loops to reduce memory
+        # requirements. Doesn't affect performance much, unless set too low.
         self.mini_batch_size = kwargs.get("mini_batch_size", 50)
+        self.call_count = 0
+        self.last_inner_solution = None
 
-    def tts_reset(self):
+    def tts_reset(self) -> None:
         """
-        This should be called between batch size changes, i.e. if you're optimizing with 100 restarts,
-        then switch to 20 restarts, then you need to call this in between. This applies to raw sample
-        evaluation and the subsequent optimization as well. To be safe, call this before calling the optimizer.
-        It will make sure that the tts does inner optimization starting in the first call, and ensure that
-        the batch sizes of tensors are adequate.
+        This should be called between batch size changes, i.e. if you're optimizing
+        with 100 restarts, then switch to 20 restarts, then you need to call this in
+        between. This applies to raw sample evaluation and the subsequent optimization
+        as well. To be safe, call this before calling the optimizer.
+        It will make sure that the tts does inner optimization starting in the
+        first call, and ensure that the batch sizes of tensors are adequate.
         Only needed if tts_frequency > 1.
-        :return: None
         """
         self.call_count = 0
         self.last_inner_solution = None
@@ -161,10 +165,10 @@ class rhoKGapx(AbsKG):
             If tts_frequency = 1, then it is normal rhoKGapx.
         """
         super().__init__(**kwargs)
-        self.past_x = torch.unique(past_x.reshape(-1, self.dim_x), dim=0)
+        self.past_x = torch.unique(past_x.reshape(-1, self.dim_x), dim=0).to(
+            dtype=self.dtype, device=self.device
+        )
         self.tts_frequency = tts_frequency
-        self.call_count = 0
-        self.last_inner_solution = None
 
     def forward(self, X: Tensor) -> Tensor:
         """
@@ -172,16 +176,20 @@ class rhoKGapx(AbsKG):
         :param X: The tensor of candidate points, batch_size x q x dim
         :return: the rhoKGapx value of batch_size
         """
-        X = X.reshape(-1, self.q, self.dim)
+        X = X.reshape(-1, self.q, self.dim).to(dtype=self.dtype, device=self.device)
         batch_size = X.size(0)
 
         # generate w_samples
         if self.fix_samples:
             if self.fixed_samples is None:
-                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
+                self.fixed_samples = torch.rand(
+                    (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+                )
             w_samples = self.fixed_samples
         else:
-            w_samples = torch.rand((self.num_samples, self.dim_w))
+            w_samples = torch.rand(
+                (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+            )
 
         if self.inner_seed is None:
             inner_seed = int(torch.randint(100000, (1,)))
@@ -195,7 +203,12 @@ class rhoKGapx(AbsKG):
 
         if self.last_inner_solution is None:
             self.last_inner_solution = torch.empty(
-                self.active_fantasies, batch_size, 1, self.dim_x
+                self.active_fantasies,
+                batch_size,
+                1,
+                self.dim_x,
+                dtype=self.dtype,
+                device=self.device,
             )
 
         for i in range(num_batches):
@@ -206,14 +219,9 @@ class rhoKGapx(AbsKG):
                 right_index = (i + 1) * self.mini_batch_size
 
             # construct the fantasy model
-            if self.cuda:
-                fantasy_model = self.model.fantasize(
-                    X[left_index:right_index].cuda(), self.sampler
-                ).cuda()
-            else:
-                fantasy_model = self.model.fantasize(
-                    X[left_index:right_index], self.sampler
-                )
+            fantasy_model = self.model.fantasize(
+                X[left_index:right_index], self.sampler
+            )
 
             inner_rho = InnerRho(
                 model=fantasy_model,
@@ -224,7 +232,6 @@ class rhoKGapx(AbsKG):
                 inner_seed=inner_seed,
                 CVaR=self.CVaR,
                 expectation=self.expectation,
-                cuda=self.cuda,
                 weights=self.weights,
             )
 
@@ -239,6 +246,8 @@ class rhoKGapx(AbsKG):
                     self.past_x.size(0) + self.q,
                     self.active_fantasies,
                     right_index - left_index,
+                    dtype=self.dtype,
+                    device=self.device,
                 )
                 for j in range(temp_values.size(0)):
                     with settings.propagate_grads(True):
@@ -273,46 +282,55 @@ class rhoKG(AbsKG):
         Everthing is as explained in AbsKG
         In addition:
         :param inner_optimizer: A callable for optimizing innerRho
-        :param tts_frequency: The frequency for two time scale optimization. Every tts_frequency calls,
-            the inner optimization is performed. The old solution is used otherwise.
-            If tts_frequency = 1, then doing normal nested optimization.
+        :param tts_frequency: The frequency for two time scale optimization. Every
+            tts_frequency calls, the inner optimization is performed. The old solution
+            is used otherwise.
+            If tts_frequency = 1, then we do normal nested optimization.
         """
         super().__init__(**kwargs)
         self.inner_optimizer = inner_optimizer
         self.tts_frequency = tts_frequency
-        self.call_count = 0
-        self.last_inner_solution = None
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
         Calculate the value of rhoKG acquisition function by averaging over fantasies
-        :param X: batch_size x q x dim of solutions to evaluate
+        :param X: `batch_size x q x dim` of solutions to evaluate
         :return: value of rhoKG at X (to be maximized) - size: batch_size
         """
         # make sure X has proper shape
-        X = X.reshape(-1, self.q, self.dim)
+        X = X.reshape(-1, self.q, self.dim).to(dtype=self.dtype, device=self.device)
         batch_size = X.size(0)
 
         # generate w_samples
         if self.fix_samples:
             if self.fixed_samples is None:
-                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
+                self.fixed_samples = torch.rand(
+                    (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+                )
             w_samples = self.fixed_samples
         else:
-            w_samples = torch.rand((self.num_samples, self.dim_w))
+            w_samples = torch.rand(
+                (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+            )
 
         if self.inner_seed is None:
             inner_seed = int(torch.randint(100000, (1,)))
         else:
             inner_seed = self.inner_seed
 
-        # in an attempt to reduce the memory usage, we will evaluate in mini batches of size mini_batch_size
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches
+        # of size mini_batch_size
         num_batches = ceil(batch_size / self.mini_batch_size)
-        values = torch.empty(batch_size)
+        values = torch.empty(batch_size, dtype=self.dtype, device=self.device)
 
         if self.last_inner_solution is None:
             self.last_inner_solution = torch.empty(
-                self.active_fantasies, batch_size, 1, self.dim_x
+                self.active_fantasies,
+                batch_size,
+                1,
+                self.dim_x,
+                dtype=self.dtype,
+                device=self.device,
             )
 
         for i in range(num_batches):
@@ -323,14 +341,9 @@ class rhoKG(AbsKG):
                 right_index = (i + 1) * self.mini_batch_size
 
             # construct the fantasy model
-            if self.cuda:
-                fantasy_model = self.model.fantasize(
-                    X[left_index:right_index].cuda(), self.sampler
-                ).cuda()
-            else:
-                fantasy_model = self.model.fantasize(
-                    X[left_index:right_index], self.sampler
-                )
+            fantasy_model = self.model.fantasize(
+                X[left_index:right_index], self.sampler
+            )
 
             inner_rho = InnerRho(
                 model=fantasy_model,
@@ -341,7 +354,6 @@ class rhoKG(AbsKG):
                 inner_seed=inner_seed,
                 CVaR=self.CVaR,
                 expectation=self.expectation,
-                cuda=self.cuda,
                 weights=self.weights,
             )
             # optimize inner VaR

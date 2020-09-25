@@ -26,7 +26,9 @@ class OneShotOptimizer(Optimizer):
         self.one_shot_dim = self.q * self.dim + self.num_fantasies * self.dim_x
         self.solution_shape = [1, self.one_shot_dim]
         self.old_outer_bounds = self.outer_bounds
-        self.outer_bounds = torch.tensor([[0.0], [1.0]]).repeat(1, self.one_shot_dim)
+        self.outer_bounds = torch.tensor(
+            [[0.0], [1.0]], dtype=self.dtype, device=self.device
+        ).repeat(1, self.one_shot_dim)
 
     def generate_outer_restart_points(
         self, acqf: OneShotrhoKG, w_samples: Tensor = None
@@ -42,13 +44,16 @@ class OneShotOptimizer(Optimizer):
             n=self.raw_samples,
             q=self.q,
             inequality_constraints=self.inequality_constraints,
-        )
+        ).to(dtype=self.dtype, device=self.device)
         # get the optimizers of the inner problem
-        w_samples = (
-            acqf.fixed_samples
-            if acqf.fixed_samples is not None
-            else torch.rand(acqf.num_samples, acqf.dim_w)
-        )
+        if w_samples is None:
+            w_samples = (
+                acqf.fixed_samples
+                if acqf.fixed_samples is not None
+                else torch.rand(
+                    acqf.num_samples, acqf.dim_w, dtype=self.dtype, device=self.device
+                )
+            )
         inner_rho = InnerRho(
             model=acqf.model,
             w_samples=w_samples,
@@ -58,8 +63,7 @@ class OneShotOptimizer(Optimizer):
             inner_seed=acqf.inner_seed,
             CVaR=acqf.CVaR,
             expectation=acqf.expectation,
-            cuda=acqf.cuda,
-            weights=acqf.weights,
+            weights=getattr(acqf, "weights", None),
         )
         inner_solutions, inner_values = super().optimize_inner(inner_rho, False)
         # sample from the optimizers

@@ -42,6 +42,7 @@ num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
+kwargs["dtype"] = torch.float64
 kwargs["CVaR"] = True
 kwargs["expectation"] = False
 kwargs["alpha"] = 0.7

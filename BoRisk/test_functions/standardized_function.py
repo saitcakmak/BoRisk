@@ -42,13 +42,11 @@ class StandardizedFunction:
         :return: function value
         """
         old_state = torch.random.get_rng_state()
-        try:
+        if seed:
             torch.random.manual_seed(seed=seed)
-        except TypeError:
-            torch.random.seed()
         shape = list(X.size())
         shape[-1] = 1
-        X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
+        X = X * self.scale.repeat(shape).to(X) + self.l_bounds.repeat(shape).to(X)
         result = self.function(X.reshape(-1, X.size(-1))).reshape(shape)
         torch.random.set_rng_state(old_state)
         if self.negate:
@@ -64,7 +62,7 @@ class StandardizedFunction:
         """
         shape = list(X.size())
         shape[-1] = 1
-        X = X * self.scale.repeat(shape) + self.l_bounds.repeat(shape)
+        X = X * self.scale.repeat(shape).to(X) + self.l_bounds.repeat(shape).to(X)
         result = self.function.evaluate_true(X).reshape(shape)
         if self.negate:
             result = -result

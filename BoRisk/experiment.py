@@ -6,6 +6,7 @@ The Experiment class is for running experiments using the acquisition functions 
 here. The BenchmarkExp class is for running the benchmark experiments using the
 existing acquisition functions from BoTorch package.
 """
+from typing import Optional, Tuple
 
 import torch
 from botorch.acquisition import (
@@ -58,7 +59,8 @@ class Experiment:
         "CVaR": False,
         "random_sampling": False,
         "expectation": False,
-        "cuda": False,
+        "dtype": torch.float32,
+        "device": torch.device("cpu"),
         "apx": True,
         "apx_cvar": False,
         "disc": True,
@@ -66,45 +68,50 @@ class Experiment:
         "num_inner_restarts": 10,
         "inner_raw_multiplier": 5,
         "weights": None,
-        "fix_samples": True,
+        "fix_samples": False,
         "one_shot": False,
         "low_fantasies": None,
     }
 
-    def __init__(self, function: str, **kwargs):
+    def __init__(self, function: str, **kwargs) -> None:
         """
         The experiment settings:
         :param function: The problem function to be used.
-        :param noise_std: standard deviation of the function evaluation noise. Defaults to 0.1
+        :param noise_std: standard deviation of the function evaluation noise.
+            Defaults to 0.1
         :param dim_w: Dimension of the w component.
         :param num_samples: Number of samples of w to be used to evaluate C/VaR.
-        :param w_samples: option to explicitly specify the samples. If given, num_samples is ignored.
-            One of these is necessary!
+        :param w_samples: option to explicitly specify the samples. If given,
+            num_samples is ignored. One of these is necessary!
         :param num_fantasies: Number of fantasy models to construct in evaluating rhoKG.
         :param num_restarts: Number of random restarts for optimization of rhoKG.
         :param raw_multiplier: Raw_samples = num_restarts * raw_multiplier
         :param alpha: The risk level of C/VaR.
         :param q: Number of parallel solutions to evaluate. Think qKG.
-        :param num_repetitions: Number of repetitions of lookahead fantasy evaluations or sampling
+        :param num_repetitions: Number of posterior samples used for E[rho[F]]
         :param verbose: Print more stuff and plot if d == 2.
         :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
         :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG. The default is VaR.
-        :param random_sampling: If true, we will use random sampling to generate samples - no KG.
+        :param random_sampling: If true, we will use random sampling - no KG.
         :param expectation: If true, we are running BQO optimization.
-        :param cuda: True if using GPUs
-            # TODO: this is a poor implementation and should be improved.
+        :param dtype: The tensor dtype for the experiment
+        :param device: The device to use. Defaults to CPU.
         :param apx: If True, the rhoKGapx algorithm is used.
         :param apx_cvar: If True, we use ApxCVaRKG. Overwrites other options!
-        :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
+        :param disc: If True, the optimization of acqf is done with w restricted to
+            the set w_samples
         :param tts_frequency: The frequency of two-time-scale optimization.
             If 1, we do normal nested optimization. Default is 1.
         :param num_inner_restarts: Inner restarts for nested optimization
         :param inner_raw_multiplier: raw multipler for nested optimization
-        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+        :param weights: If w_samples are not uniformly distributed, these are the sample
+            weights, summing up to 1, i.e. probability mass function.
             A 1-dim tensor of size num_samples
-        :param fix_samples: In continuous case of W, whether the samples are redrawn at every iteration
-            or fixed to w_samples.
-        :param one_shot: Uses one-shot optimization. DO NOT USE unless you know what you're doing.
+        :param fix_samples: When W is continuous, this determines whether the samples
+            are redrawn at each call to rhoKG or fixed to a random realization.
+            If w_samples are specified, this gets overwritten.
+        :param one_shot: Uses one-shot optimization.
+            DO NOT USE unless you know what you're doing.
         :param low_fantasies: see AbsKG.change_num_fantasies for details. This reduces
             the number of fantasies used during raw sample evaluation to reduce the
             computational cost. It is recommended (=4) but not enabled by default.
@@ -126,24 +133,36 @@ class Experiment:
             setattr(self, key, kwargs[key])
         self.dim_x = self.dim - self.dim_w
         if kwargs.get("w_samples") is not None:
-            self.w_samples = kwargs["w_samples"].reshape(-1, self.dim_w)
+            self.w_samples = (
+                kwargs["w_samples"]
+                .reshape(-1, self.dim_w)
+                .to(dtype=self.dtype, device=self.device)
+            )
             self.num_samples = self.w_samples.size(0)
+            self.fixed_samples = True
         elif "num_samples" in kwargs.keys():
             self.num_samples = kwargs["num_samples"]
             self.w_samples = None
             warnings.warn("w_samples is None and will be randomized at each iteration")
+        else:
+            raise ValueError("Either num_samples or w_samples must be specified!")
         if self.expectation:
             self.num_repetitions = 0
-        self.X = torch.empty(0, self.dim)
-        self.Y = torch.empty(0, 1)
+        if self.weights is not None:
+            self.weights = self.weights.to(self.w_samples)
+        self.X = torch.empty(0, self.dim).to(dtype=self.dtype, device=self.device)
+        self.Y = torch.empty(0, 1).to(dtype=self.dtype, device=self.device)
         self.model = None
         self.low_fantasies = kwargs.get("low_fantasies", None)
+
         self.inner_optimizer = InnerOptimizer(
             num_restarts=self.num_inner_restarts,
             raw_multiplier=self.inner_raw_multiplier,
             dim_x=self.dim_x,
             maxiter=self.maxiter,
             inequality_constraints=self.function.inequality_constraints,
+            dtype=self.dtype,
+            device=self.device,
         )
         if self.apx_cvar:
             optimizer = ApxCVaROptimizer
@@ -161,15 +180,40 @@ class Experiment:
             maxiter=self.maxiter,
             inequality_constraints=self.function.inequality_constraints,
             low_fantasies=self.low_fantasies,
+            dtype=self.dtype,
+            device=self.device,
         )
         if self.fix_samples:
+            if self.w_samples is None:
+                raise ValueError("To fix samples, specify w_samples.")
             self.fixed_samples = self.w_samples
         else:
             self.fixed_samples = None
 
         self.passed = False  # error handling
+        self.fit_count = 0
 
-    def initialize_gp(self, init_samples: Tensor = None, n: int = None):
+    def change_dtype_device(
+        self, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None
+    ) -> None:
+        r"""
+        This changes the dtype and device of all experiment tensors, and refits the GP 
+        model.
+        :param dtype: The torch.dtype to use
+        :param device: The device to use
+        """
+        if dtype is None and device is None:
+            return None
+        dtype = dtype or self.dtype
+        device = device or self.device
+        for key, value in vars(self).items():
+            if isinstance(value, Tensor):
+                setattr(self, key, value.to(dtype=dtype, device=device))
+        self.dtype = dtype
+        self.device = torch.device(device)
+        self.fit_gp()
+
+    def initialize_gp(self, init_samples: Tensor = None, n: int = None) -> None:
         """
         Initialize the gp with the given set of samples or number of samples.
         If none given, then defaults to n = 2 dim + 2 random samples.
@@ -177,19 +221,20 @@ class Experiment:
         :param n: number of samples to initialize with
         """
         if init_samples is not None:
-            self.X = init_samples.reshape(-1, self.dim)
-        elif n is not None:
-            self.X = constrained_rand(
-                (n, self.dim), self.function.inequality_constraints
+            self.X = init_samples.reshape(-1, self.dim).to(
+                dtype=self.dtype, device=self.device
             )
         else:
             self.X = constrained_rand(
-                (2 * self.dim + 2, self.dim), self.function.inequality_constraints
+                (n or 2 * self.dim + 2, self.dim),
+                self.function.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
         self.Y = self.function(self.X)
         self.fit_gp()
 
-    def fit_gp(self):
+    def fit_gp(self) -> None:
         """
         Re-fits the GP using the most up to date data.
         """
@@ -206,44 +251,41 @@ class Experiment:
             ),
         )
 
-        if self.cuda:
-            self.model = SingleTaskGP(
-                self.X.cuda(),
-                self.Y.cuda(),
-                likelihood.cuda(),
-                outcome_transform=Standardize(m=1),
-            ).cuda()
-            mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model).cuda()
-            fit_gpytorch_model(mll).cuda()
-        else:
-            self.model = SingleTaskGP(
-                self.X, self.Y, likelihood, outcome_transform=Standardize(m=1)
-            )
-            mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model)
-            fit_gpytorch_model(mll)
+        self.model = SingleTaskGP(
+            self.X, self.Y, likelihood, outcome_transform=Standardize(m=1)
+        )
+        mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model)
+        fit_gpytorch_model(mll)
 
         # dummy computation to be safe with gp fit
         try:
-            if self.cuda:
-                dummy = torch.rand((1, self.q, self.dim)).cuda()
-            else:
-                dummy = torch.rand((1, self.q, self.dim))
+            dummy = torch.rand(
+                (1, self.q, self.dim), dtype=self.dtype, device=self.device
+            )
             _ = self.model.posterior(dummy).mean
-        except RuntimeError:
-            self.Y = self.Y + torch.randn(self.Y.size()) * 0.001
-            self.fit_gp()
-
+        except RuntimeError as err:
+            if self.fit_count < 5:
+                self.fit_count += 1
+                self.Y = self.Y + torch.randn_like(self.Y) * 0.001
+                self.fit_gp()
+            else:
+                raise err
+        self.fit_count = 0
         self.passed = False
 
-    def current_best(self, past_only: bool = False, inner_seed: int = None):
+    def current_best(
+        self, past_only: bool = False, inner_seed: int = None
+    ) -> Tuple[Tensor, Tensor]:
         """
         Solve the inner optimization problem to return the current optimum
         :param past_only: If true, maximize over previously evaluated x only.
         :param inner_seed: Used for sampling randomness in InnerRho
-        :return: Current best solution and value, and inner VaR for plotting
+        :return: Current best solution and value
         """
         if self.w_samples is None:
-            w_samples = torch.rand(self.num_samples, self.dim_w)
+            w_samples = torch.rand(
+                self.num_samples, self.dim_w, dtype=self.dtype, device=self.device
+            )
         else:
             w_samples = self.w_samples
         inner_rho = InnerRho(
@@ -266,9 +308,9 @@ class Experiment:
             print(
                 "Current best solution, value: ", current_best_sol, current_best_value
             )
-        return current_best_sol, current_best_value, inner_rho
+        return current_best_sol, current_best_value
 
-    def one_iteration(self, **kwargs):
+    def one_iteration(self, **kwargs) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Do a single iteration of the algorithm
         :param kwargs: ignored
@@ -278,15 +320,18 @@ class Experiment:
         inner_seed = int(torch.randint(100000, (1,)))
         self.optimizer.new_iteration()
         self.inner_optimizer.new_iteration()
-        current_best_sol, current_best_value, inner_VaR = self.current_best(
+        current_best_sol, current_best_value = self.current_best(
             past_only=self.apx, inner_seed=inner_seed
         )
 
         if self.random_sampling:
             candidate = constrained_rand(
-                (self.q, self.dim), self.function.inequality_constraints
+                (self.q, self.dim),
+                self.function.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
-            value = torch.tensor([0])
+            value = torch.tensor([0]).to(candidate)
         else:
             if self.apx_cvar:
                 acqf = ApxCVaRKG(current_best_rho=current_best_value, **vars(self))
@@ -314,8 +359,8 @@ class Experiment:
                 candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples)
             else:
                 candidate, value = self.optimizer.optimize_outer(acqf)
-        candidate = candidate.cpu().detach()
-        value = value.cpu().detach()
+        candidate = candidate.detach()
+        value = value.detach()
 
         if self.verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -351,7 +396,7 @@ class BenchmarkExp(Experiment):
     Note: This negates the function observations to make it a minimization problem.
     """
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs) -> None:
         """
         Init as usual, just with tiny benchmark specific tweaks.
         See Experiment.__init__()
@@ -363,12 +408,11 @@ class BenchmarkExp(Experiment):
         self.dim = self.dim_x
         if kwargs.get("num_samples", None) is not None:
             self.num_samples = kwargs["num_samples"]
-        if self.cuda:
-            self.bounds = torch.tensor([[0.0], [1.0]]).repeat(1, self.dim).cuda()
-        else:
-            self.bounds = torch.tensor([[0.0], [1.0]]).repeat(1, self.dim)
+        self.bounds = torch.tensor(
+            [[0.0], [1.0]], dtype=self.dtype, device=self.device
+        ).repeat(1, self.dim)
 
-    def get_obj(self, X: torch.Tensor, w_samples: Tensor = None):
+    def get_obj(self, X: torch.Tensor, w_samples: Tensor = None) -> Tensor:
         """
         Returns the objective value (VaR etc) for the given x points
         :param X: Solutions, only the X component
@@ -383,17 +427,10 @@ class BenchmarkExp(Experiment):
         if w_samples is None:
             # If w_samples is not given, we assume continuous domain and draw a random
             # set of w_samples
-            if self.w_samples is None:
-                w_samples = torch.rand(self.num_samples, self.dim_w)
-                sols = torch.cat(
-                    (
-                        X.repeat(1, self.num_samples, 1),
-                        w_samples.repeat(X.size(0), 1, 1),
-                    ),
-                    dim=-1,
+            if self.w_samples is None or self.w_samples.size(0) == self.num_samples:
+                w_samples = self.w_samples or torch.rand(
+                    self.num_samples, self.dim_w, dtype=self.dtype, device=self.device
                 )
-            elif self.w_samples.size(0) == self.num_samples:
-                w_samples = self.w_samples
                 sols = torch.cat(
                     (
                         X.repeat(1, self.num_samples, 1),
@@ -402,10 +439,16 @@ class BenchmarkExp(Experiment):
                     dim=-1,
                 )
             elif self.w_samples.size(0) > self.num_samples:
+                # If set w_samples is larger than we want to use, we subsample.
                 if self.weights is not None:
                     weights = self.weights
                 else:
-                    weights = torch.ones(self.num_samples) / self.num_samples
+                    weights = (
+                        torch.ones(
+                            self.num_samples, dtype=self.dtype, device=self.device
+                        )
+                        / self.num_samples
+                    )
                 idx = torch.multinomial(weights.repeat(X.size(0), 1), self.num_samples)
                 w_samples = self.w_samples[idx]
                 sols = torch.cat(
@@ -416,6 +459,7 @@ class BenchmarkExp(Experiment):
                     "This should never happen. Make sure num_samples <= w_samples.size(0)!"
                 )
         else:
+            w_samples = w_samples.to(dtype=self.dtype, device=self.device)
             sols = torch.cat((X.repeat(1, w_samples.shape[-2], 1), w_samples), dim=-1)
         vals = self.function(sols)
         vals, ind = torch.sort(vals, dim=-2)
@@ -437,7 +481,7 @@ class BenchmarkExp(Experiment):
             if self.expectation:
                 values = torch.mean(vals * weights, dim=-2)
             else:
-                summed_weights = torch.empty(weights.size())
+                summed_weights = torch.empty_like(weights)
                 summed_weights[..., 0, :] = weights[..., 0, :]
                 for i in range(1, weights.size(-2)):
                     summed_weights[..., i, :] = (
@@ -445,7 +489,9 @@ class BenchmarkExp(Experiment):
                     )
                 gr_ind = summed_weights >= self.alpha
                 var_ind = torch.ones(
-                    [*summed_weights.size()[:-2], 1, 1], dtype=torch.long
+                    [*summed_weights.size()[:-2], 1, 1],
+                    dtype=torch.long,
+                    device=self.device,
                 ) * weights.size(-2)
                 for i in range(weights.size(-2)):
                     var_ind[gr_ind[..., i, :]] = torch.min(
@@ -462,7 +508,9 @@ class BenchmarkExp(Experiment):
         # Value is negated to get a minimization problem - the benchmarks are all maximization
         return -values
 
-    def initialize_benchmark_gp(self, x_samples: Tensor, init_w_samples: Tensor = None):
+    def initialize_benchmark_gp(
+        self, x_samples: Tensor, init_w_samples: Tensor = None
+    ) -> None:
         """
         Initialize the GP by taking full C/VaR samples from the given x samples.
         :param x_samples: Tensor of x points, broadcastable to num_samples x 1 x dim_x
@@ -474,12 +522,12 @@ class BenchmarkExp(Experiment):
         self.Y = self.get_obj(x_samples, init_w_samples)
         self.fit_gp()
 
-    def current_best(self, past_only: bool = False, **kwargs):
+    def current_best(self, past_only: bool = False, **kwargs) -> Tuple[Tensor, Tensor]:
         """
         Get the current best solution and value
         :param past_only: If True, optimization is over previously evaluated points only.
         :param kwargs: ignored
-        :return: Current best solution and value, along with inner objective
+        :return: Current best solution and value
         """
         inner = PosteriorMean(self.model)
         if past_only:
@@ -501,12 +549,15 @@ class BenchmarkExp(Experiment):
             print(
                 "Current best solution, value: ", current_best_sol, -current_best_value
             )
-        return current_best_sol, -current_best_value, inner
+        return current_best_sol, -current_best_value
 
-    def one_iteration(self, acqf: AcquisitionFunction):
+    def one_iteration(
+        self, acqf: AcquisitionFunction
+    ) -> Tuple[Tensor, Tensor, Tensor, Tensor]:
         """
         Do a single iteration of the algorithm
-        :param acqf: The acquisition function to use, just a class reference!
+        :param acqf: The acquisition function to use. The class constructor,
+            not an instance.
         :return: current best solution & value, acqf value and candidate (next sample)
         """
         iteration_start = time()
@@ -515,15 +566,16 @@ class BenchmarkExp(Experiment):
             ProbabilityOfImprovement,
             NoisyExpectedImprovement,
         ]
-        current_best_sol, current_best_value, inner = self.current_best(
-            past_only=past_only
-        )
+        current_best_sol, current_best_value = self.current_best(past_only=past_only)
 
         if self.random_sampling:
             candidate = constrained_rand(
-                (self.q, self.dim), self.function.inequality_constraints
+                (self.q, self.dim),
+                self.function.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
-            value = torch.tensor([0])
+            value = torch.tensor([0], dtype=self.dtype, device=self.device)
         else:
             args = {"model": self.model}
             if acqf in [ExpectedImprovement, ProbabilityOfImprovement]:
@@ -557,8 +609,8 @@ class BenchmarkExp(Experiment):
                 num_restarts=self.num_restarts,
                 raw_samples=self.num_restarts * self.raw_multiplier,
             )
-        candidate = candidate.cpu().detach()
-        value = value.cpu().detach()
+        candidate = candidate.detach()
+        value = value.detach()
 
         if self.verbose:
             print("Candidate: ", candidate, " acqf value: ", value)
