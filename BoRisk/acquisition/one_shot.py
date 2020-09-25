@@ -1,5 +1,6 @@
 import warnings
 from math import ceil
+from typing import Optional
 
 import torch
 from botorch import settings
@@ -25,7 +26,7 @@ class OneShotrhoKG(AbsKG):
         """
         warnings.warn("This is only experimental. Use rhoKGapx if possible!")
         # make sure X has proper shape
-        X = X.reshape(-1, 1, X.shape[-1])
+        X = X.reshape(-1, 1, X.shape[-1]).to(dtype=self.dtype, device=self.device)
         batch_size = X.shape[0]
         # split the evaluation and fantasy solutions
         split_sizes = [self.q * self.dim, self.num_fantasies * self.dim_x]
@@ -41,15 +42,19 @@ class OneShotrhoKG(AbsKG):
 
         # We use mini batches to reduce memory usage
         num_batches = ceil(batch_size / self.mini_batch_size)
-        values = torch.empty(batch_size)
+        values = torch.empty(batch_size, dtype=self.dtype, device=self.device)
 
         # generate w_samples
         if self.fix_samples:
             if self.fixed_samples is None:
-                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
+                self.fixed_samples = torch.rand(
+                    (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+                )
             w_samples = self.fixed_samples
         else:
-            w_samples = torch.rand((self.num_samples, self.dim_w))
+            w_samples = torch.rand(
+                (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+            )
 
         if self.inner_seed is None:
             inner_seed = int(torch.randint(100000, (1,)))
@@ -65,14 +70,9 @@ class OneShotrhoKG(AbsKG):
             else:
                 right_index = (i + 1) * self.mini_batch_size
             # construct the fantasy model
-            if self.cuda:
-                fantasy_model = self.model.fantasize(
-                    X_actual[left_index:right_index].cuda(), self.sampler
-                ).cuda()
-            else:
-                fantasy_model = self.model.fantasize(
-                    X_actual[left_index:right_index], self.sampler
-                )
+            fantasy_model = self.model.fantasize(
+                X_actual[left_index:right_index], self.sampler
+            )
 
             inner_rho = InnerRho(
                 model=fantasy_model,
@@ -83,9 +83,8 @@ class OneShotrhoKG(AbsKG):
                 inner_seed=inner_seed,
                 CVaR=self.CVaR,
                 expectation=self.expectation,
-                cuda=self.cuda,
                 w_actual=w_actual[left_index:right_index],
-                weights=self.weights,
+                weights=getattr(self, "weights", None),
             )
             # sample and return
             with settings.propagate_grads(True):
@@ -94,3 +93,6 @@ class OneShotrhoKG(AbsKG):
                 inner_values, dim=0
             )
         return values
+
+    def change_num_fantasies(self, num_fantasies: Optional[int] = None) -> None:
+        raise NotImplementedError("Low fantasies is not supported here!")

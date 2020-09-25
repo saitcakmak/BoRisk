@@ -15,7 +15,7 @@ directory = os.path.join(
 )
 
 # specify the parameters for the files to read
-output_key = "one_shot_q=1"
+output_key = "tts_apx_cvar_q=1"
 iterations = 80
 seed_list = range(1, 31)
 
@@ -26,17 +26,18 @@ seed_list = range(1, 31)
 # # rho = "cvar"
 # rho = "var"
 
-function_name = "marzat"
-suffix = "_cvar_10fant_%s_" % output_key
-# suffix2 = '_a=0.75.pt'
-# suffix2 = "_a=0.75_cont_low_fant_4.pt"
-suffix2 = '_a=0.75_cont.pt'
-rho = "cvar"
+# function_name = "marzat"
+# suffix = "_cvar_10fant_%s_" % output_key
+# # suffix2 = '_a=0.75.pt'
+# # suffix2 = "_a=0.75_cont_low_fant_4.pt"
+# suffix2 = '_a=0.75_cont.pt'
+# rho = "cvar"
 
-# function_name = 'covid'
-# suffix = '_cvar_%s_' % output_key
+function_name = "covid"
+suffix = "_cvar_%s_" % output_key
 # suffix2 = '_a=0.9_low_fant_4_weights.pt'
-# rho = 'cvar'
+suffix2 = "_a=0.9_weights.pt"
+rho = "cvar"
 
 # function_name = "portfolio_surrogate"
 # suffix = "_var_%s_" % output_key

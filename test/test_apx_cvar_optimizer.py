@@ -58,6 +58,7 @@ class TestApxCVaROptimizer(BotorchTestCase):
             inequality_constraints=inequality_constraints,
         )
         w_samples = torch.rand(num_samples, dim_w)
+        # TODO:!!!! Error in test
         solution, value = optimizer.optimize_outer(acqf, w_samples=w_samples)
         self.assertTrue(solution[..., dim_x:dim] in w_samples)
         self.assertGreaterEqual(

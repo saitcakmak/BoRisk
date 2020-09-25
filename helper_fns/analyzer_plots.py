@@ -22,9 +22,11 @@ params_dict = {
     "tts_apx_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "+", "errorevery": 5},
     "tts_apx_c_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "+", "errorevery": 5},
     "tts_apx_cvar_q=1": {"label": "ApxCVaRKG", "marker": "x", "errorevery": 5},
+    "apx_cvar_q=1": {"label": "ApxCVaRKG", "marker": "x", "errorevery": 5},
     "tts_varkg_q=1": {"label": "$\\rho$KG", "marker": "s", "errorevery": 5},
     "tts_rhoKG_q=1": {"label": "$\\rho$KG", "marker": "s", "errorevery": 5},
     "one_shot_q=1": {"label": "$OS\\rho$KG", "marker": "v", "errorevery": 5},
+    "one_shot2_q=1": {"label": "$OS\\rho$KG", "marker": "v", "errorevery": 5},
 }
 
 # This is the multiplier for the confidence intervals

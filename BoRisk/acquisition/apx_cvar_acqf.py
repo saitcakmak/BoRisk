@@ -24,14 +24,6 @@ class ApxCVaRKG(AbsKG):
         super().__init__(**kwargs)
         if not self.CVaR:
             raise ValueError("This acqf is only for CVaR!")
-        if self.cuda:
-            raise NotImplementedError("Cuda not supported!")
-        if self.weights is not None:
-            if self.weights.shape[0] != self.num_samples:
-                raise ValueError("Weights must be of size num_samples.")
-            if sum(self.weights) != 1:
-                raise ValueError("Weights must sum up to 1.")
-            self.weights = self.weights.reshape(-1)
 
     def forward(self, X: Tensor) -> Tensor:
         r"""
@@ -40,12 +32,12 @@ class ApxCVaRKG(AbsKG):
             tensor of `q` candidates `x, w` and `num_fantasies` solutions `x` and
             `\beta` values for each fantasy model.
         :return: An `n`-dim tensor of acquisition function values
-        # TODO: integrate active fantasies
         """
         if X.dim() == 2 and self.q == 1:
             X = X.unsqueeze(-2)
         if X.dim() != 3:
             raise ValueError("Only supports X.dim() = 3!")
+        X = X.to(dtype=self.dtype, device=self.device)
         n = X.shape[0]
         # separate candidates and fantasy solutions
         X_actual = X[..., : self.q * self.dim].reshape(n, self.q, self.dim)
@@ -62,10 +54,14 @@ class ApxCVaRKG(AbsKG):
         # generate w_samples
         if self.fix_samples:
             if self.fixed_samples is None:
-                self.fixed_samples = torch.rand((self.num_samples, self.dim_w))
+                self.fixed_samples = torch.rand(
+                    (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+                )
             w_samples = self.fixed_samples
         else:
-            w_samples = torch.rand((self.num_samples, self.dim_w))
+            w_samples = torch.rand(
+                (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+            )
 
         # construct the fantasy model
         fantasy_model = self.model.fantasize(X_actual, self.sampler)
@@ -95,7 +91,7 @@ class ApxCVaRKG(AbsKG):
         updf = torch.exp(normal.log_prob(u))
         values = sigma * (updf + u * ucdf)
         # take the expectation over W
-        if self.weights is None:
+        if getattr(self, "weights", None) is None:
             values = torch.mean(values, dim=-2)
         else:
             # Get the expectation with weights

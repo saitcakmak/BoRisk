@@ -272,7 +272,6 @@ if __name__ == "__main__":
         CVaR=True,
         expectation=False,
         verbose=verb,
-        cuda=False,
         q=1,
         apx=apx,
         disc=disc,

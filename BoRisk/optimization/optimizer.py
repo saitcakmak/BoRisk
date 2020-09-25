@@ -54,6 +54,8 @@ class Optimizer:
         eta: float = 2.0,
         maxiter: int = 1000,
         low_fantasies: Optional[int] = None,
+        dtype: Optional[torch.dtype] = torch.float32,
+        device: Optional[torch.device] = torch.device("cpu"),
     ):
         """
         Initialize with optimization settings.
@@ -74,7 +76,11 @@ class Optimizer:
         :param low_fantasies: see AbsKG.change_num_fantasies for details. This reduces
             the number of fantasies used during raw sample evaluation to reduce the
             computational cost. It is recommended (=4) but not enabled by default.
+        :param dtype: The tensor dtype for the experiment
+        :param device: The device to use. Defaults to CPU.
         """
+        self.dtype = dtype
+        self.device = device
         self.num_restarts = num_restarts
         self.num_refine_restarts = max(1, ceil(num_restarts / 10.0))
         self.raw_samples = num_restarts * raw_multiplier
@@ -82,8 +88,12 @@ class Optimizer:
         self.dim = dim
         self.dim_x = dim_x
         self.q = q
-        self.inner_bounds = torch.tensor([[0.0], [1.0]]).repeat(1, dim_x)
-        self.outer_bounds = torch.tensor([[0.0], [1.0]]).repeat(1, dim)
+        self.inner_bounds = torch.tensor(
+            [[0.0], [1.0]], dtype=self.dtype, device=self.device
+        ).repeat(1, dim_x)
+        self.outer_bounds = torch.tensor(
+            [[0.0], [1.0]], dtype=self.dtype, device=self.device
+        ).repeat(1, dim)
         self.random_frac = random_frac
         self.limit = self.raw_samples * limiter
         self.inner_solutions = None  # mixed solutions
@@ -106,7 +116,7 @@ class Optimizer:
                 n=self.raw_samples,
                 q=1,
                 inequality_constraints=self.inequality_constraints,
-            )
+            ).to(dtype=self.dtype, device=self.device)
         elif self.inner_solutions.size(0) < (1 - self.random_frac) * self.raw_samples:
             num_reused = self.inner_solutions.size(0)
             num_remaining = self.raw_samples - num_reused
@@ -115,7 +125,7 @@ class Optimizer:
                 n=num_remaining,
                 q=1,
                 inequality_constraints=self.inequality_constraints,
-            )
+            ).to(dtype=self.dtype, device=self.device)
             return torch.cat(
                 (self.inner_solutions.unsqueeze(-2), random_samples), dim=0
             )
@@ -128,7 +138,7 @@ class Optimizer:
                 n=int(self.raw_samples * self.random_frac),
                 q=1,
                 inequality_constraints=self.inequality_constraints,
-            )
+            ).to(dtype=self.dtype, device=self.device)
             return torch.cat((reused, random_samples), dim=0)
 
     def generate_restart_points_from_samples(
@@ -176,16 +186,16 @@ class Optimizer:
             options={"maxiter": self.maxiter},
             inequality_constraints=self.inequality_constraints,
         )
-        solutions = solutions.cpu().detach()
-        values = values.cpu().detach()
-        self.add_inner_solutions(solutions.detach(), values.detach())
+        solutions = solutions.detach()
+        values = values.detach()
+        self.add_inner_solutions(solutions, values)
         best = torch.argmax(values.view(-1), dim=0)
         if return_best_only:
-            solutions = solutions[best].detach()
-            values = values[best].detach()
+            solutions = solutions[best]
+            values = values[best]
             self.current_best = -values
         else:
-            self.current_best = -values[best].detach()
+            self.current_best = -values[best]
         return solutions, values
 
     def generate_outer_restart_points(
@@ -202,7 +212,7 @@ class Optimizer:
             n=self.raw_samples,
             q=self.q,
             inequality_constraints=self.inequality_constraints,
-        )
+        ).to(dtype=self.dtype, device=self.device)
         if w_samples is not None:
             w_ind = torch.randint(w_samples.shape[0], (self.raw_samples, self.q))
             if self.q > 1:
@@ -220,7 +230,6 @@ class Optimizer:
         rhoKGapx, Nested or Tts optimizer with w component restricted to w_samples
         :param acqf: rhoKGapx or rhoKG object
         :param w_samples: the set W to consider. If None, assumes continuous optimization.
-        # TODO adjust the default and specify this outside
         :param batch_size: We will do the optimization in mini batches to save on memory
         :return: Optimal solution and value
         """
@@ -248,8 +257,10 @@ class Optimizer:
         acqf.tts_reset()
         init_size = initial_conditions.shape[0]
         num_batches = ceil(init_size / batch_size)
-        solutions = torch.empty(init_size, *self.solution_shape)
-        values = torch.empty(init_size)
+        solutions = torch.empty(
+            init_size, *self.solution_shape, dtype=self.dtype, device=self.device
+        )
+        values = torch.empty(init_size, dtype=self.dtype, device=self.device)
         options = {"maxiter": int(self.maxiter / 25)}
         for i in range(num_batches):
             l_idx = i * batch_size
@@ -279,7 +290,7 @@ class Optimizer:
             inequality_constraints=self.inequality_constraints,
         )
         best = torch.argmax(values)
-        return solutions[best].cpu().detach(), values[best].cpu().detach()
+        return solutions[best].detach(), values[best].detach()
 
     def new_iteration(self):
         """
@@ -303,7 +314,7 @@ class Optimizer:
         :return: None
         """
         solutions = solutions.reshape(-1, self.dim_x)
-        values = values.reshape(-1).cpu()
+        values = values.reshape(-1)
         if self.inner_solutions is None:
             self.inner_solutions = solutions
             self.inner_values = values
@@ -342,6 +353,8 @@ class InnerOptimizer:
         limiter: float = 10,
         eta: float = 2.0,
         maxiter: int = 100,
+        dtype: Optional[torch.dtype] = torch.float32,
+        device: Optional[torch.device] = torch.device("cpu"),
     ):
         """
         Initialize with optimization settings.
@@ -361,11 +374,17 @@ class InnerOptimizer:
         :param eta: Parameter for exponential weighting of raw samples
                     to generate the starting solutions
         :param maxiter: maximum iterations of L-BFGS-B to Run
+        :param dtype: The tensor dtype for the experiment
+        :param device: The device to use. Defaults to CPU.
         """
+        self.dtype = dtype
+        self.device = device
         self.num_restarts = num_restarts
         self.raw_samples = num_restarts * raw_multiplier
         self.dim_x = dim_x
-        self.bounds = torch.tensor([[0.0], [1.0]]).repeat(1, dim_x)
+        self.bounds = torch.tensor(
+            [[0.0], [1.0]], dtype=self.dtype, device=self.device
+        ).repeat(1, dim_x)
         self.random_frac = random_frac
         self.new_iter_frac = new_iter_frac
         self.limit = self.raw_samples * limiter
@@ -384,6 +403,8 @@ class InnerOptimizer:
             samples = constrained_rand(
                 (self.raw_samples, *batch_shape, 1, self.dim_x),
                 inequality_constraints=self.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
             return samples
         else:
@@ -403,6 +424,8 @@ class InnerOptimizer:
             random_samples = constrained_rand(
                 (num_random, *batch_shape, 1, self.dim_x),
                 inequality_constraints=self.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
             samples = torch.cat((reused, random_samples), dim=0)
             return samples

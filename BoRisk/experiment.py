@@ -58,7 +58,8 @@ class Experiment:
         "CVaR": False,
         "random_sampling": False,
         "expectation": False,
-        "cuda": False,
+        "dtype": torch.float32,
+        "device": torch.device("cpu"),
         "apx": True,
         "apx_cvar": False,
         "disc": True,
@@ -91,8 +92,8 @@ class Experiment:
         :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG. The default is VaR.
         :param random_sampling: If true, we will use random sampling to generate samples - no KG.
         :param expectation: If true, we are running BQO optimization.
-        :param cuda: True if using GPUs
-            # TODO: this is a poor implementation and should be improved.
+        :param dtype: The tensor dtype for the experiment
+        :param device: The device to use. Defaults to CPU.
         :param apx: If True, the rhoKGapx algorithm is used.
         :param apx_cvar: If True, we use ApxCVaRKG. Overwrites other options!
         :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
@@ -126,7 +127,11 @@ class Experiment:
             setattr(self, key, kwargs[key])
         self.dim_x = self.dim - self.dim_w
         if kwargs.get("w_samples") is not None:
-            self.w_samples = kwargs["w_samples"].reshape(-1, self.dim_w)
+            self.w_samples = (
+                kwargs["w_samples"]
+                .reshape(-1, self.dim_w)
+                .to(dtype=self.dtype, device=self.device)
+            )
             self.num_samples = self.w_samples.size(0)
         elif "num_samples" in kwargs.keys():
             self.num_samples = kwargs["num_samples"]
@@ -134,16 +139,21 @@ class Experiment:
             warnings.warn("w_samples is None and will be randomized at each iteration")
         if self.expectation:
             self.num_repetitions = 0
-        self.X = torch.empty(0, self.dim)
-        self.Y = torch.empty(0, 1)
+        if self.weights:
+            self.weights = self.weights.to(self.w_samples)
+        self.X = torch.empty(0, self.dim).to(dtype=self.dtype, device=self.device)
+        self.Y = torch.empty(0, 1).to(dtype=self.dtype, device=self.device)
         self.model = None
         self.low_fantasies = kwargs.get("low_fantasies", None)
+
         self.inner_optimizer = InnerOptimizer(
             num_restarts=self.num_inner_restarts,
             raw_multiplier=self.inner_raw_multiplier,
             dim_x=self.dim_x,
             maxiter=self.maxiter,
             inequality_constraints=self.function.inequality_constraints,
+            dtype=self.dtype,
+            device=self.device,
         )
         if self.apx_cvar:
             optimizer = ApxCVaROptimizer
@@ -161,6 +171,8 @@ class Experiment:
             maxiter=self.maxiter,
             inequality_constraints=self.function.inequality_constraints,
             low_fantasies=self.low_fantasies,
+            dtype=self.dtype,
+            device=self.device,
         )
         if self.fix_samples:
             self.fixed_samples = self.w_samples
@@ -177,14 +189,15 @@ class Experiment:
         :param n: number of samples to initialize with
         """
         if init_samples is not None:
-            self.X = init_samples.reshape(-1, self.dim)
-        elif n is not None:
-            self.X = constrained_rand(
-                (n, self.dim), self.function.inequality_constraints
+            self.X = init_samples.reshape(-1, self.dim).to(
+                dtype=self.dtype, device=self.device
             )
         else:
             self.X = constrained_rand(
-                (2 * self.dim + 2, self.dim), self.function.inequality_constraints
+                (n or 2 * self.dim + 2, self.dim),
+                self.function.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
         self.Y = self.function(self.X)
         self.fit_gp()
@@ -206,31 +219,20 @@ class Experiment:
             ),
         )
 
-        if self.cuda:
-            self.model = SingleTaskGP(
-                self.X.cuda(),
-                self.Y.cuda(),
-                likelihood.cuda(),
-                outcome_transform=Standardize(m=1),
-            ).cuda()
-            mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model).cuda()
-            fit_gpytorch_model(mll).cuda()
-        else:
-            self.model = SingleTaskGP(
-                self.X, self.Y, likelihood, outcome_transform=Standardize(m=1)
-            )
-            mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model)
-            fit_gpytorch_model(mll)
+        self.model = SingleTaskGP(
+            self.X, self.Y, likelihood, outcome_transform=Standardize(m=1)
+        )
+        mll = ExactMarginalLogLikelihood(self.model.likelihood, self.model)
+        fit_gpytorch_model(mll)
 
         # dummy computation to be safe with gp fit
         try:
-            if self.cuda:
-                dummy = torch.rand((1, self.q, self.dim)).cuda()
-            else:
-                dummy = torch.rand((1, self.q, self.dim))
+            dummy = torch.rand(
+                (1, self.q, self.dim), dtype=self.dtype, device=self.device
+            )
             _ = self.model.posterior(dummy).mean
         except RuntimeError:
-            self.Y = self.Y + torch.randn(self.Y.size()) * 0.001
+            self.Y = self.Y + torch.randn_like(self.Y) * 0.001
             self.fit_gp()
 
         self.passed = False
@@ -243,7 +245,9 @@ class Experiment:
         :return: Current best solution and value, and inner VaR for plotting
         """
         if self.w_samples is None:
-            w_samples = torch.rand(self.num_samples, self.dim_w)
+            w_samples = torch.rand(
+                self.num_samples, self.dim_w, dtype=self.dtype, device=self.device
+            )
         else:
             w_samples = self.w_samples
         inner_rho = InnerRho(
@@ -284,9 +288,12 @@ class Experiment:
 
         if self.random_sampling:
             candidate = constrained_rand(
-                (self.q, self.dim), self.function.inequality_constraints
+                (self.q, self.dim),
+                self.function.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
-            value = torch.tensor([0])
+            value = torch.tensor([0]).to(candidate)
         else:
             if self.apx_cvar:
                 acqf = ApxCVaRKG(current_best_rho=current_best_value, **vars(self))
@@ -314,8 +321,8 @@ class Experiment:
                 candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples)
             else:
                 candidate, value = self.optimizer.optimize_outer(acqf)
-        candidate = candidate.cpu().detach()
-        value = value.cpu().detach()
+        candidate = candidate.detach()
+        value = value.detach()
 
         if self.verbose:
             print("Candidate: ", candidate, " KG value: ", value)
@@ -363,10 +370,9 @@ class BenchmarkExp(Experiment):
         self.dim = self.dim_x
         if kwargs.get("num_samples", None) is not None:
             self.num_samples = kwargs["num_samples"]
-        if self.cuda:
-            self.bounds = torch.tensor([[0.0], [1.0]]).repeat(1, self.dim).cuda()
-        else:
-            self.bounds = torch.tensor([[0.0], [1.0]]).repeat(1, self.dim)
+        self.bounds = torch.tensor(
+            [[0.0], [1.0]], dtype=self.dtype, device=self.device
+        ).repeat(1, self.dim)
 
     def get_obj(self, X: torch.Tensor, w_samples: Tensor = None):
         """
@@ -383,17 +389,10 @@ class BenchmarkExp(Experiment):
         if w_samples is None:
             # If w_samples is not given, we assume continuous domain and draw a random
             # set of w_samples
-            if self.w_samples is None:
-                w_samples = torch.rand(self.num_samples, self.dim_w)
-                sols = torch.cat(
-                    (
-                        X.repeat(1, self.num_samples, 1),
-                        w_samples.repeat(X.size(0), 1, 1),
-                    ),
-                    dim=-1,
+            if self.w_samples is None or self.w_samples.size(0) == self.num_samples:
+                w_samples = self.w_samples or torch.rand(
+                    self.num_samples, self.dim_w, dtype=self.dtype, device=self.device
                 )
-            elif self.w_samples.size(0) == self.num_samples:
-                w_samples = self.w_samples
                 sols = torch.cat(
                     (
                         X.repeat(1, self.num_samples, 1),
@@ -402,10 +401,16 @@ class BenchmarkExp(Experiment):
                     dim=-1,
                 )
             elif self.w_samples.size(0) > self.num_samples:
+                # If set w_samples is larger than we want to use, we subsample.
                 if self.weights is not None:
                     weights = self.weights
                 else:
-                    weights = torch.ones(self.num_samples) / self.num_samples
+                    weights = (
+                        torch.ones(
+                            self.num_samples, dtype=self.dtype, device=self.device
+                        )
+                        / self.num_samples
+                    )
                 idx = torch.multinomial(weights.repeat(X.size(0), 1), self.num_samples)
                 w_samples = self.w_samples[idx]
                 sols = torch.cat(
@@ -416,6 +421,7 @@ class BenchmarkExp(Experiment):
                     "This should never happen. Make sure num_samples <= w_samples.size(0)!"
                 )
         else:
+            w_samples = w_samples.to(dtype=self.dtype, device=self.device)
             sols = torch.cat((X.repeat(1, w_samples.shape[-2], 1), w_samples), dim=-1)
         vals = self.function(sols)
         vals, ind = torch.sort(vals, dim=-2)
@@ -437,7 +443,7 @@ class BenchmarkExp(Experiment):
             if self.expectation:
                 values = torch.mean(vals * weights, dim=-2)
             else:
-                summed_weights = torch.empty(weights.size())
+                summed_weights = torch.empty_like(weights)
                 summed_weights[..., 0, :] = weights[..., 0, :]
                 for i in range(1, weights.size(-2)):
                     summed_weights[..., i, :] = (
@@ -445,7 +451,9 @@ class BenchmarkExp(Experiment):
                     )
                 gr_ind = summed_weights >= self.alpha
                 var_ind = torch.ones(
-                    [*summed_weights.size()[:-2], 1, 1], dtype=torch.long
+                    [*summed_weights.size()[:-2], 1, 1],
+                    dtype=torch.long,
+                    device=self.device,
                 ) * weights.size(-2)
                 for i in range(weights.size(-2)):
                     var_ind[gr_ind[..., i, :]] = torch.min(
@@ -506,7 +514,8 @@ class BenchmarkExp(Experiment):
     def one_iteration(self, acqf: AcquisitionFunction):
         """
         Do a single iteration of the algorithm
-        :param acqf: The acquisition function to use, just a class reference!
+        :param acqf: The acquisition function to use. The class constructor,
+            not an instance.
         :return: current best solution & value, acqf value and candidate (next sample)
         """
         iteration_start = time()
@@ -521,9 +530,12 @@ class BenchmarkExp(Experiment):
 
         if self.random_sampling:
             candidate = constrained_rand(
-                (self.q, self.dim), self.function.inequality_constraints
+                (self.q, self.dim),
+                self.function.inequality_constraints,
+                dtype=self.dtype,
+                device=self.device,
             )
-            value = torch.tensor([0])
+            value = torch.tensor([0], dtype=self.dtype, device=self.device)
         else:
             args = {"model": self.model}
             if acqf in [ExpectedImprovement, ProbabilityOfImprovement]:
@@ -557,8 +569,8 @@ class BenchmarkExp(Experiment):
                 num_restarts=self.num_restarts,
                 raw_samples=self.num_restarts * self.raw_multiplier,
             )
-        candidate = candidate.cpu().detach()
-        value = value.cpu().detach()
+        candidate = candidate.detach()
+        value = value.detach()
 
         if self.verbose:
             print("Candidate: ", candidate, " acqf value: ", value)
