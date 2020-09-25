@@ -46,13 +46,14 @@ class OneShotOptimizer(Optimizer):
             inequality_constraints=self.inequality_constraints,
         ).to(dtype=self.dtype, device=self.device)
         # get the optimizers of the inner problem
-        w_samples = (
-            acqf.fixed_samples
-            if acqf.fixed_samples is not None
-            else torch.rand(
-                acqf.num_samples, acqf.dim_w, dtype=self.dtype, device=self.device
+        if w_samples is None:
+            w_samples = (
+                acqf.fixed_samples
+                if acqf.fixed_samples is not None
+                else torch.rand(
+                    acqf.num_samples, acqf.dim_w, dtype=self.dtype, device=self.device
+                )
             )
-        )
         inner_rho = InnerRho(
             model=acqf.model,
             w_samples=w_samples,

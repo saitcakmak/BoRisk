@@ -76,36 +76,41 @@ class Experiment:
         """
         The experiment settings:
         :param function: The problem function to be used.
-        :param noise_std: standard deviation of the function evaluation noise. Defaults to 0.1
+        :param noise_std: standard deviation of the function evaluation noise.
+            Defaults to 0.1
         :param dim_w: Dimension of the w component.
         :param num_samples: Number of samples of w to be used to evaluate C/VaR.
-        :param w_samples: option to explicitly specify the samples. If given, num_samples is ignored.
-            One of these is necessary!
+        :param w_samples: option to explicitly specify the samples. If given,
+            num_samples is ignored. One of these is necessary!
         :param num_fantasies: Number of fantasy models to construct in evaluating rhoKG.
         :param num_restarts: Number of random restarts for optimization of rhoKG.
         :param raw_multiplier: Raw_samples = num_restarts * raw_multiplier
         :param alpha: The risk level of C/VaR.
         :param q: Number of parallel solutions to evaluate. Think qKG.
-        :param num_repetitions: Number of repetitions of lookahead fantasy evaluations or sampling
+        :param num_repetitions: Number of posterior samples used for E[rho[F]]
         :param verbose: Print more stuff and plot if d == 2.
         :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
         :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG. The default is VaR.
-        :param random_sampling: If true, we will use random sampling to generate samples - no KG.
+        :param random_sampling: If true, we will use random sampling - no KG.
         :param expectation: If true, we are running BQO optimization.
         :param dtype: The tensor dtype for the experiment
         :param device: The device to use. Defaults to CPU.
         :param apx: If True, the rhoKGapx algorithm is used.
         :param apx_cvar: If True, we use ApxCVaRKG. Overwrites other options!
-        :param disc: If True, the optimization of acqf is done with w restricted to the set w_samples
+        :param disc: If True, the optimization of acqf is done with w restricted to
+            the set w_samples
         :param tts_frequency: The frequency of two-time-scale optimization.
             If 1, we do normal nested optimization. Default is 1.
         :param num_inner_restarts: Inner restarts for nested optimization
         :param inner_raw_multiplier: raw multipler for nested optimization
-        :param weights: If w_samples are not uniformly distributed, these are the sample weights, summing up to 1.
+        :param weights: If w_samples are not uniformly distributed, these are the sample
+            weights, summing up to 1, i.e. probability mass function.
             A 1-dim tensor of size num_samples
-        :param fix_samples: In continuous case of W, whether the samples are redrawn at every iteration
-            or fixed to w_samples.
-        :param one_shot: Uses one-shot optimization. DO NOT USE unless you know what you're doing.
+        :param fix_samples: When W is continuous, this determines whether the samples
+            are redrawn at each call to rhoKG or fixed to a random realization.
+            If w_samples are specified, this gets overwritten.
+        :param one_shot: Uses one-shot optimization.
+            DO NOT USE unless you know what you're doing.
         :param low_fantasies: see AbsKG.change_num_fantasies for details. This reduces
             the number of fantasies used during raw sample evaluation to reduce the
             computational cost. It is recommended (=4) but not enabled by default.

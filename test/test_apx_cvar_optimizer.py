@@ -57,9 +57,13 @@ class TestApxCVaROptimizer(BotorchTestCase):
             dim_x=dim_x,
             inequality_constraints=inequality_constraints,
         )
-        w_samples = torch.rand(num_samples, dim_w)
-        # TODO:!!!! Error in test
+        if dim_w > 1:
+            w_samples = torch.rand(num_samples, dim_w)
+        else:
+            w_samples = torch.linspace(0, 1, num_samples).reshape(num_samples, 1)
         solution, value = optimizer.optimize_outer(acqf, w_samples=w_samples)
+        # Note: if the solution is at the boundary, this sometimes returns a small
+        # value, e.g. 1e-18, and the check below fails.
         self.assertTrue(solution[..., dim_x:dim] in w_samples)
         self.assertGreaterEqual(
             torch.sum(
