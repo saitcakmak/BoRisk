@@ -11,7 +11,7 @@ from BoRisk.test_functions import function_picker
 function_name = "covid"
 num_samples = 27  # 10 for benchmarks and starting
 num_fantasies = 10  # default 50
-key_list = ["tts_apx_cvar_q=1"]
+key_list = ["apx_cvar_q=1"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
