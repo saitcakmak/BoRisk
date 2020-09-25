@@ -9,30 +9,31 @@ from BoRisk.test_functions import function_picker
 
 # Modify this and make sure it does what you want!
 
-function_name = "portfolio_surrogate"
-num_samples = 40  # this is 40 for rhoKG / apx and 10 for benchmarks
+function_name = "braninwilliams"
+num_samples = 12
 num_fantasies = 10  # default 50
-key_list = ["tts_apx_q=1"]
+key_list = ["tts_rhoKG_q=1"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 80
+iterations = 60
 
 import sys
 
 seed_list = [int(sys.argv[1])]
 
-output_file = "%s_%s" % (function_name, "var")
+output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
 dim_w = 2
-kwargs["noise_std"] = 0.1
-kwargs[
-    "negate"
-] = True  # True if the function is written for maximization, e.g. portfolio
+kwargs["noise_std"] = 10
 function = function_picker(function_name)
-kwargs["fix_samples"] = True
-w_samples = function.w_samples
+if dim_w > 1:
+    w_samples = None or function.w_samples
+    if w_samples is None:
+        raise ValueError("Specify w_samples!")
+else:
+    w_samples = None
 weights = function.weights
 kwargs["weights"] = weights
 dim_x = function.dim - dim_w
@@ -40,14 +41,13 @@ num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
-kwargs["CVaR"] = False
+kwargs["CVaR"] = True
 kwargs["expectation"] = False
-kwargs["alpha"] = 0.8
-kwargs["disc"] = False
+kwargs["alpha"] = 0.7
+kwargs["disc"] = True
 kwargs["low_fantasies"] = 4
 kwargs["dtype"] = torch.double
-num_x_samples = 8
-num_init_w = 10
+num_x_samples = 6
 
 output_dict = dict()
 
@@ -67,7 +67,7 @@ for i, key in enumerate(key_list):
         # init samples
         old_state = torch.random.get_rng_state()
         torch.manual_seed(seed)
-        num_full_samples = num_x_samples * num_init_w
+        num_full_samples = num_x_samples * num_samples
         init_samples = draw_constrained_sobol(
             bounds=function.bounds,
             n=num_full_samples,

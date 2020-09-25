@@ -428,9 +428,15 @@ class BenchmarkExp(Experiment):
             # If w_samples is not given, we assume continuous domain and draw a random
             # set of w_samples
             if self.w_samples is None or self.w_samples.size(0) == self.num_samples:
-                w_samples = self.w_samples or torch.rand(
-                    self.num_samples, self.dim_w, dtype=self.dtype, device=self.device
-                )
+                if self.w_samples is None:
+                    w_samples = torch.rand(
+                        self.num_samples,
+                        self.dim_w,
+                        dtype=self.dtype,
+                        device=self.device,
+                    )
+                else:
+                    w_samples = self.w_samples
                 sols = torch.cat(
                     (
                         X.repeat(1, self.num_samples, 1),

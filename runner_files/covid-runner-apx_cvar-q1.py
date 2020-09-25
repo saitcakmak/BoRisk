@@ -2,6 +2,7 @@
 This is the main file to be run on the cluster.
 Modify this to fit the experiment you intend to run.
 """
+from BoRisk import draw_constrained_sobol
 from BoRisk.exp_loop import exp_loop
 import torch
 from BoRisk.test_functions import function_picker
@@ -20,7 +21,6 @@ iterations = 80
 import sys
 
 seed_list = [int(sys.argv[1])]
-# seed_list = range(1, 11)
 
 output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -36,11 +36,12 @@ num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
-kwargs["apx_cvar"] = True
 kwargs["CVaR"] = True
+kwargs["apx_cvar"] = True
 kwargs["alpha"] = 0.9
 kwargs["disc"] = True
-# kwargs["low_fantasies"] = 4
+kwargs["dtype"] = torch.double
+
 num_x_samples = 6
 num_init_w = 10
 
@@ -59,51 +60,21 @@ for i, key in enumerate(key_list):
             tts_frequency = 10
         else:
             tts_frequency = 1
-        if num_x_samples:
-            # constrained initialization - only uses the first constraint if exists
-            old_state = torch.random.get_rng_state()
-            torch.manual_seed(seed)
-            x_samples = torch.rand(num_x_samples, dim_x)
-            if function.inequality_constraints is not None:
-                ineq = function.inequality_constraints[0]
-                ineq_ind = ineq[0]
-                ineq_coef = ineq[1]
-                ineq_rhs = ineq[2]
-                while True:
-                    num_violated = torch.sum(
-                        torch.sum(x_samples[..., ineq_ind] * ineq_coef, dim=-1)
-                        < ineq_rhs
-                    )
-                    if num_violated == 0:
-                        break
-                    violated_ind = (
-                        torch.sum(x_samples[..., ineq_ind] * ineq_coef, dim=-1)
-                        < ineq_rhs
-                    )
-                    x_samples[violated_ind.nonzero(), ..., ineq_ind] = torch.rand(
-                        sum(violated_ind), len(ineq_ind)
-                    )
-
-            if w_samples is None:
-                init_w_samples = torch.rand(num_x_samples, num_init_w, dim_w)
-            elif w_samples.size(0) >= num_init_w and weights is not None:
-                idx = torch.multinomial(weights.repeat(num_x_samples, 1), num_init_w)
-                init_w_samples = w_samples[idx]
-            else:
-                raise NotImplementedError
-            kwargs["x_samples"] = x_samples
-            kwargs["init_w_samples"] = init_w_samples
-            kwargs["init_samples"] = torch.cat(
-                (x_samples.unsqueeze(-2).repeat(1, num_init_w, 1), init_w_samples),
-                dim=-1,
-            )
-            torch.random.set_rng_state(old_state)
-        else:
-            kwargs["x_samples"] = None
-        if bm_alg_list[i] is None:
-            q = q_base
-        else:
-            q = int(q_base / num_samples)
+        # init samples
+        old_state = torch.random.get_rng_state()
+        torch.manual_seed(seed)
+        num_full_samples = num_x_samples * num_init_w
+        init_samples = draw_constrained_sobol(
+            bounds=function.bounds,
+            n=num_full_samples,
+            q=1,
+            inequality_constraints=function.inequality_constraints,
+        ).squeeze(-2)
+        if w_samples is not None:
+            init_samples[..., dim_x:] = w_samples[
+                torch.randint(w_samples.shape[0], size=(num_full_samples,))
+            ]
+        torch.random.set_rng_state(old_state)
         output = exp_loop(
             function_name,
             seed=int(seed),
@@ -113,8 +84,9 @@ for i, key in enumerate(key_list):
             num_samples=num_samples,
             num_fantasies=num_fantasies,
             num_restarts=num_restarts,
+            init_samples=init_samples,
             raw_multiplier=raw_multiplier,
-            q=q,
+            q=q_base,
             apx=apx,
             random_sampling=random,
             tts_frequency=tts_frequency,

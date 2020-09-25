@@ -5,6 +5,7 @@ Modify this to fit the experiment you intend to run.
 from BoRisk.exp_loop import exp_loop
 import torch
 from BoRisk.test_functions import function_picker
+from BoRisk.utils import draw_constrained_sobol
 
 # Modify this and make sure it does what you want!
 
@@ -20,17 +21,15 @@ iterations = 120
 import sys
 
 seed_list = [int(sys.argv[1])]
-# seed_list = [6044, 8239, 4933, 3760, 8963]
 
-output_file = "%s_%s" % (function_name, "var_10fant_6start")
+output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
 dim_w = 2
 kwargs["noise_std"] = 10
 function = function_picker(function_name)
 if dim_w > 1:
-    w_samples = None
-    w_samples = function.w_samples
+    w_samples = None or function.w_samples
     if w_samples is None:
         raise ValueError("Specify w_samples!")
 else:
@@ -47,6 +46,7 @@ kwargs["expectation"] = False
 kwargs["alpha"] = 0.7
 kwargs["disc"] = True
 kwargs["low_fantasies"] = 4
+kwargs["dtype"] = torch.double
 num_x_samples = 6
 
 output_dict = dict()
@@ -64,17 +64,21 @@ for i, key in enumerate(key_list):
             tts_frequency = 10
         else:
             tts_frequency = 1
-        if num_x_samples:
-            old_state = torch.random.get_rng_state()
-            torch.manual_seed(seed)
-            x_samples = torch.rand(num_x_samples, dim_x)
-            torch.random.set_rng_state(old_state)
-        else:
-            x_samples = None
-        if bm_alg_list[i] is None:
-            q = q_base
-        else:
-            q = int(q_base / num_samples)
+        # init samples
+        old_state = torch.random.get_rng_state()
+        torch.manual_seed(seed)
+        num_full_samples = num_x_samples * num_samples
+        init_samples = draw_constrained_sobol(
+            bounds=function.bounds,
+            n=num_full_samples,
+            q=1,
+            inequality_constraints=function.inequality_constraints,
+        ).squeeze(-2)
+        if w_samples is not None:
+            init_samples[..., dim_x:] = w_samples[
+                torch.randint(w_samples.shape[0], size=(num_full_samples,))
+            ]
+        torch.random.set_rng_state(old_state)
         output = exp_loop(
             function_name,
             seed=int(seed),
@@ -84,9 +88,9 @@ for i, key in enumerate(key_list):
             num_samples=num_samples,
             num_fantasies=num_fantasies,
             num_restarts=num_restarts,
-            x_samples=x_samples,
+            init_samples=init_samples,
             raw_multiplier=raw_multiplier,
-            q=q,
+            q=q_base,
             apx=apx,
             random_sampling=random,
             tts_frequency=tts_frequency,
