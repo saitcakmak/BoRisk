@@ -69,7 +69,7 @@ for i, key in enumerate(key_list):
         torch.manual_seed(seed)
         num_full_samples = num_x_samples * num_samples
         init_samples = draw_constrained_sobol(
-            bounds=function.bounds,
+            bounds=torch.tensor([[0.], [1.]]).repeat(1, function.dim),
             n=num_full_samples,
             q=1,
             inequality_constraints=function.inequality_constraints,

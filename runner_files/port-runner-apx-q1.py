@@ -45,7 +45,7 @@ kwargs["expectation"] = False
 kwargs["alpha"] = 0.8
 kwargs["disc"] = False
 kwargs["low_fantasies"] = 4
-#kwargs["dtype"] = torch.double
+# kwargs["dtype"] = torch.double
 num_x_samples = 8
 num_init_w = 10
 
@@ -69,7 +69,7 @@ for i, key in enumerate(key_list):
         torch.manual_seed(seed)
         num_full_samples = num_x_samples * num_init_w
         init_samples = draw_constrained_sobol(
-            bounds=function.bounds,
+            bounds=torch.tensor([[0.], [1.]]).repeat(1, function.dim),
             n=num_full_samples,
             q=1,
             inequality_constraints=function.inequality_constraints,

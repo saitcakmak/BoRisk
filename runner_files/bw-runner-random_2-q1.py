@@ -3,10 +3,13 @@ This is the main file to be run on the cluster.
 Modify this to fit the experiment you intend to run.
 """
 from BoRisk import draw_constrained_sobol
+
 print("borisk import 1")
 from BoRisk.exp_loop import exp_loop
+
 print("borisk import 2")
 import torch
+
 print("torch import")
 from BoRisk.test_functions import function_picker
 
@@ -23,8 +26,9 @@ q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
 iterations = 240
 
 import sys
+
 seed_list = [int(sys.argv[1])]
-#seed_list = range(1, 101)
+# seed_list = range(1, 101)
 
 output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -76,7 +80,7 @@ for i, key in enumerate(key_list):
         torch.manual_seed(seed)
         num_full_samples = num_x_samples * num_samples
         init_samples = draw_constrained_sobol(
-            bounds=function.bounds,
+            bounds=torch.tensor([[0.], [1.]]).repeat(1, function.dim),
             n=num_full_samples,
             q=1,
             inequality_constraints=function.inequality_constraints,
