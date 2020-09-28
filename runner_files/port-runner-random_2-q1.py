@@ -2,7 +2,6 @@
 This is the main file to be run on the cluster.
 Modify this to fit the experiment you intend to run.
 """
-from BoRisk import draw_constrained_sobol
 from BoRisk.exp_loop import exp_loop
 import torch
 from BoRisk.test_functions import function_picker
@@ -12,15 +11,15 @@ from BoRisk.test_functions import function_picker
 function_name = "portfolio_surrogate"
 num_samples = 40  # this is 40 for rhoKG / apx and 10 for benchmarks
 num_fantasies = 10  # default 50
-key_list = ["tts_apx_q=1"]
+key_list = ["random"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 80
+iterations = 160
 
 import sys
-
 seed_list = [int(sys.argv[1])]
+#seed_list = range(1, 101)
 
 output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!
@@ -44,8 +43,7 @@ kwargs["CVaR"] = False
 kwargs["expectation"] = False
 kwargs["alpha"] = 0.8
 kwargs["disc"] = False
-kwargs["low_fantasies"] = 4
-#kwargs["dtype"] = torch.double
+kwargs["dtype"] = torch.double
 num_x_samples = 8
 num_init_w = 10
 

@@ -2,36 +2,31 @@
 This is the main file to be run on the cluster.
 Modify this to fit the experiment you intend to run.
 """
-from BoRisk import draw_constrained_sobol
 from BoRisk.exp_loop import exp_loop
 import torch
 from BoRisk.test_functions import function_picker
 
 # Modify this and make sure it does what you want!
 
-function_name = "portfolio_surrogate"
-num_samples = 40  # this is 40 for rhoKG / apx and 10 for benchmarks
+function_name = "covid"
+num_samples = 27  # 10 for benchmarks and starting
 num_fantasies = 10  # default 50
-key_list = ["tts_apx_q=1"]
+key_list = ["random"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [None]
 q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
-iterations = 80
+iterations = 160
 
 import sys
-
 seed_list = [int(sys.argv[1])]
+#seed_list = range(1, 101)
 
-output_file = "%s_%s" % (function_name, "var")
+output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
-dim_w = 2
-kwargs["noise_std"] = 0.1
-kwargs[
-    "negate"
-] = True  # True if the function is written for maximization, e.g. portfolio
+dim_w = 3
+kwargs["noise_std"] = None  # noise is built in to the simulator
 function = function_picker(function_name)
-kwargs["fix_samples"] = True
 w_samples = function.w_samples
 weights = function.weights
 kwargs["weights"] = weights
@@ -40,13 +35,12 @@ num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
 
 kwargs["num_inner_restarts"] = 5 * dim_x
-kwargs["CVaR"] = False
-kwargs["expectation"] = False
-kwargs["alpha"] = 0.8
-kwargs["disc"] = False
-kwargs["low_fantasies"] = 4
-#kwargs["dtype"] = torch.double
-num_x_samples = 8
+kwargs["CVaR"] = True
+kwargs["alpha"] = 0.9
+kwargs["disc"] = True
+kwargs["dtype"] = torch.double
+
+num_x_samples = 6
 num_init_w = 10
 
 output_dict = dict()
