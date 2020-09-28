@@ -17,7 +17,7 @@ plot_gap = True  # if true, we plot the optimality gap
 plot_log = True  # if true, the plot is on log scale
 prefix = "plot_"
 # prefix = ''
-suffix = "_cvar"
+suffix = "_var"
 filename = "%s%s%s" % (prefix, function_name, suffix)
 dim_w = 2
 CVaR = True
@@ -152,7 +152,7 @@ if plot_gap:
                 searched_best = search_around(best_found_point, 0.01)
                 best_value = min(best_found, best_value, searched_best)
 # If the key has no output, remove it.
-for key in output.keys():
+for key in list(output.keys()):
     if output[key].keys() == dict().keys():
         output.pop(key)
 # Comment out to get actual value. Uncomment to get gap

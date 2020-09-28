@@ -15,16 +15,16 @@ directory = os.path.join(
 )
 
 # specify the parameters for the files to read
-output_key = "tts_apx_cvar_q=1"
-iterations = 80
+output_key = "tts_apx_q=1"
+iterations = 30
 seed_list = range(1, 31)
 
-# function_name = "braninwilliams"
-# suffix = "_var_10fant_6start_%s_" % output_key
-# suffix2 = "_low_fant_4_weights.pt"
-# # suffix2 = "_cvar_weights.pt"
-# # rho = "cvar"
-# rho = "var"
+function_name = "braninwilliams"
+suffix = "_var_10fant_6start_%s_" % output_key
+suffix2 = "_low_fant_4_weights.pt"
+# suffix2 = "_cvar_weights.pt"
+# rho = "cvar"
+rho = "var"
 
 # function_name = "marzat"
 # suffix = "_cvar_10fant_%s_" % output_key
@@ -33,15 +33,15 @@ seed_list = range(1, 31)
 # suffix2 = '_a=0.75_cont.pt'
 # rho = "cvar"
 
-function_name = "covid"
-suffix = "_cvar_%s_" % output_key
-# suffix2 = '_a=0.9_low_fant_4_weights.pt'
-suffix2 = "_a=0.9_weights.pt"
-rho = "cvar"
+# function_name = "covid"
+# suffix = "_cvar_%s_" % output_key
+# # suffix2 = '_a=0.9_low_fant_4_weights.pt'
+# suffix2 = "_a=0.9_weights.pt"
+# rho = "cvar"
 
 # function_name = "portfolio_surrogate"
 # suffix = "_var_%s_" % output_key
-# # suffix2 = '_a=0.8.pt'
+# # suffix2 = '_a=0.8_cont.pt'
 # suffix2 = "_a=0.8_cont_low_fant_4.pt"
 # rho = "var"
 
@@ -59,6 +59,7 @@ def read_bests(seed):
         data = torch.load(filename)
     except FileNotFoundError:
         print("seed %d not found" % seed)
+        print("file: %s" % filename)
         return None
     try:
         data_0 = data[0]
