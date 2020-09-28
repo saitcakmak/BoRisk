@@ -38,7 +38,9 @@ class PortfolioSurrogate(SyntheticTestFunction):
     def evaluate_true(self, X: Tensor) -> Tensor:
         if self.model is not None:
             with torch.no_grad(), gpytorch.settings.max_cg_iterations(10000):
-                return self.model.posterior(X).mean
+                return self.model.posterior(
+                    X.to(dtype=torch.float32, device="cpu")
+                ).mean.to(X)
         self.fit_model()
         return self.evaluate_true(X)
 
