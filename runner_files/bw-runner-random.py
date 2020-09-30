@@ -19,7 +19,7 @@ q_base = 1  # q for rhoKG. For others, it is q_base / num_samples
 iterations = 240
 
 # seed_list = [int(sys.argv[1])]
-seed_list = range(21, 31)
+seed_list = range(1, 31)
 
 output_file = "%s_%s" % (function_name, "var")
 torch.manual_seed(0)  # to ensure the produced seed are same!

@@ -25,6 +25,8 @@ seed_list = [int(sys.argv[1])]
 output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
+if len(sys.argv) > 2:
+    kwargs["device"] = sys.argv[2]
 dim_w = 3
 kwargs["noise_std"] = None  # noise is built in to the simulator
 function = function_picker(function_name)
