@@ -191,7 +191,7 @@ class InnerRho(MCAcquisitionFunction):
                 )
                 for i in range(weights.shape[-2]):
                     var_ind[gr_ind[..., i, :]] = torch.min(
-                        var_ind[gr_ind[..., i, :]], torch.tensor([i])
+                        var_ind[gr_ind[..., i, :]], torch.tensor([i]).to(X.device)
                     )
 
                 if self.CVaR:
