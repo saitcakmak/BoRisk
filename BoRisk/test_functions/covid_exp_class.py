@@ -179,7 +179,7 @@ class CovidSim(SyntheticTestFunction):
             num_infected = 0
             for j in range(self.num_pop):
                 pop_params = base_params.copy()
-                pop_params["test_population_fraction"] = pop_test_frac[j]
+                pop_params["test_population_fraction"] = pop_test_frac[j].cpu()
                 pop_params["population_size"] = self.populations[j]
                 pop_params["initial_ID_prevalence"] = X[i, 0, self.num_pop + j - 1]
                 loop = True
@@ -206,7 +206,7 @@ class CovidSim(SyntheticTestFunction):
         # recover the old random state
         np.random.set_state(np_random_state)
         torch.random.set_rng_state(torch_state)
-        return out.reshape(out_size)
+        return out.reshape(out_size).to(X)
 
     def evaluate_true(self, X: Tensor) -> Tensor:
         raise NotImplementedError
