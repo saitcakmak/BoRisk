@@ -180,7 +180,7 @@ if plot_gap:
                 searched_best = search_around(best_found_point, 0.01)
                 best_value = max(best_found, best_value, searched_best)
 # If the key has no output, remove it.
-for key in output.keys():
+for key in list(output.keys()):
     if output[key].keys() == dict().keys():
         output.pop(key)
 # Comment out to get actual value. Uncomment to get gap - use plot_gap for this

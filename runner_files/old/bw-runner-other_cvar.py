@@ -17,18 +17,21 @@ from BoRisk.test_functions import function_picker
 function_name = "braninwilliams"
 num_samples = 12
 num_fantasies = 10  # default 50
-key_list = ["EI", "qKG"]
+key_list = ["EI", "MES", "qKG", "UCB", "classical_random"]
 # this should be a list of bm algorithms corresponding to the keys. None if rhoKG
 bm_alg_list = [
     ExpectedImprovement,
+    qMaxValueEntropy,
     qKnowledgeGradient,
+    UpperConfidenceBound,
+    qKnowledgeGradient,  # arbitrary placeholder
 ]
 q_base = 12  # q for rhoKG. For others, it is q_base / num_samples
 iterations = 20
 
 seed_list = range(1, 101)
 
-output_file = "%s_%s" % (function_name, "var_10fant_6start")
+output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
 dim_w = 2

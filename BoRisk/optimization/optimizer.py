@@ -196,7 +196,7 @@ class Optimizer:
             self.current_best = -values
         else:
             self.current_best = -values[best]
-        return solutions, values
+        return solutions, -values
 
     def generate_outer_restart_points(
         self, acqf: Union[rhoKG, rhoKGapx], w_samples: Tensor = None

@@ -4,7 +4,7 @@ Just reads the current best output reported and saves it for plotting.
 
 import torch
 from time import time
-from BoRisk import test_functions
+from helper_fns.re_evaluate import re_evaluate_from_file
 import os
 
 
@@ -13,36 +13,56 @@ directory = os.path.join(
     "exp_output"
     # "benchmarks"
 )
+low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1"]
 
 # specify the parameters for the files to read
-output_key = "tts_apx_q=1"
-iterations = 30
+# output_key = "tts_apx_q=1"
+# output_key = "tts_rhoKG_q=1"
+# output_key = "one_shot_q=1"
+# output_key = "apx_cvar_q=1"
+output_key = "random"
+iterations = 120  # BW
+# iterations = 100  # marzat
+# iterations = 80  # portfolio and covid
+if output_key == "random":
+    iterations = iterations * 2
+elif output_key == "tts_rhoKG_q=1":
+    iterations = iterations // 2
 seed_list = range(1, 31)
+re_evaluate = False  # DO NOT USE WITH BENCHMARKS!!
 
 function_name = "braninwilliams"
-suffix = "_var_10fant_6start_%s_" % output_key
-suffix2 = "_low_fant_4_weights.pt"
-# suffix2 = "_cvar_weights.pt"
-# rho = "cvar"
-rho = "var"
+rho = "cvar"
+# suffix = "_var_10fant_6start_%s_" % output_key
+suffix = "_%s_%s_" % (rho, output_key)
+if output_key in low_fant_keys:
+    suffix2 = "_low_fant_4_weights.pt"
+else:
+    suffix2 = "_weights.pt"
 
 # function_name = "marzat"
-# suffix = "_cvar_10fant_%s_" % output_key
-# # suffix2 = '_a=0.75.pt'
-# # suffix2 = "_a=0.75_cont_low_fant_4.pt"
-# suffix2 = '_a=0.75_cont.pt'
+# # suffix = "_cvar_10fant_%s_" % output_key
+# suffix = "_cvar_%s_" % output_key
+# if output_key in low_fant_keys:
+#     suffix2 = "_a=0.75_cont_low_fant_4.pt"
+# else:
+#     suffix2 = "_a=0.75_cont.pt"
 # rho = "cvar"
 
 # function_name = "covid"
 # suffix = "_cvar_%s_" % output_key
-# # suffix2 = '_a=0.9_low_fant_4_weights.pt'
-# suffix2 = "_a=0.9_weights.pt"
+# if output_key in low_fant_keys:
+#     suffix2 = "_a=0.9_low_fant_4_weights.pt"
+# else:
+#     suffix2 = "_a=0.9_weights.pt"
 # rho = "cvar"
 
 # function_name = "portfolio_surrogate"
 # suffix = "_var_%s_" % output_key
-# # suffix2 = '_a=0.8_cont.pt'
-# suffix2 = "_a=0.8_cont_low_fant_4.pt"
+# if output_key in low_fant_keys:
+#     suffix2 = "_a=0.8_cont_low_fant_4.pt"
+# else:
+#     suffix2 = "_a=0.8_cont.pt"
 # rho = "var"
 
 output_file = os.path.join(
@@ -55,6 +75,8 @@ output_file = os.path.join(
 def read_bests(seed):
     start = time()
     filename = os.path.join(directory, function_name + suffix + str(seed) + suffix2)
+    if re_evaluate:
+        re_evaluate_from_file(filename, function_name)
     try:
         data = torch.load(filename)
     except FileNotFoundError:
