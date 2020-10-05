@@ -15,13 +15,17 @@ directory = os.path.join(
 # DO NOT USE WITH BENCHMARKS!!
 
 
-def re_evaluate_from_file(file: str, function_name: str, verbose: bool = False):
+def re_evaluate_from_file(
+    file: str, function_name: str, device: str, verbose: bool = False
+):
     r"""
     Given the path to an output file, it iterates over the output to re-evaluate the
     best reported points, i.e. the minimizer of the posterior objective. It will
     overwrite the best point reported, and save it under the name old_best_point.
     :param file: Path to an exp_loop output file
     :param function_name: The function name for initializing the Experiment.
+    :param device: The device to use, "cpu" or "cuda". "cuda" should offer significant
+        speed up here.
     :param verbose: If True, prints something at each iteration
     :return: None. Overwrites the output file.
     """
@@ -52,11 +56,14 @@ def re_evaluate_from_file(file: str, function_name: str, verbose: bool = False):
                 "current_best_value",
                 "acqf_value",
                 "candidate",
+                "device"
             ]
-        }
+        },
+        device=device
     )
-    full_X = last_data["train_X"]
-    full_Y = last_data["train_Y"]
+    exp.change_dtype_device(device=device)
+    full_X = last_data["train_X"].to(device)
+    full_Y = last_data["train_Y"].to(device)
     exp.num_repetitions = 4000  # IMPORTANT PARAMETER!!
     for i in range(last_iteration + 1):
         if verbose:
@@ -97,5 +104,6 @@ if __name__ == "__main__":
     re_evaluate_from_file(
         os.path.join(directory, "braninwilliams_cvar_apx_cvar_q=1_1_weights.pt"),
         "braninwilliams",
+        "cuda",
         True,
     )

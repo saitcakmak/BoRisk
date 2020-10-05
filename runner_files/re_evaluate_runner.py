@@ -11,6 +11,7 @@ directory = os.path.join(
 
 seed = sys.argv[1]
 func = sys.argv[2]
+device = sys.argv[3]
 
 # specify the parameters for the files to read
 key_list = ["tts_apx_q=1", "tts_rhoKG_q=1", "one_shot_q=1", "apx_cvar_q=1", "random"]
@@ -58,4 +59,4 @@ for output_key in key_list:
 
     filename = os.path.join(directory, function_name + suffix + str(seed) + suffix2)
     print("Starting file %s" % filename)
-    re_evaluate_from_file(filename, function_name, True)
+    re_evaluate_from_file(filename, function_name, device, True)

@@ -209,7 +209,8 @@ class Experiment:
                 setattr(self, key, value.to(dtype=dtype, device=device))
         self.dtype = dtype
         self.device = torch.device(device)
-        self.fit_gp()
+        if self.X.numel():
+            self.fit_gp()
 
     def initialize_gp(self, init_samples: Tensor = None, n: int = None) -> None:
         """
