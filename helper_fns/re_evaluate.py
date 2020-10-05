@@ -69,6 +69,9 @@ def re_evaluate_from_file(
         if verbose:
             print("starting iteration %d, time: %s" % (i, time() - start))
         # update each iteration
+        if "old_current_best_sol" in full_data[i].keys():
+            print("iteration is already re-evaluated. Skipping!")
+            continue
         r_idx = (-last_iteration + i - 1) * last_data["q"]
         exp.X = full_X[:r_idx]
         exp.Y = full_Y[:r_idx]
@@ -104,6 +107,6 @@ if __name__ == "__main__":
     re_evaluate_from_file(
         os.path.join(directory, "braninwilliams_cvar_apx_cvar_q=1_1_weights.pt"),
         "braninwilliams",
-        "cuda",
+        "cpu",
         True,
     )
