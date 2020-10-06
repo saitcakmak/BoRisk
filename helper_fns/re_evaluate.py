@@ -64,7 +64,7 @@ def re_evaluate_from_file(
     exp.change_dtype_device(device=device)
     full_X = last_data["train_X"].to(device)
     full_Y = last_data["train_Y"].to(device)
-    exp.num_repetitions = 4000  # IMPORTANT PARAMETER!!
+    exp.num_repetitions = 400  # IMPORTANT PARAMETER!!
     for i in range(last_iteration + 1):
         if verbose:
             print("starting iteration %d, time: %s" % (i, time() - start))
@@ -86,6 +86,9 @@ def re_evaluate_from_file(
         full_data[i]["old_current_best_value"] = full_data[i]["current_best_value"]
         full_data[i]["current_best_sol"] = sol
         full_data[i]["current_best_value"] = -value
+        # update the output file
+        if i % 10 == 0:
+            torch.save(full_data, file)
     # update the final solution if it exists
     if "final_solution" in full_data.keys():
         exp.X = full_X
@@ -107,6 +110,6 @@ if __name__ == "__main__":
     re_evaluate_from_file(
         os.path.join(directory, "braninwilliams_cvar_apx_cvar_q=1_1_weights.pt"),
         "braninwilliams",
-        "cpu",
+        "cuda",
         True,
     )
