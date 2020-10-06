@@ -69,7 +69,8 @@ def re_evaluate_from_file(
         if verbose:
             print("starting iteration %d, time: %s" % (i, time() - start))
         # update each iteration
-        if "old_current_best_sol" in full_data[i].keys():
+        iter_data = full_data.get(i, dict())
+        if "old_current_best_sol" in iter_data.keys():
             print("iteration is already re-evaluated. Skipping!")
             continue
         r_idx = (-last_iteration + i - 1) * last_data["q"]
@@ -82,8 +83,8 @@ def re_evaluate_from_file(
                 "old value: %f, new value: %f"
                 % (full_data[i]["current_best_value"], value)
             )
-        full_data[i]["old_current_best_sol"] = full_data[i]["current_best_sol"]
-        full_data[i]["old_current_best_value"] = full_data[i]["current_best_value"]
+        full_data[i]["old_current_best_sol"] = iter_data.get("current_best_sol")
+        full_data[i]["old_current_best_value"] = iter_data.get("current_best_value")
         full_data[i]["current_best_sol"] = sol
         full_data[i]["current_best_value"] = -value
         # update the output file
