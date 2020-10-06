@@ -81,7 +81,7 @@ def re_evaluate_from_file(
         if verbose:
             print(
                 "old value: %f, new value: %f"
-                % (full_data[i]["current_best_value"], value)
+                % (iter_data["current_best_value"], value)
             )
         full_data[i]["old_current_best_sol"] = iter_data.get("current_best_sol")
         full_data[i]["old_current_best_value"] = iter_data.get("current_best_value")
