@@ -22,7 +22,7 @@ import sys
 
 seed_list = [int(sys.argv[1])]
 
-output_file = "%s_%s" % (function_name, "var")
+output_file = "%s_%s" % (function_name, "cvar")
 torch.manual_seed(0)  # to ensure the produced seed are same!
 kwargs = dict()
 if len(sys.argv) > 2:
