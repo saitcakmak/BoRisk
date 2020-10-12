@@ -1,0 +1,20 @@
+#!/bin/sh
+
+seeds=$(seq 1 30)
+#probs=("bw" "bw_cvar" "m6" "port" "covid")
+probs=("port" "covid")
+acqfs=("apx" "one_shot" "random_2" "apx_cvar")
+#acqfs=("apx_cvar")
+device="cpu"
+
+for prob in ${probs[@]}
+do
+  for acqf in ${acqfs[@]}
+  do
+    for i in $seeds
+    do 
+      sleep 0.1
+      sbatch --requeue /home/gid-cakmaks/BoRisk/sub_graphite.sub $prob $acqf $i $device
+    done
+  done
+done
