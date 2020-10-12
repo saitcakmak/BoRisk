@@ -15,7 +15,6 @@ directory = os.path.join(
 function_name = "covid"
 plot_log = False  # if true, the plot is on log scale
 prefix = "plot_"
-# prefix = ''
 suffix = "_cvar"
 filename = "%s%s%s" % (prefix, function_name, suffix)
 dim_w = 3
@@ -27,7 +26,8 @@ dim_x = dim - dim_w
 num_w = 27
 num_plot = 10  # max number of plot lines in a figure
 w_batch_size = 10
-# this is the number of w used to approximate the objective for benchmarks. Needed for proper plotting.
+# this is the number of w used to approximate the objective for benchmarks.
+# Needed for proper plotting.
 
 
 out_store = "covid_eval_data.pt"
@@ -132,6 +132,7 @@ for key in key_list:
     for i in range(len(inner_keys)):
         if sub_data[inner_keys[i]] is None:
             raise ValueError("Some of the data is None! Key: %s " % key)
+        print("starting key %s seed %s" % (key, inner_keys[i]))
         best_list = sub_data[inner_keys[i]]["current_best"]
         if "x" not in output[key].keys():
             output[key]["x"] = (
@@ -145,7 +146,7 @@ for key in key_list:
             output[key]["y"] = torch.cat([output[key]["y"], reshaped], dim=0)
 
 # If the key has no output, remove it.
-for key in output.keys():
+for key in list(output.keys()):
     if output[key].keys() == dict().keys():
         output.pop(key)
 
