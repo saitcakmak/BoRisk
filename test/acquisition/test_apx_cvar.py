@@ -111,10 +111,8 @@ class TestTTSApxCVaR(BotorchTestCase):
             raw_multiplier=20,
             num_fantasies=num_fantasies,
             dim=dim,
-            dim_x=dim_x
+            dim_x=dim_x,
         )
         acqf.tts_reset()
         candidate, opt_value = optimizer.optimize_outer(acqf)
         self.assertTrue((opt_value > value).all())
-
-

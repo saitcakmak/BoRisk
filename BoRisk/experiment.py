@@ -36,7 +36,10 @@ import warnings
 from BoRisk.utils import constrained_rand
 from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG, TTSApxCVaRKG
 from BoRisk.acquisition.one_shot import OneShotrhoKG
-from BoRisk.optimization.apx_cvar_optimizer import ApxCVaROptimizer, InnerApxCVaROptimizer
+from BoRisk.optimization.apx_cvar_optimizer import (
+    ApxCVaROptimizer,
+    InnerApxCVaROptimizer,
+)
 from BoRisk.optimization.one_shot_optimizer import OneShotOptimizer
 
 
@@ -157,7 +160,9 @@ class Experiment:
         self.model = None
         self.low_fantasies = kwargs.get("low_fantasies", None)
         if self.apx_cvar and self.tts_apx_cvar:
-            raise ValueError("apx_cvar and tts_apx_cvar cannot be true at the same time!")
+            raise ValueError(
+                "apx_cvar and tts_apx_cvar cannot be true at the same time!"
+            )
 
         if self.tts_apx_cvar:
             inner_optimizer = InnerApxCVaROptimizer

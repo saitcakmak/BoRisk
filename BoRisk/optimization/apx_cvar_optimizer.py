@@ -236,15 +236,26 @@ class InnerApxCVaROptimizer(InnerOptimizer):
                 exponent -= 1
             search_X = draw_constrained_sobol(
                 bounds=self.bounds[:, :-1],
-                n=2 ** exponent,  # keeping this low since it will be used with batch models
+                n=2
+                ** exponent,  # keeping this low since it will be used with batch models
                 q=1,
                 seed=None,
                 inequality_constraints=self.inequality_constraints,
             ).to(dtype=self.dtype, device=self.device)
-            search_X = search_X.reshape(-1, 1, 1, 1, self.dim_x-1).repeat(
+            search_X = search_X.reshape(-1, 1, 1, 1, self.dim_x - 1).repeat(
                 1, *model._input_batch_shape, 1, 1
             )
-            search_X = torch.cat([search_X, torch.rand_like(search_X)], dim=-1)
+            search_X = torch.cat(
+                [
+                    search_X,
+                    torch.rand(
+                        *search_X.shape[:-1],
+                        model.train_inputs[0].shape[-1] - self.dim_x + 1
+                    ).to(search_X),
+                ],
+                dim=-1,
+            )
+            model.train_inputs[0].shape[-1]
             posterior = model.posterior(search_X)
             mean = posterior.mean
             std = posterior.variance.sqrt()
