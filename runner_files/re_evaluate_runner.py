@@ -14,9 +14,9 @@ func = sys.argv[2]
 device = sys.argv[3]
 
 # specify the parameters for the files to read
-key_list = ["tts_apx_q=1", "tts_rhoKG_q=1", "one_shot_q=1", "apx_cvar_q=1", "random"]
+key_list = ["tts_apx_q=1", "tts_rhoKG_q=1", "one_shot_q=1", "apx_cvar_q=1", "random", "tts_apx_cvar_q=1"]
 
-low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1"]
+low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1", "tts_apx_cvar_q=1"]
 
 for output_key in key_list:
     if func == "bw":
