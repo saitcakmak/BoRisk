@@ -40,9 +40,13 @@ def draw_constrained_sobol(
         tries += 1
         if seed is not None:
             seed = seed + 1
-        violated_ind: Tensor = torch.sum(
-            torch.sum(samples[..., ineq_ind] * ineq_coef.to(samples), dim=-1), dim=-1
-        ) < ineq_rhs
+        violated_ind: Tensor = (
+            torch.sum(
+                torch.sum(samples[..., ineq_ind] * ineq_coef.to(samples), dim=-1),
+                dim=-1,
+            )
+            < ineq_rhs
+        )
         num_violated = torch.sum(violated_ind)
         if num_violated == 0:
             break
@@ -84,9 +88,9 @@ def constrained_rand(
     tries = 0
     while tries < max_tries:
         tries += 1
-        violated_ind: Tensor = torch.sum(
-            samples[..., ineq_ind] * ineq_coef.to(samples), dim=-1
-        ) < ineq_rhs
+        violated_ind: Tensor = (
+            torch.sum(samples[..., ineq_ind] * ineq_coef.to(samples), dim=-1) < ineq_rhs
+        )
         num_violated = torch.sum(violated_ind)
         if num_violated == 0:
             break

@@ -28,9 +28,12 @@ num_plot = 10  # max number of plot lines in a figure
 w_batch_size = 10
 # this is the number of w used to approximate the objective for benchmarks.
 # Needed for proper plotting.
+skip_non_evaluated = False
 
 
-out_store = "covid_eval_data.pt"
+out_store = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "covid_eval_data.pt"
+)
 try:
     out = torch.load(out_store)
 except FileNotFoundError:
@@ -85,6 +88,8 @@ def get_obj(X: torch.Tensor, key, inner_key):
                 print("reusing the partial output for %s %s" % (key, inner_key))
                 partial_out = out[key][inner_key]
     partial_size = partial_out.size(0)
+    if skip_non_evaluated and partial_size != X.shape[0]:
+        return None
     if (X > 1).any() or (X < 0).any():
         raise ValueError(
             "Some of the solutions is out of bounds. Make sure to reevaluate"
@@ -139,6 +144,8 @@ for key in key_list:
                 torch.linspace(0, best_list.size(0) - 1, best_list.size(0)) * q
             )
         values = get_obj(best_list, key, inner_keys[i])
+        if values is None:
+            continue
         reshaped = values.reshape(1, -1)
         if "y" not in output[key].keys():
             output[key]["y"] = reshaped

@@ -34,9 +34,9 @@ from botorch.models.transforms import Standardize
 from BoRisk.optimization.optimizer import Optimizer, InnerOptimizer
 import warnings
 from BoRisk.utils import constrained_rand
-from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG
+from BoRisk.acquisition.apx_cvar_acqf import ApxCVaRKG, TTSApxCVaRKG
 from BoRisk.acquisition.one_shot import OneShotrhoKG
-from BoRisk.optimization.apx_cvar_optimizer import ApxCVaROptimizer
+from BoRisk.optimization.apx_cvar_optimizer import ApxCVaROptimizer, InnerApxCVaROptimizer
 from BoRisk.optimization.one_shot_optimizer import OneShotOptimizer
 
 
@@ -63,6 +63,7 @@ class Experiment:
         "device": torch.device("cpu"),
         "apx": True,
         "apx_cvar": False,
+        "tts_apx_cvar": False,
         "disc": True,
         "tts_frequency": 10,
         "num_inner_restarts": 10,
@@ -98,6 +99,7 @@ class Experiment:
         :param device: The device to use. Defaults to CPU.
         :param apx: If True, the rhoKGapx algorithm is used.
         :param apx_cvar: If True, we use ApxCVaRKG. Overwrites other options!
+        :param tts_apx_cvar: If True, we use TTSApxCVaRKG. Overwrites other options!
         :param disc: If True, the optimization of acqf is done with w restricted to
             the set w_samples
         :param tts_frequency: The frequency of two-time-scale optimization.
@@ -154,8 +156,15 @@ class Experiment:
         self.Y = torch.empty(0, 1).to(dtype=self.dtype, device=self.device)
         self.model = None
         self.low_fantasies = kwargs.get("low_fantasies", None)
+        if self.apx_cvar and self.tts_apx_cvar:
+            raise ValueError("apx_cvar and tts_apx_cvar cannot be true at the same time!")
 
-        self.inner_optimizer = InnerOptimizer(
+        if self.tts_apx_cvar:
+            inner_optimizer = InnerApxCVaROptimizer
+        else:
+            inner_optimizer = InnerOptimizer
+
+        self.inner_optimizer = inner_optimizer(
             num_restarts=self.num_inner_restarts,
             raw_multiplier=self.inner_raw_multiplier,
             dim_x=self.dim_x,
@@ -195,7 +204,7 @@ class Experiment:
         self, dtype: Optional[torch.dtype] = None, device: Optional[torch.device] = None
     ) -> None:
         r"""
-        This changes the dtype and device of all experiment tensors, and refits the GP 
+        This changes the dtype and device of all experiment tensors, and refits the GP
         model.
         :param dtype: The torch.dtype to use
         :param device: The device to use
@@ -334,6 +343,12 @@ class Experiment:
         else:
             if self.apx_cvar:
                 acqf = ApxCVaRKG(current_best_rho=current_best_value, **vars(self))
+            elif self.tts_apx_cvar:
+                acqf = TTSApxCVaRKG(
+                    current_best_rho=current_best_value,
+                    inner_optimizer=self.inner_optimizer.optimize,
+                    **{_: vars(self)[_] for _ in vars(self) if _ != "inner_optimizer"}
+                )
             elif self.one_shot:
                 acqf = OneShotrhoKG(
                     current_best_rho=current_best_value,
@@ -493,11 +508,14 @@ class BenchmarkExp(Experiment):
                         summed_weights[..., i - 1, :] + weights[..., i, :]
                     )
                 gr_ind = summed_weights >= self.alpha
-                var_ind = torch.ones(
-                    [*summed_weights.size()[:-2], 1, 1],
-                    dtype=torch.long,
-                    device=self.device,
-                ) * weights.size(-2)
+                var_ind = (
+                    torch.ones(
+                        [*summed_weights.size()[:-2], 1, 1],
+                        dtype=torch.long,
+                        device=self.device,
+                    )
+                    * weights.size(-2)
+                )
                 for i in range(weights.size(-2)):
                     var_ind[gr_ind[..., i, :]] = torch.min(
                         var_ind[gr_ind[..., i, :]], torch.tensor([i])

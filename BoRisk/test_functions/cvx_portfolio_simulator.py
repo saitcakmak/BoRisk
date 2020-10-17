@@ -12,8 +12,7 @@ from botorch.test_functions.synthetic import SyntheticTestFunction
 
 
 class CVXPortfolioSimulator(SyntheticTestFunction):
-    r"""
-    """
+    r""""""
 
     _optimizers = None
 

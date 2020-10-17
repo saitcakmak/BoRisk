@@ -1,6 +1,10 @@
+from math import ceil
+
 from torch.distributions import Normal
-from BoRisk.acquisition import AbsKG
-from typing import Optional
+from BoRisk.acquisition.acquisition import AbsKG
+from BoRisk.acquisition.inner_rho import InnerApxCVaR
+
+from typing import Optional, Callable
 import torch
 from botorch import settings
 from torch import Tensor
@@ -107,3 +111,106 @@ class ApxCVaRKG(AbsKG):
 
     def change_num_fantasies(self, num_fantasies: Optional[int] = None) -> None:
         raise NotImplementedError("Low fantasies is not supported here!")
+
+
+class TTSApxCVaRKG(AbsKG):
+    r"""
+    This is ApxCVaRKG, except that it preserves the nested structure, and is intended
+    to use TTS optimization.
+    """
+
+    def __init__(
+        self, inner_optimizer: Callable, tts_frequency: int = 1, **kwargs
+    ) -> None:
+        r"""
+        See AbsKG.__init__. This simply performs some checks.
+
+        :param inner_optimizer: A callable for optimizing InnerApxCVaR
+        :param tts_frequency: The frequency for two time scale optimization.
+            Every tts_frequency calls, the inner optimization is performed. The old
+            solution is used otherwise.
+            If tts_frequency = 1, then it is standard nested optimization.
+        """
+        super().__init__(**kwargs)
+        if not self.CVaR:
+            raise ValueError("This acqf is only for CVaR!")
+        self.inner_optimizer = inner_optimizer
+        self.tts_frequency = tts_frequency
+
+    def forward(self, X: Tensor) -> Tensor:
+        r"""
+        Evaluate the value of the acquisition function on the given solution set.
+        :param X: An `n x q x dim` tensor of `q` candidates `x, w`.
+        :return: An `n`-dim tensor of acquisition function values
+        """
+        if X.dim() == 2 and self.q == 1:
+            X = X.unsqueeze(-2)
+        if X.dim() != 3:
+            raise ValueError("Only supports X.dim() = 3!")
+        X = X.to(dtype=self.dtype, device=self.device)
+        batch_size = X.size(0)
+
+        # generate w_samples
+        if self.fix_samples:
+            if self.fixed_samples is None:
+                self.fixed_samples = torch.rand(
+                    (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+                )
+            w_samples = self.fixed_samples
+        else:
+            w_samples = torch.rand(
+                (self.num_samples, self.dim_w), dtype=self.dtype, device=self.device
+            )
+
+        # in an attempt to reduce the memory usage, we will evaluate in mini batches
+        # of size mini_batch_size
+        num_batches = ceil(batch_size / self.mini_batch_size)
+        values = torch.empty(batch_size, dtype=self.dtype, device=self.device)
+
+        if self.last_inner_solution is None:
+            self.last_inner_solution = torch.empty(
+                self.active_fantasies,
+                batch_size,
+                1,
+                self.dim_x + 1,
+                dtype=self.dtype,
+                device=self.device,
+            )
+
+        for i in range(num_batches):
+            left_index = i * self.mini_batch_size
+            if i == num_batches - 1:
+                right_index = batch_size
+            else:
+                right_index = (i + 1) * self.mini_batch_size
+
+            # construct the fantasy model
+            fantasy_model = self.model.fantasize(
+                X[left_index:right_index], self.sampler
+            )
+
+            inner_rho = InnerApxCVaR(
+                model=fantasy_model,
+                w_samples=w_samples,
+                alpha=self.alpha,
+                dim_x=self.dim_x,
+                CVaR=self.CVaR,
+                weights=self.weights,
+            )
+            # optimize inner VaR
+            with settings.propagate_grads(True):
+                if self.call_count % self.tts_frequency == 0:
+                    solution, value = self.inner_optimizer(inner_rho)
+                    self.last_inner_solution[:, left_index:right_index] = solution
+                else:
+                    value = inner_rho(
+                        self.last_inner_solution[:, left_index:right_index]
+                    )
+            value = -value
+            if not X.requires_grad:
+                value = value.detach()
+            values[left_index:right_index] = self.current_best_rho - torch.mean(
+                value, dim=0
+            )
+        self.call_count += 1
+        return values

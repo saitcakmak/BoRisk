@@ -18,22 +18,19 @@ params_dict = {
         "errorevery": 1,
     },
     "random": {"label": "$\\rho$-random", "marker": "p", "errorevery": 5},
-    "tts_kgcp_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "*", "errorevery": 5},
+    # "tts_kgcp_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "*", "errorevery": 5},
     "tts_apx_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "+", "errorevery": 5},
-    "tts_apx_c_q=1": {"label": "$\\rho$KG$^{apx}$", "marker": "+", "errorevery": 5},
-    "tts_apx_cvar_q=1": {"label": "ApxCVaRKG", "marker": "x", "errorevery": 5},
     "apx_cvar_q=1": {"label": "ApxCVaRKG", "marker": "x", "errorevery": 5},
-    "tts_varkg_q=1": {"label": "$\\rho$KG", "marker": "s", "errorevery": 5},
+    # "tts_varkg_q=1": {"label": "$\\rho$KG", "marker": "s", "errorevery": 5},
     "tts_rhoKG_q=1": {"label": "$\\rho$KG", "marker": "s", "errorevery": 5},
     "one_shot_q=1": {"label": "$OS\\rho$KG", "marker": "v", "errorevery": 5},
-    "one_shot2_q=1": {"label": "$OS\\rho$KG", "marker": "v", "errorevery": 5},
 }
 
 # This is the multiplier for the confidence intervals
 beta = 1.0
 
 # Moving average window
-ma_window = 1
+ma_window = 3
 
 
 def plot_out(output, title, ylabel, plot_log):
@@ -87,10 +84,6 @@ def plot_out(output, title, ylabel, plot_log):
     plt.ylabel(ylabel)
     plt.title(title)
     plt.grid(True)
-    ticks = plt.yticks()
-    if "f_6" in title:
-        new_ticks = (-0.25, 0.0, 0.25, 0.5, 0.75, 1.0, 1.25, 1.5, 1.75)
-        plt.yticks(ticks=new_ticks)
     if "Covid" in title:
         plt.ticklabel_format(axis="y", style="sci", scilimits=(0, 0))
     plt.legend(ncol=2)

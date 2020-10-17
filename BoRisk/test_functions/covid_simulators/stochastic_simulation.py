@@ -184,7 +184,7 @@ class StochasticSimulation:
         return self.sim_df
 
     def step_contact_trace(self, new_QI):
-        """ resolve contact traces at the front of the queue and add new QIs to the back
+        """resolve contact traces at the front of the queue and add new QIs to the back
         of the contact trace queue"""
 
         # update the contact trace queue

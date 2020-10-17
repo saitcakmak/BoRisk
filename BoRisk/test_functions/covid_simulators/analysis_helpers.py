@@ -85,7 +85,7 @@ def run_sensitivity_sims_time_dist(
     trajectories_per_config=100,
     verbose=True,
 ):
-    """ run simulations, varying time in state_sensitivity, setting time distribution equal to f(avg, max) for 
+    """run simulations, varying time in state_sensitivity, setting time distribution equal to f(avg, max) for
     avg, max in param_avg_values and param_max_values respectively
     Inputs for state_sensitivity:
         exposed

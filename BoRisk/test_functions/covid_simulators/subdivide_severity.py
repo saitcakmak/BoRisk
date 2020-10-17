@@ -3,10 +3,10 @@ import numpy as np
 
 def subdivide_severity(prob_severity_given_age, prob_infection, prob_age):
     """prob_severity_given_age is a matrix where element [i,j] is the probability that someone in age group i has a severity of j
-	prob_infection is a vector where element i is the probability of infection given close contact for age group i
-	prob_age is the proportion of the population that is in age group i
+    prob_infection is a vector where element i is the probability of infection given close contact for age group i
+    prob_age is the proportion of the population that is in age group i
 
-	The return vector is the probability that an infected patient is of severity j"""
+    The return vector is the probability that an infected patient is of severity j"""
 
     # Check everything is the right size
     num_age_groups = prob_severity_given_age.shape[0]

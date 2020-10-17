@@ -1,10 +1,14 @@
 from typing import Optional, Union
 
 import torch
+from botorch import settings
 from botorch.acquisition import MCAcquisitionFunction
 from botorch.models.model import Model
 from botorch.utils import draw_sobol_normal_samples
 from torch import Tensor
+import warnings
+
+from torch.distributions import Normal
 
 
 class InnerRho(MCAcquisitionFunction):
@@ -86,7 +90,7 @@ class InnerRho(MCAcquisitionFunction):
         Sample from GP and calculate the corresponding E_n[rho[F]]
         :param X: The decision variable, only the x component.
             Shape: num_fantasies x num_starting_sols x 1 x dim_x (see below)
-        :return: -E_n[rho[F(X, w)]].
+        :return: -E_n[rho[F(X, W)]].
             Shape: batch_shape (squeezed if self.batch_shape is 1 dim)
             Note that the return value is negated since the optimizers we use do
             maximization.
@@ -217,3 +221,76 @@ class InnerRho(MCAcquisitionFunction):
             return values
         else:
             return -values.squeeze(-1)
+
+
+class InnerApxCVaR(InnerRho):
+    r"""
+    The inner problem of ApxCVaRKG, using the EI type approximation.
+    """
+
+    def __init__(self, **kwargs):
+        r"""
+        See InnerRho for details.
+        """
+        super(InnerApxCVaR, self).__init__(**kwargs)
+        if not self.CVaR:
+            raise ValueError("This only works with CVaR!")
+        if self.num_repetitions > 0:
+            warnings.warn(
+                "This does not use posterior sampling, thus ignores " "num_repetitions!"
+            )
+
+    def forward(self, X: Tensor) -> Tensor:
+        r"""
+        Approximates E_n[CVaR[F]] as described in ApxCVaRKG.
+        :param X: The decision variable `x` and the `\beta` value.
+            Shape: batch x num_fantasies x num_starting_sols x 1 x (dim_x + 1) (see below)
+        :return: -E_n[CVaR[F(x, W)]].
+            Shape: batch x num_fantasies x num_starting_sols
+            Note that the return value is negated since the optimizers we use do
+            maximization.
+        """
+        if X.requires_grad:
+            torch.set_grad_enabled(True)
+        # ensure X has the correct dtype and device
+        X = X.to(self.w_samples)
+        # make sure X has proper shape, 4 dimensional to match the batch shape of rhoKG
+        assert X.shape[-1] == self.dim_x + 1
+        assert X.dim() >= 4
+
+        X_fant = X[..., : self.dim_x]  # batch x num_fantasies x n x 1 x dim_x
+        beta = X[..., -1:]  # batch x num_fantasies x n x 1 x 1
+
+        # Join X_fant with w_samples
+        z_fant = torch.cat(
+            [
+                X_fant.repeat(*[1] * (X_fant.dim() - 2), self.num_samples, 1),
+                self.w_samples.repeat(*X_fant.shape[:-2], 1, 1),
+            ],
+            dim=-1,
+        )
+        # get posterior mean and std dev
+        with settings.propagate_grads(True):
+            posterior = self.model.posterior(z_fant)
+            mu = posterior.mean
+            sigma = torch.sqrt(posterior.variance)
+
+        # Calculate `E_f[[f(x) - \beta]^+]`
+        u = (mu - beta.expand_as(mu)) / sigma
+        # this is from EI
+        normal = Normal(torch.zeros_like(u), torch.ones_like(u))
+        ucdf = normal.cdf(u)
+        updf = torch.exp(normal.log_prob(u))
+        values = sigma * (updf + u * ucdf)
+        # take the expectation over W
+        if getattr(self, "weights", None) is None:
+            values = torch.mean(values, dim=-2)
+        else:
+            # Get the expectation with weights
+            values = values * self.weights.unsqueeze(-1)
+            values = torch.sum(values, dim=-2)
+        # add beta and divide by 1-alpha
+        values = beta.view_as(values) + values / (1 - self.alpha)
+        # return with last dim squeezed
+        # negated since CVaR is being minimized
+        return -values.squeeze(-1)

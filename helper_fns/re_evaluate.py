@@ -56,7 +56,7 @@ def re_evaluate_from_file(
                 "current_best_value",
                 "acqf_value",
                 "candidate",
-                "device"
+                "device",
             ]
         },
         device=device
@@ -83,7 +83,7 @@ def re_evaluate_from_file(
         if verbose:
             print(
                 "old value: %f, new value: %f"
-                % (iter_data.get("current_best_value", 0.), value)
+                % (iter_data.get("current_best_value", 0.0), value)
             )
         full_data[i]["old_current_best_sol"] = iter_data.get("current_best_sol")
         full_data[i]["old_current_best_value"] = iter_data.get("current_best_value")

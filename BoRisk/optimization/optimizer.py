@@ -440,7 +440,7 @@ class InnerOptimizer:
         batch_size = int(torch.prod(torch.tensor(batch_shape)))
         X = self.generate_raw_samples(batch_shape)
         with torch.no_grad():
-            Y = acqf(X).detach()
+            Y = acqf(X)
         Ystd = Y.std(dim=0)
 
         max_val, max_idx = torch.max(Y, dim=0)

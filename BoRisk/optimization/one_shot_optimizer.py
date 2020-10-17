@@ -82,7 +82,10 @@ class OneShotOptimizer(Optimizer):
         return self.generate_restart_points_from_samples(X, acqf)
 
     def optimize_outer(
-        self, acqf: OneShotrhoKG, w_samples: Tensor = None, batch_size: int = 20,
+        self,
+        acqf: OneShotrhoKG,
+        w_samples: Tensor = None,
+        batch_size: int = 20,
     ) -> Tuple[Tensor, Tensor]:
         """
         Optimizes ApxCVaRKG in a one-shot manner.
