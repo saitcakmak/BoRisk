@@ -200,7 +200,7 @@ class TTSApxCVaRKG(AbsKG):
             # optimize inner VaR
             with settings.propagate_grads(True):
                 if self.call_count % self.tts_frequency == 0:
-                    solution, value = self.inner_optimizer(inner_rho)
+                    solution, value = self.inner_optimizer(inner_rho, self.model)
                     self.last_inner_solution[:, left_index:right_index] = solution
                 else:
                     value = inner_rho(

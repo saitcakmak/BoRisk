@@ -230,21 +230,13 @@ class InnerApxCVaROptimizer(InnerOptimizer):
         if beta_low is None or beta_high is None:
             if model is None:
                 raise ValueError("Either the model or the bounds should be provided!")
-            exponent = 10
-            batch_size = int(torch.prod(torch.tensor(model._input_batch_shape)))
-            while 2 ** exponent * batch_size > 2 ** 12 and exponent > 1:
-                exponent -= 1
             search_X = draw_constrained_sobol(
                 bounds=self.bounds[:, :-1],
-                n=2
-                ** exponent,  # keeping this low since it will be used with batch models
+                n=2 ** 10,
                 q=1,
                 seed=None,
                 inequality_constraints=self.inequality_constraints,
             ).to(dtype=self.dtype, device=self.device)
-            search_X = search_X.reshape(-1, 1, 1, 1, self.dim_x - 1).repeat(
-                1, *model._input_batch_shape, 1, 1
-            )
             search_X = torch.cat(
                 [
                     search_X,
@@ -255,7 +247,6 @@ class InnerApxCVaROptimizer(InnerOptimizer):
                 ],
                 dim=-1,
             )
-            model.train_inputs[0].shape[-1]
             posterior = model.posterior(search_X)
             mean = posterior.mean
             std = posterior.variance.sqrt()
@@ -263,12 +254,26 @@ class InnerApxCVaROptimizer(InnerOptimizer):
                 beta_low = torch.min(mean - 2 * std)
             if beta_high is None:
                 beta_high = torch.max(mean + 2 * std)
-        self.bounds[0, -1] = beta_low
-        self.bounds[1, -1] = beta_high
+        self.beta_low = beta_low.to(self.bounds)
+        self.beta_high = beta_high.to(self.bounds)
+        self.bounds[0, -1] = self.beta_low
+        self.bounds[1, -1] = self.beta_high
 
-    def optimize(self, acqf: InnerApxCVaR) -> Tuple[Tensor, Tensor]:
+    def optimize(self, acqf: InnerApxCVaR, base_model: ExactGP) -> Tuple[Tensor, Tensor]:
         r"""
         Updates bounds and calls InnerOptimizer.optimize.
+
+        :param acqf: The InnerApxCVaR object being optimized
+        :param base_model: The GP model (non-fantasy) used to generate beta bounds.
         """
-        self.update_bounds(acqf.model)
+        if self.beta_low is None:
+            self.update_bounds(base_model)
         return super().optimize(acqf)
+
+    def new_iteration(self):
+        r"""
+        In addition to super().new_iteration(), this resets beta bounds.
+        """
+        self.beta_low = None
+        self.beta_high = None
+        super(InnerApxCVaROptimizer, self).new_iteration()

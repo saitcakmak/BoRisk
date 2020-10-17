@@ -164,7 +164,7 @@ def exp_loop(
             full_data[i] = data
             torch.save(full_data, os.path.join(output_path, "%s.pt" % filename))
 
-        except RuntimeError as err:
+        except ValueError as err:
             import sys
 
             gettrace = getattr(sys, "gettrace", None)

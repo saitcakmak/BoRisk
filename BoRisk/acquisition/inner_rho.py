@@ -256,7 +256,8 @@ class InnerApxCVaR(InnerRho):
         X = X.to(self.w_samples)
         # make sure X has proper shape, 4 dimensional to match the batch shape of rhoKG
         assert X.shape[-1] == self.dim_x + 1
-        assert X.dim() >= 4
+        if X.dim() < 4:
+            X = X.reshape(-1, *self.model._input_batch_shape, 1, self.dim_x + 1)
 
         X_fant = X[..., : self.dim_x]  # batch x num_fantasies x n x 1 x dim_x
         beta = X[..., -1:]  # batch x num_fantasies x n x 1 x 1
