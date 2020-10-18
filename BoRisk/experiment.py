@@ -74,7 +74,8 @@ class Experiment:
         "weights": None,
         "fix_samples": True,
         "one_shot": False,
-        "low_fantasies": None,
+        "low_fantasies": 4,
+        "random_w": False,
     }
 
     def __init__(self, function: str, **kwargs) -> None:
@@ -119,7 +120,10 @@ class Experiment:
             DO NOT USE unless you know what you're doing.
         :param low_fantasies: see AbsKG.change_num_fantasies for details. This reduces
             the number of fantasies used during raw sample evaluation to reduce the
-            computational cost. It is recommended (=4) but not enabled by default.
+            computational cost.
+        :param random_w: If this is True, the w component of the candidate is fixed to
+            a random realization instead of being optimized. This is only for
+            presenting a comparison in the paper, and should not be used.
         """
         if "seed" in kwargs.keys():
             warnings.warn("Seed should be set outside. It will be ignored!")
@@ -375,9 +379,11 @@ class Experiment:
                     **{_: vars(self)[_] for _ in vars(self) if _ != "inner_optimizer"}
                 )
             if self.disc:
-                candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples)
+                candidate, value = self.optimizer.optimize_outer(acqf, self.w_samples,
+                                                                 random_w=self.random_w)
             else:
-                candidate, value = self.optimizer.optimize_outer(acqf)
+                candidate, value = self.optimizer.optimize_outer(acqf,
+                                                                 random_w=self.random_w)
         candidate = candidate.detach()
         value = value.detach()
 
