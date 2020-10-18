@@ -139,12 +139,14 @@ class ApxCVaROptimizer(Optimizer):
         acqf: ApxCVaRKG,
         w_samples: Tensor = None,
         batch_size: int = 50,
+        **kwargs,
     ) -> Tuple[Tensor, Tensor]:
         """
         Optimizes ApxCVaRKG in a one-shot manner.
         :param acqf: ApxCVaRKG object
         :param w_samples: the set W to consider. If None, assumes continuous optimization.
         :param batch_size: Just to preserve the function signature. Not as critical here.
+        :param kwargs: ignored
         :return: Optimal solution and value
         """
         # update the beta bounds
