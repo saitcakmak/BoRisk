@@ -225,17 +225,30 @@ class Optimizer:
         acqf: MCAcquisitionFunction,
         w_samples: Tensor = None,
         batch_size: int = 5,
+        random_w: bool = False,
     ) -> Tuple[Tensor, Tensor]:
         """
         rhoKGapx, Nested or Tts optimizer with w component restricted to w_samples
         :param acqf: rhoKGapx or rhoKG object
         :param w_samples: the set W to consider. If None, assumes continuous optimization.
         :param batch_size: We will do the optimization in mini batches to save on memory
+        :param random_w: If this is True, the w component of the candidate is fixed to
+            a random realization instead of being optimized. This is only for
+            presenting a comparison in the paper, and should not be used.
         :return: Optimal solution and value
         """
         if self.low_fantasies is not None:
             # set the low num_fantasies
             acqf.change_num_fantasies(num_fantasies=self.low_fantasies)
+        if random_w:
+            if w_samples is not None:
+                w_samples = w_samples[
+                    int(torch.randint(w_samples.shape[0], (1,)))
+                ].reshape(1, -1)
+            else:
+                w_samples = torch.rand(
+                    1, self.dim - self.dim_x, device=self.device, dtype=self.dtype
+                )
         initial_conditions = self.generate_outer_restart_points(acqf, w_samples)
         if self.low_fantasies is not None:
             # recover the original num_fantasies

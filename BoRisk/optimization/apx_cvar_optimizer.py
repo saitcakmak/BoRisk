@@ -259,7 +259,9 @@ class InnerApxCVaROptimizer(InnerOptimizer):
         self.bounds[0, -1] = self.beta_low
         self.bounds[1, -1] = self.beta_high
 
-    def optimize(self, acqf: InnerApxCVaR, base_model: ExactGP) -> Tuple[Tensor, Tensor]:
+    def optimize(
+        self, acqf: InnerApxCVaR, base_model: ExactGP
+    ) -> Tuple[Tensor, Tensor]:
         r"""
         Updates bounds and calls InnerOptimizer.optimize.
 
