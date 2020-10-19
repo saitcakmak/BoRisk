@@ -24,7 +24,7 @@ key_list = [
     "tts_w_apx_q=1",
 ]
 
-low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1", "tts_apx_cvar_q=1"]
+low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1", "tts_apx_cvar_q=1", "tts_w_apx_q=1"]
 
 for output_key in key_list:
     if func == "bw":
