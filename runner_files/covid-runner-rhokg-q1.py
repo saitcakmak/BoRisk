@@ -37,6 +37,7 @@ dim_x = function.dim - dim_w
 num_restarts = 10 * function.dim
 raw_multiplier = 50  # default 50
 
+kwargs["mini_batch_size"] = 3
 kwargs["num_inner_restarts"] = 5 * dim_x
 kwargs["CVaR"] = True
 kwargs["alpha"] = 0.9
