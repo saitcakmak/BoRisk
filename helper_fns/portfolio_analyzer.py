@@ -69,14 +69,14 @@ likelihood = GaussianLikelihood(
     ),
 )
 
-model = SingleTaskGP(X, Y, likelihood, outcome_transform=Standardize(m=1))
+model = SingleTaskGP(X.cuda(), Y.cuda(), likelihood, outcome_transform=Standardize(m=1))
 mll = ExactMarginalLogLikelihood(model.likelihood, model)
 fit_gpytorch_model(mll)
 
 # Construct inner objective and get the best value
 inner_rho = InnerRho(
     model=model,
-    w_samples=w_samples,
+    w_samples=w_samples.cuda(),
     alpha=alpha,
     dim_x=dim_x,
     num_repetitions=40,
@@ -93,6 +93,7 @@ if plot_gap:
         q=1,
         maxiter=1000,
         inequality_constraints=None,
+        device="cuda",
     )
 
     best_sol, best_value = optimizer.optimize_inner(inner_rho)
@@ -105,8 +106,9 @@ def get_obj(X: torch.Tensor):
     :param X: Solutions, only the X component
     :return: VaR / CVaR values
     """
-    X = X.reshape(-1, 1, dim_x)
-    return inner_rho(X).detach()
+    X = X.reshape(-1, 1, dim_x).cuda()
+    with torch.no_grad():
+        return inner_rho(X)
 
 
 data = torch.load(os.path.join(directory, filename))

@@ -13,11 +13,12 @@ directory = os.path.join(
     "exp_output",
     # "benchmarks"
 )
-low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1"]
+low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1", "tts_apx_cvar_q=1", "tts_w_apx_q=1"]
 
 # specify the parameters for the files to read
-# output_key = "tts_apx_q=1"
-output_key = "tts_rhoKG_q=1"
+output_key = "tts_apx_q=1"
+# output_key = "tts_w_apx_q=1"
+# output_key = "tts_rhoKG_q=1"
 # output_key = "one_shot_q=1"
 # output_key = "apx_cvar_q=1"
 # output_key = "random"

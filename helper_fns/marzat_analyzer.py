@@ -150,6 +150,8 @@ if plot_gap:
     for key in output.keys():
         output[key]["y"] = output[key]["y"] - best_value
 
+torch.save(output, "marzat_analyzer_output.pt")
+
 plot_out(
     output=output,
     title="$f_6(x_c, x_e)$ Log Optimality Gap",

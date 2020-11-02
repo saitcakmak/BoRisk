@@ -160,9 +160,12 @@ if plot_gap:
     for key in output.keys():
         output[key]["y"] = output[key]["y"] - best_value
 
+if CVaR:
+    torch.save(output, "bw_cvar_analyzer_output.pt")
+
 plot_out(
     output=output,
-    title="Branin Willams Log Optimality Gap",
+    title="Branin Willams %s Log Optimality Gap" % ("CVaR" if CVaR else "VaR"),
     ylabel="log gap",
     plot_log=plot_log,
 )
