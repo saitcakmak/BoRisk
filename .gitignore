@@ -148,7 +148,6 @@ dmypy.json
 /batch_output/old/
 /exp_output/covid_error/
 /exp_output/braninwilliams_error/
-/plots/
 /exp_output/portfolio_old/
 /exp_output/covid_pre_seed/
 /graphite_output/
@@ -159,7 +158,6 @@ dmypy.json
 /other/
 /runner_files/test.py
 /exp_output/old/
-/debug/
 /debug/
 /BoRisk/other/
 /exp_output/v2/
