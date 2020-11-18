@@ -244,7 +244,7 @@ class InnerApxCVaROptimizer(InnerOptimizer):
                     search_X,
                     torch.rand(
                         *search_X.shape[:-1],
-                        model.train_inputs[0].shape[-1] - self.dim_x + 1
+                        model.train_inputs[0].shape[-1] - self.dim_x + 1,
                     ).to(search_X),
                 ],
                 dim=-1,

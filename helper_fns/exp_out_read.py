@@ -16,9 +16,9 @@ directory = os.path.join(
 low_fant_keys = ["tts_apx_q=1", "tts_rhoKG_q=1", "tts_apx_cvar_q=1", "tts_w_apx_q=1"]
 
 # specify the parameters for the files to read
-output_key = "tts_apx_q=1"
+# output_key = "tts_apx_q=1"
 # output_key = "tts_w_apx_q=1"
-# output_key = "tts_rhoKG_q=1"
+output_key = "tts_rhoKG_q=1"
 # output_key = "one_shot_q=1"
 # output_key = "apx_cvar_q=1"
 # output_key = "random"
@@ -38,7 +38,7 @@ elif output_key == "tts_rhoKG_q=1":
     iterations = iterations // 2
 seed_list = range(1, 51)
 re_evaluate = False  # DO NOT USE WITH BENCHMARKS!!
-re_evaluated_only = False  # skips runs if they haven't been re-evaluated
+re_evaluated_only = True  # skips runs if they haven't been re-evaluated
 
 if prob in ["bw", "bw_cvar"]:
     function_name = "braninwilliams"
