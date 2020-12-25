@@ -40,8 +40,10 @@ def exp_loop(
     :param filename: output file name
     :param iterations: number of iterations of algorithm to run
     :param benchmark_alg: If we're running BenchmarkExp, specify the algorithm here.
-    :param x_samples: overwrites init samples etc. All initalization is done on full w_samples set
-        for each x in x_samples.
+    :param init_samples: The set of points at which to evaluate the function for
+        initializing the GP model.
+    :param x_samples: If specified, the GP is initialized with samples from
+        the cross product of `x_samples` with `w_samples`. Overwritten by `init_samples`.
     :param output_path: The path to the folder the output file should be placed.
         Defaults to exp_output at the parent directory.
     :return: None - saves the output.

@@ -1,15 +1,33 @@
 # BoRisk - Bayesian Optimization of Risk Measures
-https://arxiv.org/abs/2007.05554
+
+> [S. Cakmak, R. Astudillo, P. Frazier, and E. Zhou. Bayesian Optimization of Risk 
+Measures. Advances in Neural Information Processing Systems 33, 2020.]
+> (https://arxiv.org/abs/2007.05554)
+
+```
+@inproceedings{cakmak2020borisk,
+  title={Bayesian Optimization of Risk Measures},
+  author={Cakmak, Sait and Astudillo, Raul and Frazier, Peter and Zhou, Enlu},
+  booktitle = {Advances in Neural Information Processing Systems 33},
+  year={2020},
+  url = {http://arxiv.org/abs/2007.05554}
+}
+```
 
 ### Setup:
+Please see `tutorial.ipynb` for an overview of how to use `exp_loop` to run experiments.
+
 Within a virtual environment;
 
-Install the requirements, e.g. `pip install -r requirements.txt`
+Install the requirements, i.e., `pip install -r requirements.txt`
 
-Install the package locally, i.e. `pip install -e .`
+Install the package locally, i.e, `pip install -e .`
 
-Now you can use `import BoRisk` or `from BoRisk import ...` to access the package
- contents without having to worry about any path issues. It is highly recommended to
+You can now use `import BoRisk` or `from BoRisk import ...` to access the package
+ contents as usual.
+
+### Usage:
+It is highly recommended to
   define the problem function in `test_functions`, and use it by adding it to the list
    of functions in `function_picker` which runs it through `StandardizedFunction` to
     project the domain to the unit hypercube. 
@@ -22,9 +40,9 @@ The most convenient way is to run the
      `rhoKGapx` algorithm, and small number of fantasies and optimization parameters.
 
 Our implementation supports non-standard data types and GPU acceleration, which can be
- specified by passing, e.g. `dtype = torch.double` and `device = "cuda"` to the
+ specified by passing, e.g., `dtype = torch.double` and `device = "cuda"` to the
   `Experiment`. We observed that using `dtype = torch.double` helps with numerical
-   issues, e.g. in Cholesky decomposition, but comes with a slight increase in
+   issues, e.g., in Cholesky decomposition, but comes with a slight increase in
     computational cost (< 1.5x). We also observed that the use of GPUs results in
      modest speed up (~1.5-2x), so it is recommended to utilize this option when
       available.
@@ -74,10 +92,4 @@ and repeats for the given number of iterations. It saves the output after each B
 
 - BoRisk/utils.py: Simple utilities for drawing constrained random variables.
 
-Note: While the code was being written, the rhoKG acquisition function was called VaRKG
- and the 
-approximation was referred to as KGCP. While cleaning up the code, the names were
- updated. 
-This note serves to clarify any confusion due to any reference to VaRKG or KGCP that
- was missed during the clean up.
  

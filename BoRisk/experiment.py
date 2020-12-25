@@ -83,7 +83,6 @@ class Experiment:
         The experiment settings:
         :param function: The problem function to be used.
         :param noise_std: standard deviation of the function evaluation noise.
-            Defaults to 0.1
         :param dim_w: Dimension of the w component.
         :param num_samples: Number of samples of w to be used to evaluate C/VaR.
         :param w_samples: option to explicitly specify the samples. If given,
@@ -94,7 +93,7 @@ class Experiment:
         :param alpha: The risk level of C/VaR.
         :param q: Number of parallel solutions to evaluate. Think qKG.
         :param num_repetitions: Number of posterior samples used for E[rho[F]]
-        :param verbose: Print more stuff and plot if d == 2.
+        :param verbose: Print more stuff, such as current best value.
         :param maxiter: (Maximum) number of iterations allowed for L-BFGS-B algorithm.
         :param CVaR: If true, use CVaR instead of VaR, i.e. CVaRKG. The default is VaR.
         :param random_sampling: If true, we will use random sampling - no KG.
