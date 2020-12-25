@@ -15,8 +15,6 @@ Measures. Advances in Neural Information Processing Systems 33, 2020.]
 ```
 
 ### Setup:
-Please see `tutorial.ipynb` for an overview of how to use `exp_loop` to run experiments.
-
 Within a virtual environment;
 
 Install the requirements, i.e., `pip install -r requirements.txt`
@@ -27,6 +25,8 @@ You can now use `import BoRisk` or `from BoRisk import ...` to access the packag
  contents as usual.
 
 ### Usage:
+Please see `tutorial.ipynb` for an overview of how to use `exp_loop` to run experiments.
+
 It is highly recommended to
   define the problem function in `test_functions`, and use it by adding it to the list
    of functions in `function_picker` which runs it through `StandardizedFunction` to
