@@ -14,14 +14,8 @@ Measures. Advances in Neural Information Processing Systems 33, 2020.]
 }
 ```
 
-## Update / Recommended Usage:
-As of the 0.5.0 release, risk measures are supported in [BoTorch](https://botorch.org). To take advantage of the recent improvements in the upstream packages and avoid backcompatibility issues, we recommend using the BoTorch implementations of risk measures instead. Tutorial notebooks demonstrating optimization of risk measures in native [BoTorch](https://botorch.org) can be found [here](https://botorch.org/tutorials/risk_averse_bo_with_environmental_variables) and [here](https://botorch.org/tutorials/risk_averse_bo_with_input_perturbations).
-
-PS.: The 0.5.0 release includes a few bugs in the risk measure implementation, which are fixed in the master branch. It is highly recommended to work based off of the master branch (or a later release when available), which can be installed using the following two commands:
-```
-pip install --upgrade git+https://github.com/cornellius-gp/gpytorch.git
-pip install --upgrade git+https://github.com/pytorch/botorch.git
-```
+## Archival Notice / Recommended Usage:
+Risk measures have been upstreamed to [BoTorch](https://botorch.org). To take advantage of the recent improvements in the upstream packages and avoid backcompatibility issues, we recommend using the BoTorch implementations of risk measures instead. Tutorial notebooks demonstrating optimization of risk measures in native [BoTorch](https://botorch.org) can be found [here](https://botorch.org/tutorials/risk_averse_bo_with_environmental_variables) and [here](https://botorch.org/tutorials/risk_averse_bo_with_input_perturbations).
 
 ### Setup:
 Within a virtual environment;
