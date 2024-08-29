@@ -2,7 +2,7 @@ botorch==0.3.3
 gpytorch==1.3.0
 torch==1.7.1
 numpy==1.22.0
-scipy==1.5.2
+scipy==1.10.0
 pandas
 # for plotting experiment results
 matplotlib
